@@ -14,7 +14,7 @@ import {
   FiUpload, FiImage, FiMessageCircle,
   FiFileText, FiDownload, FiSearch, FiDroplet, FiTrash2,
   FiExternalLink, FiLoader, FiCopy, FiEdit2, FiMoreVertical, FiShare2,
-  FiList
+  FiList, FiSave
 } from 'react-icons/fi';
 import * as XLSX from 'xlsx-js-style';
 import { downloadDeliveryReportPDF } from '../utils/pdfGenerator';
@@ -506,6 +506,8 @@ export default function ArrivedDeliveriesScreen({
   const [itemsListSortDir, setItemsListSortDir] = useState<'asc' | 'desc'>('asc');
   const [itemsListLastClickedId, setItemsListLastClickedId] = useState<string | null>(null);
   const [itemsListEditVehicleId, setItemsListEditVehicleId] = useState<string | null>(null); // For edit modal
+  const [itemsListEditMode, setItemsListEditMode] = useState(false); // Edit mode toggle
+  const [itemsListPendingChanges, setItemsListPendingChanges] = useState<Map<string, ArrivalItemStatus>>(new Map()); // itemId -> new status
 
   // State - Unassigned arrivals (items found on site without vehicle assignment)
   const [unassignedArrivals, setUnassignedArrivals] = useState<UnassignedArrival[]>([]);
@@ -5296,66 +5298,6 @@ export default function ArrivedDeliveriesScreen({
           }
         };
 
-        // Apply status to a single item
-        const applyStatusToSingleItem = async (itemId: string, status: ArrivalItemStatus) => {
-          setItemsListSaving(true);
-          try {
-            const item = items.find(i => i.id === itemId);
-            if (!item) return;
-            const vehicle = getVehicle(item.vehicle_id);
-            let arrivedVehicle = vehicle ? getArrivedVehicle(vehicle.id) : null;
-
-            // Create arrival record if doesn't exist
-            if (!arrivedVehicle && vehicle) {
-              const { data, error } = await supabase
-                .from('trimble_arrived_vehicles')
-                .insert({
-                  vehicle_id: vehicle.id,
-                  project_id: projectId,
-                  arrival_date: new Date().toISOString().split('T')[0],
-                  arrival_time: new Date().toTimeString().substring(0, 5),
-                  status: 'arrived',
-                  created_by: tcUserEmail
-                })
-                .select()
-                .single();
-
-              if (!error && data) {
-                arrivedVehicle = data;
-                // Create confirmation records for all vehicle items
-                const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
-                await supabase.from('trimble_arrival_confirmations').insert(
-                  vehicleItems.map(vi => ({
-                    arrived_vehicle_id: data.id,
-                    item_id: vi.id,
-                    status: 'pending',
-                    created_by: tcUserEmail
-                  }))
-                );
-                await loadArrivedVehicles();
-                await loadConfirmations();
-              }
-            }
-
-            if (arrivedVehicle) {
-              await supabase
-                .from('trimble_arrival_confirmations')
-                .update({
-                  status,
-                  confirmed_at: new Date().toISOString(),
-                  confirmed_by: tcUserEmail
-                })
-                .eq('arrived_vehicle_id', arrivedVehicle.id)
-                .eq('item_id', itemId);
-              await loadConfirmations();
-            }
-          } catch (e: any) {
-            setMessage('Viga: ' + e.message);
-          } finally {
-            setItemsListSaving(false);
-          }
-        };
-
         // Sort header component
         const SortHeader = ({ field, label }: { field: 'mark' | 'vehicle' | 'status'; label: string }) => (
           <div
@@ -5444,26 +5386,164 @@ export default function ArrivedDeliveriesScreen({
                     ({itemsListSelectedIds.size} valitud)
                   </span>
                 )}
+                {itemsListPendingChanges.size > 0 && (
+                  <span style={{ color: '#f59e0b', marginLeft: '4px' }}>
+                    ({itemsListPendingChanges.size} muudetud)
+                  </span>
+                )}
               </span>
 
-              {/* Clear selection */}
-              {itemsListSelectedIds.size > 0 && (
-                <button
-                  onClick={() => setItemsListSelectedIds(new Set())}
-                  style={{
-                    padding: '3px 8px',
-                    background: '#f3f4f6',
-                    color: '#374151',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: '4px',
-                    fontSize: '10px',
-                    cursor: 'pointer',
-                    marginLeft: 'auto'
-                  }}
-                >
-                  Tühista valik
-                </button>
-              )}
+              {/* Edit mode toggle and action buttons */}
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {/* Clear selection */}
+                {itemsListSelectedIds.size > 0 && !itemsListEditMode && (
+                  <button
+                    onClick={() => setItemsListSelectedIds(new Set())}
+                    style={{
+                      padding: '3px 8px',
+                      background: '#f3f4f6',
+                      color: '#374151',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '4px',
+                      fontSize: '10px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Tühista valik
+                  </button>
+                )}
+
+                {/* Edit mode toggle */}
+                {!itemsListEditMode ? (
+                  <button
+                    onClick={() => setItemsListEditMode(true)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 10px',
+                      background: '#3b82f6',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: 500,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <FiEdit2 size={11} />
+                    Muuda staatusi
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => {
+                        setItemsListEditMode(false);
+                        setItemsListPendingChanges(new Map());
+                      }}
+                      style={{
+                        padding: '4px 10px',
+                        background: '#f3f4f6',
+                        color: '#374151',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Tühista
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (itemsListPendingChanges.size === 0) {
+                          setItemsListEditMode(false);
+                          return;
+                        }
+                        setItemsListSaving(true);
+                        try {
+                          let updated = 0;
+                          for (const [itemId, newStatus] of itemsListPendingChanges) {
+                            const item = items.find(i => i.id === itemId);
+                            if (!item) continue;
+                            const vehicle = getVehicle(item.vehicle_id);
+                            let arrivedVehicle = vehicle ? getArrivedVehicle(vehicle.id) : null;
+
+                            // Create arrival record if doesn't exist
+                            if (!arrivedVehicle && vehicle) {
+                              const { data, error } = await supabase
+                                .from('trimble_arrived_vehicles')
+                                .insert({
+                                  vehicle_id: vehicle.id,
+                                  project_id: projectId,
+                                  arrival_date: new Date().toISOString().split('T')[0],
+                                  arrival_time: new Date().toTimeString().substring(0, 5),
+                                  status: 'arrived',
+                                  created_by: tcUserEmail
+                                })
+                                .select()
+                                .single();
+
+                              if (!error && data) {
+                                arrivedVehicle = data;
+                                // Create confirmation records for all vehicle items
+                                const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
+                                await supabase.from('trimble_arrival_confirmations').insert(
+                                  vehicleItems.map(vi => ({
+                                    arrived_vehicle_id: data.id,
+                                    item_id: vi.id,
+                                    status: 'pending',
+                                    created_by: tcUserEmail
+                                  }))
+                                );
+                              }
+                            }
+
+                            if (arrivedVehicle) {
+                              await supabase
+                                .from('trimble_arrival_confirmations')
+                                .update({
+                                  status: newStatus,
+                                  confirmed_at: new Date().toISOString(),
+                                  confirmed_by: tcUserEmail
+                                })
+                                .eq('arrived_vehicle_id', arrivedVehicle.id)
+                                .eq('item_id', itemId);
+                              updated++;
+                            }
+                          }
+                          await loadArrivedVehicles();
+                          await loadConfirmations();
+                          setItemsListPendingChanges(new Map());
+                          setItemsListEditMode(false);
+                          setMessage(`✓ ${updated} staatust salvestatud`);
+                        } catch (e: any) {
+                          setMessage('Viga: ' + e.message);
+                        } finally {
+                          setItemsListSaving(false);
+                        }
+                      }}
+                      disabled={itemsListSaving || itemsListPendingChanges.size === 0}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '4px 10px',
+                        background: itemsListPendingChanges.size > 0 ? '#22c55e' : '#9ca3af',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 500,
+                        cursor: itemsListPendingChanges.size > 0 ? 'pointer' : 'not-allowed',
+                        opacity: itemsListSaving ? 0.7 : 1
+                      }}
+                    >
+                      <FiSave size={11} />
+                      Salvesta {itemsListPendingChanges.size > 0 && `(${itemsListPendingChanges.size})`}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Compact items table */}
@@ -5504,9 +5584,13 @@ export default function ArrivedDeliveriesScreen({
                   const arrivedVehicle = vehicle ? getArrivedVehicle(vehicle.id) : null;
                   const isSelected = itemsListSelectedIds.has(item.id);
 
-                  const currentStatus: ArrivalItemStatus = arrivedVehicle
+                  const dbStatus: ArrivalItemStatus = arrivedVehicle
                     ? getItemConfirmationStatus(arrivedVehicle.id, item.id)
                     : 'pending';
+
+                  // Use pending change if exists, otherwise use database status
+                  const displayStatus = itemsListPendingChanges.get(item.id) || dbStatus;
+                  const hasPendingChange = itemsListPendingChanges.has(item.id);
 
                   // Format vehicle info with dates
                   const scheduledDate = vehicle?.scheduled_date ? new Date(vehicle.scheduled_date) : null;
@@ -5633,43 +5717,91 @@ export default function ArrivedDeliveriesScreen({
 
                       {/* Status - clickable buttons */}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '2px' }}>
+                        {/* Pending change indicator */}
+                        {hasPendingChange && (
+                          <span style={{
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            background: '#f59e0b',
+                            marginRight: '2px'
+                          }} title="Muudatus salvestamata" />
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            applyStatusToSingleItem(item.id, 'confirmed');
+                            if (!itemsListEditMode) return;
+                            // In edit mode, add to pending changes
+                            setItemsListPendingChanges(prev => {
+                              const next = new Map(prev);
+                              if (displayStatus === 'confirmed') {
+                                // If already confirmed, clicking again removes the pending change
+                                if (prev.has(item.id) && prev.get(item.id) === 'confirmed') {
+                                  next.delete(item.id);
+                                } else if (dbStatus === 'confirmed') {
+                                  // Already confirmed in DB, no change needed
+                                  next.delete(item.id);
+                                } else {
+                                  next.set(item.id, 'confirmed');
+                                }
+                              } else {
+                                next.set(item.id, 'confirmed');
+                              }
+                              return next;
+                            });
                           }}
-                          disabled={itemsListSaving}
+                          disabled={itemsListSaving || !itemsListEditMode}
                           style={{
                             padding: '2px 6px',
                             fontSize: '10px',
-                            border: 'none',
+                            border: hasPendingChange && displayStatus === 'confirmed' ? '2px solid #f59e0b' : 'none',
                             borderRadius: '3px',
-                            cursor: 'pointer',
-                            background: currentStatus === 'confirmed' ? '#22c55e' : '#e5e7eb',
-                            color: currentStatus === 'confirmed' ? '#fff' : '#6b7280',
-                            transition: 'all 0.15s'
+                            cursor: itemsListEditMode ? 'pointer' : 'not-allowed',
+                            background: displayStatus === 'confirmed' ? '#22c55e' : '#e5e7eb',
+                            color: displayStatus === 'confirmed' ? '#fff' : '#6b7280',
+                            transition: 'all 0.15s',
+                            opacity: !itemsListEditMode ? 0.5 : 1
                           }}
-                          title="Kinnita saabunuks"
+                          title={itemsListEditMode ? "Kinnita saabunuks" : "Aktiveeri muutmise režiim"}
                         >
                           ✓
                         </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            applyStatusToSingleItem(item.id, 'missing');
+                            if (!itemsListEditMode) return;
+                            // In edit mode, add to pending changes
+                            setItemsListPendingChanges(prev => {
+                              const next = new Map(prev);
+                              if (displayStatus === 'missing') {
+                                // If already missing, clicking again removes the pending change
+                                if (prev.has(item.id) && prev.get(item.id) === 'missing') {
+                                  next.delete(item.id);
+                                } else if (dbStatus === 'missing') {
+                                  // Already missing in DB, no change needed
+                                  next.delete(item.id);
+                                } else {
+                                  next.set(item.id, 'missing');
+                                }
+                              } else {
+                                next.set(item.id, 'missing');
+                              }
+                              return next;
+                            });
                           }}
-                          disabled={itemsListSaving}
+                          disabled={itemsListSaving || !itemsListEditMode}
                           style={{
                             padding: '2px 6px',
                             fontSize: '10px',
-                            border: 'none',
+                            border: hasPendingChange && displayStatus === 'missing' ? '2px solid #f59e0b' : 'none',
                             borderRadius: '3px',
-                            cursor: 'pointer',
-                            background: currentStatus === 'missing' ? '#ef4444' : '#e5e7eb',
-                            color: currentStatus === 'missing' ? '#fff' : '#6b7280',
-                            transition: 'all 0.15s'
+                            cursor: itemsListEditMode ? 'pointer' : 'not-allowed',
+                            background: displayStatus === 'missing' ? '#ef4444' : '#e5e7eb',
+                            color: displayStatus === 'missing' ? '#fff' : '#6b7280',
+                            transition: 'all 0.15s',
+                            opacity: !itemsListEditMode ? 0.5 : 1
                           }}
-                          title="Märgi puuduvaks"
+                          title={itemsListEditMode ? "Märgi puuduvaks" : "Aktiveeri muutmise režiim"}
                         >
                           ✗
                         </button>

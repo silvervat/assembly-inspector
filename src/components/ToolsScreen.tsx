@@ -514,90 +514,85 @@ export default function ToolsScreen({
     const handleStepsSelection = async () => {
       try {
         const selection = await api.viewer.getSelection();
-        if (!selection || selection.length === 0) {
-          // No selection - check if we need to remove markups for previously selected
-          const prevSel = stepsPrevSelectionRef.current;
-          if (prevSel.size > 0) {
-            const currentMarkups = stepsMarkupsRef.current;
-            const idsToRemove: number[] = [];
-            const newMarkups = new Map(currentMarkups);
-
-            for (const guid of prevSel) {
-              const data = currentMarkups.get(guid);
-              if (data) {
-                idsToRemove.push(data.markupId);
-                newMarkups.delete(guid);
-              }
-            }
-
-            if (idsToRemove.length > 0) {
-              try {
-                await (api.markup as any)?.removeTextMarkup?.(idsToRemove);
-              } catch (e) {
-                console.warn('Error removing step markups:', e);
-              }
-              setStepsMarkups(newMarkups);
-              stepsMarkupsRef.current = newMarkups; // Update ref immediately
-            }
-            setStepsPrevSelection(new Set());
-            stepsPrevSelectionRef.current = new Set(); // Update ref immediately
-          }
-          return;
-        }
-
-        // Build map of currently selected objects: guid -> {modelId, runtimeId}
-        const currentSelection = new Map<string, { modelId: string; runtimeId: number }>();
-
-        for (const modelSel of selection) {
-          if (!modelSel.objectRuntimeIds || modelSel.objectRuntimeIds.length === 0) continue;
-
-          // Get GUIDs for selected objects
-          const guids = await api.viewer.convertToObjectIds(modelSel.modelId, modelSel.objectRuntimeIds);
-          if (guids) {
-            for (let i = 0; i < guids.length; i++) {
-              const g = guids[i];
-              if (g) {
-                currentSelection.set(g.toLowerCase(), {
-                  modelId: modelSel.modelId,
-                  runtimeId: modelSel.objectRuntimeIds[i]
-                });
-              }
-            }
-          }
-        }
-
-        const currentGuids = new Set(currentSelection.keys());
-        const prevSelection = stepsPrevSelectionRef.current;
         const currentMarkups = stepsMarkupsRef.current;
 
-        // Find newly added objects (in current but not in previous and not already marked)
-        const newlySelected: Array<{ guid: string; modelId: string; runtimeId: number }> = [];
-        for (const [guid, info] of currentSelection) {
-          if (!prevSelection.has(guid) && !currentMarkups.has(guid)) {
-            newlySelected.push({ guid, ...info });
+        // Build set of currently selected GUIDs
+        const currentGuids = new Set<string>();
+        const currentSelection = new Map<string, { modelId: string; runtimeId: number }>();
+
+        if (selection && selection.length > 0) {
+          for (const modelSel of selection) {
+            if (!modelSel.objectRuntimeIds || modelSel.objectRuntimeIds.length === 0) continue;
+            const guids = await api.viewer.convertToObjectIds(modelSel.modelId, modelSel.objectRuntimeIds);
+            if (guids) {
+              for (let i = 0; i < guids.length; i++) {
+                const g = guids[i];
+                if (g) {
+                  const guidLower = g.toLowerCase();
+                  currentGuids.add(guidLower);
+                  currentSelection.set(guidLower, {
+                    modelId: modelSel.modelId,
+                    runtimeId: modelSel.objectRuntimeIds[i]
+                  });
+                }
+              }
+            }
           }
         }
 
-        // Find removed objects (in previous but not in current and has markup)
-        const deselected: string[] = [];
-        for (const guid of prevSelection) {
-          if (!currentGuids.has(guid) && currentMarkups.has(guid)) {
-            deselected.push(guid);
+        // STEP 1: Remove markups for items that are no longer selected
+        const guidsToRemove: string[] = [];
+        for (const [guid] of currentMarkups) {
+          if (!currentGuids.has(guid)) {
+            guidsToRemove.push(guid);
           }
         }
 
-        // Create markups for newly selected objects
-        if (newlySelected.length > 0) {
-          let nextIndex = stepsCounterRef.current;
+        if (guidsToRemove.length > 0) {
+          const idsToRemove: number[] = [];
           const newMarkups = new Map(currentMarkups);
+
+          for (const guid of guidsToRemove) {
+            const data = newMarkups.get(guid);
+            if (data) {
+              idsToRemove.push(data.markupId);
+              newMarkups.delete(guid);
+              console.log('Removing step markup for deselected:', guid, 'markupId:', data.markupId);
+            }
+          }
+
+          if (idsToRemove.length > 0) {
+            try {
+              console.log('Calling removeTextMarkup with IDs:', idsToRemove);
+              await (api.markup as any)?.removeTextMarkup?.(idsToRemove);
+              console.log('removeTextMarkup completed');
+            } catch (e) {
+              console.warn('Error removing step markups:', e);
+            }
+            setStepsMarkups(newMarkups);
+            stepsMarkupsRef.current = newMarkups;
+          }
+        }
+
+        // STEP 2: Add markups for newly selected items (not already marked)
+        const guidsToAdd: Array<{ guid: string; modelId: string; runtimeId: number }> = [];
+        for (const [guid, info] of currentSelection) {
+          // Use the LATEST ref value after potential removal above
+          if (!stepsMarkupsRef.current.has(guid)) {
+            guidsToAdd.push({ guid, ...info });
+          }
+        }
+
+        if (guidsToAdd.length > 0) {
+          let nextIndex = stepsCounterRef.current;
+          const newMarkups = new Map(stepsMarkupsRef.current); // Use latest ref
           const mode = stepsModeRef.current;
           const color = stepsColorRef.current;
           const height = stepsHeightRef.current;
           const autoHeight = stepsAutoHeightRef.current;
 
-          for (const { guid, modelId, runtimeId } of newlySelected) {
+          for (const { guid, modelId, runtimeId } of guidsToAdd) {
             try {
-              // Get bounding box directly from selection
               const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeId]);
               if (!bboxes || bboxes.length === 0) {
                 console.warn('No bbox for', guid);
@@ -609,21 +604,16 @@ export default function ToolsScreen({
               const centerY = ((box.min.y + box.max.y) / 2) * 1000;
               const centerZ = ((box.min.z + box.max.z) / 2) * 1000;
 
-              // Generate step label
               const stepLabel = mode === 'numbers'
                 ? String(nextIndex + 1)
                 : String.fromCharCode(65 + (nextIndex % 26)) + (nextIndex >= 26 ? String(Math.floor(nextIndex / 26)) : '');
 
-              // Calculate height
-              let heightMm = height * 10; // cm to mm
-
-              // Simple auto-stagger based on counter (alternates between levels)
+              let heightMm = height * 10;
               if (autoHeight) {
-                const HEIGHT_LEVELS = [200, 1400, 2800, 4200, 5600]; // mm
+                const HEIGHT_LEVELS = [200, 1400, 2800, 4200, 5600];
                 heightMm = HEIGHT_LEVELS[nextIndex % HEIGHT_LEVELS.length];
               }
 
-              // Create the markup
               const markupData = {
                 text: stepLabel,
                 start: { positionX: centerX, positionY: centerY, positionZ: centerZ },
@@ -631,16 +621,28 @@ export default function ToolsScreen({
                 color: { r: color.r, g: color.g, b: color.b, a: 255 }
               };
 
-              console.log('Creating step markup:', stepLabel, 'at height', heightMm);
+              console.log('Creating step markup:', stepLabel, 'for guid:', guid);
               const result = await (api.markup as any)?.addTextMarkup?.([markupData]);
               console.log('Markup result:', result);
 
+              // Handle various API response formats
+              let markupId: number | null = null;
               if (result && Array.isArray(result) && result[0]?.id != null) {
-                newMarkups.set(guid, { markupId: result[0].id, stepIndex: nextIndex });
-                nextIndex++;
+                markupId = result[0].id;
               } else if (result && typeof result === 'object' && result.id != null) {
-                newMarkups.set(guid, { markupId: result.id, stepIndex: nextIndex });
+                markupId = result.id;
+              } else if (typeof result === 'number') {
+                markupId = result;
+              } else if (result && Array.isArray(result) && typeof result[0] === 'number') {
+                markupId = result[0];
+              }
+
+              if (markupId != null) {
+                newMarkups.set(guid, { markupId, stepIndex: nextIndex });
                 nextIndex++;
+                console.log('Stored markup:', guid, '-> markupId:', markupId);
+              } else {
+                console.warn('Could not get markup ID from result:', result);
               }
             } catch (e) {
               console.warn('Could not create step markup for', guid, e);
@@ -648,39 +650,11 @@ export default function ToolsScreen({
           }
 
           setStepsMarkups(newMarkups);
-          stepsMarkupsRef.current = newMarkups; // Update ref immediately
+          stepsMarkupsRef.current = newMarkups;
           setStepsCounter(nextIndex);
-          stepsCounterRef.current = nextIndex; // Update ref immediately
+          stepsCounterRef.current = nextIndex;
         }
 
-        // Remove markups for deselected objects
-        if (deselected.length > 0) {
-          const newMarkups = new Map(currentMarkups);
-          const idsToRemove: number[] = [];
-
-          for (const guid of deselected) {
-            const data = newMarkups.get(guid);
-            if (data) {
-              idsToRemove.push(data.markupId);
-              newMarkups.delete(guid);
-            }
-          }
-
-          if (idsToRemove.length > 0) {
-            try {
-              await (api.markup as any)?.removeTextMarkup?.(idsToRemove);
-            } catch (e) {
-              console.warn('Error removing step markups:', e);
-            }
-          }
-
-          setStepsMarkups(newMarkups);
-          stepsMarkupsRef.current = newMarkups; // Update ref immediately
-        }
-
-        // Update previous selection
-        setStepsPrevSelection(currentGuids);
-        stepsPrevSelectionRef.current = currentGuids; // Update ref immediately
       } catch (e) {
         console.error('Error in steps selection handler:', e);
       }
