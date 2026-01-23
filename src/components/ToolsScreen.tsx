@@ -646,7 +646,9 @@ export default function ToolsScreen({
           }
 
           setStepsMarkups(newMarkups);
+          stepsMarkupsRef.current = newMarkups; // Update ref immediately
           setStepsCounter(nextIndex);
+          stepsCounterRef.current = nextIndex; // Update ref immediately
         }
 
         // Remove markups for deselected objects
@@ -671,10 +673,12 @@ export default function ToolsScreen({
           }
 
           setStepsMarkups(newMarkups);
+          stepsMarkupsRef.current = newMarkups; // Update ref immediately
         }
 
         // Update previous selection
         setStepsPrevSelection(currentGuids);
+        stepsPrevSelectionRef.current = currentGuids; // Update ref immediately
       } catch (e) {
         console.error('Error in steps selection handler:', e);
       }
