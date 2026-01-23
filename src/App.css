@@ -16821,7 +16821,6 @@ button.stat-toggle.off:hover {
   height: 100%;
   background: var(--modus-bg-secondary);
   overflow: hidden;
-  contain: strict;
 }
 
 .tools-content {
@@ -16830,7 +16829,6 @@ button.stat-toggle.off:hover {
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
-  contain: content;
 }
 
 .tools-section {

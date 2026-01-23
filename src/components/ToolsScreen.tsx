@@ -177,11 +177,16 @@ export default function ToolsScreen({
     setExpandedSection(prev => prev === section ? null : section);
 
     // Auto-scroll to section header when expanding
+    // Use scrollTo on tools-content instead of scrollIntoView to avoid scrolling parent containers
     if (isExpanding) {
       setTimeout(() => {
         const sectionEl = sectionRefs.current[section];
         if (sectionEl) {
-          sectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          const toolsContent = sectionEl.closest('.tools-content');
+          if (toolsContent) {
+            const sectionTop = sectionEl.offsetTop - (toolsContent as HTMLElement).offsetTop;
+            toolsContent.scrollTo({ top: sectionTop, behavior: 'smooth' });
+          }
         }
       }, 50);
     }
