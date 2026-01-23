@@ -32,7 +32,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.873';
+export const APP_VERSION = '3.0.874';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -1606,7 +1606,7 @@ export default function App() {
           const BATCH_SIZE = 50;
           for (let i = 0; i < allIds.length; i += BATCH_SIZE) {
             const batch = allIds.slice(i, i + BATCH_SIZE);
-            await (api.markup as any)?.removeTextMarkup?.(batch);
+            await api.markup?.removeMarkups?.(batch);
           }
 
           showGlobalToast(`${allIds.length} markupit eemaldatud`, 'success');
