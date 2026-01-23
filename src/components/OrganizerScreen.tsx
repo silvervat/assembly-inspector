@@ -114,6 +114,8 @@ interface MarkupSettings {
   onlySelectedInModel: boolean;
   // Leader markup height in cm (0-1000, default 10)
   leaderHeight: number;
+  // Auto-stagger heights for nearby markups (< 4m apart)
+  autoStaggerHeight: boolean;
   // Legacy fields for backwards compatibility (will be migrated)
   includeGroupName?: boolean;
   groupNameLine?: MarkupLineConfig;
@@ -759,7 +761,8 @@ export default function OrganizerScreen({
     useGroupColors: true,
     customColor: { r: 34, g: 197, b: 94 }, // Default green color
     onlySelectedInModel: false,
-    leaderHeight: 10
+    leaderHeight: 10,
+    autoStaggerHeight: false
   };
 
   // Migrate old settings to new template format
@@ -813,7 +816,8 @@ export default function OrganizerScreen({
       separator: old.separator || 'newline',
       useGroupColors: old.useGroupColors ?? true,
       onlySelectedInModel: old.onlySelectedInModel ?? false,
-      leaderHeight: old.leaderHeight ?? 10
+      leaderHeight: old.leaderHeight ?? 10,
+      autoStaggerHeight: old.autoStaggerHeight ?? false
     };
   };
 
@@ -5737,6 +5741,54 @@ export default function OrganizerScreen({
         return;
       }
 
+      // Apply auto-stagger heights if enabled and multiple markups
+      if (markupSettings.autoStaggerHeight && markupsToCreate.length > 1) {
+        showToast('Arvutan automaatseid kõrgusi...');
+
+        // Sort by X position for consistent staggering
+        const indexed = markupsToCreate.map((m, idx) => ({ m, idx, x: m.start.positionX, y: m.start.positionY }));
+        indexed.sort((a, b) => a.x - b.x || a.y - b.y);
+
+        // Multi-level height staggering for close markups
+        // Heights: 200mm (20cm), 1400mm (140cm), 2800mm (280cm), ...
+        const heights: number[] = new Array(markupsToCreate.length).fill(0);
+        const PROXIMITY_THRESHOLD = 4000; // 4000mm = 4m
+        const HEIGHT_LEVELS = [200, 1400, 2800, 4200, 5600]; // mm values
+
+        for (let i = 0; i < indexed.length; i++) {
+          const current = indexed[i];
+
+          // Find all close neighbors that already have heights assigned
+          const usedHeights = new Set<number>();
+          for (let j = 0; j < indexed.length; j++) {
+            if (i === j) continue;
+            const other = indexed[j];
+            const dx = current.x - other.x;
+            const dy = current.y - other.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < PROXIMITY_THRESHOLD && heights[other.idx] > 0) {
+              usedHeights.add(heights[other.idx]);
+            }
+          }
+
+          // Find the first available height level not used by close neighbors
+          let assignedHeight = HEIGHT_LEVELS[0];
+          for (const level of HEIGHT_LEVELS) {
+            if (!usedHeights.has(level)) {
+              assignedHeight = level;
+              break;
+            }
+          }
+          heights[current.idx] = assignedHeight;
+        }
+
+        // Apply calculated heights
+        for (let i = 0; i < markupsToCreate.length; i++) {
+          markupsToCreate[i].end.positionZ = markupsToCreate[i].start.positionZ + heights[i];
+        }
+      }
+
       // Create markups in batches
       showToast(`Loon ${markupsToCreate.length} markupit...`);
       setMarkupProgress({ current: 0, total: markupsToCreate.length, action: 'adding' });
@@ -6539,12 +6591,28 @@ export default function OrganizerScreen({
     return result;
   };
 
-  const exportGroupToExcel = async (groupId: string) => {
+  const exportGroupToExcel = async (groupId: string, onlySelectedItems: boolean = false) => {
     const group = groups.find(g => g.id === groupId);
     if (!group) return;
 
     // Collect all items from this group and subgroups
-    const allItems = collectAllGroupItems(groupId);
+    let allItems = collectAllGroupItems(groupId);
+
+    // Filter to only selected items if requested
+    if (onlySelectedItems && selectedObjects.length > 0) {
+      const selectedGuidsLower = new Set(
+        selectedObjects.map(obj => obj.guidIfc?.toLowerCase()).filter(Boolean)
+      );
+      allItems = allItems.filter(({ item }) =>
+        item.guid_ifc && selectedGuidsLower.has(item.guid_ifc.toLowerCase())
+      );
+
+      if (allItems.length === 0) {
+        showToast('Valitud detailid pole selles grupis');
+        return;
+      }
+    }
+
     const customFields = group.custom_fields || [];
 
     // Check if this is a non-assembly group (uses display_properties instead of standard columns)
@@ -9142,6 +9210,37 @@ export default function OrganizerScreen({
               <button onClick={() => exportGroupToExcel(node.id)}>
                 <FiDownload size={12} /> Ekspordi Excel
               </button>
+              {(() => {
+                // Check if any selected objects are in this group (including subgroups)
+                if (selectedObjects.length === 0) return null;
+                const groupIds = new Set([node.id, ...getGroupSubtreeIds(node.id)]);
+                const selectedGuidsLower = new Set(selectedObjects.map(o => o.guidIfc?.toLowerCase()).filter(Boolean));
+                let hasSelectedInGroup = false;
+                for (const gid of groupIds) {
+                  const items = groupItems.get(gid) || [];
+                  if (items.some(item => item.guid_ifc && selectedGuidsLower.has(item.guid_ifc.toLowerCase()))) {
+                    hasSelectedInGroup = true;
+                    break;
+                  }
+                }
+                if (!hasSelectedInGroup) return null;
+                return (
+                  <button onClick={() => { setGroupMenuId(null); exportGroupToExcel(node.id, true); }}>
+                    <FiDownload size={12} /> Ekspordi valitud
+                    <span style={{ marginLeft: '4px', background: '#3b82f6', color: 'white', padding: '1px 5px', borderRadius: '8px', fontSize: '10px' }}>
+                      {selectedObjects.filter(o => {
+                        if (!o.guidIfc) return false;
+                        const guidLower = o.guidIfc.toLowerCase();
+                        for (const gid of groupIds) {
+                          const items = groupItems.get(gid) || [];
+                          if (items.some(item => item.guid_ifc?.toLowerCase() === guidLower)) return true;
+                        }
+                        return false;
+                      }).length}
+                    </span>
+                  </button>
+                );
+              })()}
               {isEffectivelyLocked ? (
                 <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title="Lukustatud gruppi ei saa importida">
                   <FiLock size={12} /> Impordi GUID
@@ -11963,7 +12062,7 @@ export default function OrganizerScreen({
 
                   {/* Leader height input */}
                   <div className="markup-height-row">
-                    <label>Kõrgus:</label>
+                    <label style={{ color: markupSettings.autoStaggerHeight ? '#9ca3af' : undefined }}>Kõrgus:</label>
                     <div className="height-input-wrapper">
                       <input
                         type="number"
@@ -11976,9 +12075,35 @@ export default function OrganizerScreen({
                         }}
                         min={0}
                         max={1000}
+                        disabled={markupSettings.autoStaggerHeight}
+                        style={markupSettings.autoStaggerHeight ? { background: '#f3f4f6', color: '#9ca3af' } : undefined}
                       />
-                      <span className="height-unit">cm</span>
+                      <span className="height-unit" style={{ color: markupSettings.autoStaggerHeight ? '#9ca3af' : undefined }}>cm</span>
                     </div>
+                  </div>
+
+                  {/* Auto-stagger heights */}
+                  <div className="markup-height-row" style={{ marginTop: '8px' }}>
+                    <label>Auto kõrgused:</label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={markupSettings.autoStaggerHeight}
+                        onChange={(e) => setMarkupSettings(prev => ({ ...prev, autoStaggerHeight: e.target.checked }))}
+                        style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: '12px', color: markupSettings.autoStaggerHeight ? '#0891b2' : '#6b7280', fontWeight: markupSettings.autoStaggerHeight ? 500 : 400 }}>
+                        {markupSettings.autoStaggerHeight ? 'Sees' : 'Väljas'}
+                      </span>
+                    </label>
+                    <button
+                      onClick={() => alert('Kui sisse lülitatud, siis lähestikku olevad markupid (< 4m vahe) saavad automaatselt erinevad kõrgused:\n\n• 1. markup: 20 cm\n• 2. markup: 140 cm\n• 3. markup: 280 cm\n• jne.\n\nSee aitab vältida markupite kattumist.')}
+                      style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', color: '#9ca3af', marginLeft: 'auto' }}
+                      title="Info"
+                      type="button"
+                    >
+                      <FiInfo size={14} />
+                    </button>
                   </div>
                 </div>
 
