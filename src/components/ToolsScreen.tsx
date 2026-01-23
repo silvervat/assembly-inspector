@@ -537,8 +537,10 @@ export default function ToolsScreen({
                 console.warn('Error removing step markups:', e);
               }
               setStepsMarkups(newMarkups);
+              stepsMarkupsRef.current = newMarkups; // Update ref immediately
             }
             setStepsPrevSelection(new Set());
+            stepsPrevSelectionRef.current = new Set(); // Update ref immediately
           }
           return;
         }
