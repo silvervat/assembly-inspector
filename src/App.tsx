@@ -32,7 +32,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.858';
+export const APP_VERSION = '3.0.859';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -982,22 +982,22 @@ export default function App() {
         setShortcutLoading('a');
 
         try {
-          // Get all arrived (confirmed) items from database
-          const { data: arrivedItems, error } = await supabase
-            .from('arrived_delivery_confirmations')
-            .select('guid_ifc')
+          // Get all arrived (confirmed) items from database via join
+          const { data: confirmedItems, error } = await supabase
+            .from('trimble_delivery_items')
+            .select('guid_ifc, confirmations:trimble_arrival_confirmations!inner(status)')
             .eq('trimble_project_id', projectId)
-            .eq('status', 'confirmed');
+            .eq('confirmations.status', 'confirmed');
 
           if (error) throw error;
 
-          if (!arrivedItems || arrivedItems.length === 0) {
+          if (!confirmedItems || confirmedItems.length === 0) {
             showGlobalToast('Saabunud detaile ei leitud', 'info');
             setShortcutLoading(null);
             return;
           }
 
-          const arrivedGuids = arrivedItems.map(i => i.guid_ifc).filter(Boolean) as string[];
+          const arrivedGuids = confirmedItems.map(i => i.guid_ifc).filter(Boolean) as string[];
           const arrivedGuidsSet = new Set(arrivedGuids.map(g => g.toLowerCase()));
 
           // Get all objects from database
