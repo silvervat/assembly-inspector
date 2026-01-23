@@ -563,9 +563,9 @@ export default function ToolsScreen({
 
           if (idsToRemove.length > 0) {
             try {
-              console.log('Calling removeTextMarkup with IDs:', idsToRemove);
-              await (api.markup as any)?.removeTextMarkup?.(idsToRemove);
-              console.log('removeTextMarkup completed');
+              console.log('Calling removeMarkups with IDs:', idsToRemove);
+              await api.markup?.removeMarkups?.(idsToRemove);
+              console.log('removeMarkups completed');
             } catch (e) {
               console.warn('Error removing step markups:', e);
             }
@@ -4033,7 +4033,7 @@ export default function ToolsScreen({
                       const idsToRemove = Array.from(stepsMarkups.values()).map(d => d.markupId);
                       if (idsToRemove.length > 0) {
                         try {
-                          await (api.markup as any)?.removeTextMarkup?.(idsToRemove);
+                          await api.markup?.removeMarkups?.(idsToRemove);
                         } catch (e) {
                           console.warn('Error removing step markups:', e);
                         }
