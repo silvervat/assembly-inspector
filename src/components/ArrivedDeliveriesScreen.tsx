@@ -5252,7 +5252,7 @@ export default function ArrivedDeliveriesScreen({
                     trimble_project_id: projectId,
                     arrival_date: new Date().toISOString().split('T')[0],
                     arrival_time: new Date().toTimeString().substring(0, 5),
-                    status: 'arrived',
+                    is_confirmed: false,
                     created_by: tcUserEmail
                   })
                   .select()
@@ -5477,7 +5477,7 @@ export default function ArrivedDeliveriesScreen({
                                   trimble_project_id: projectId,
                                   arrival_date: new Date().toISOString().split('T')[0],
                                   arrival_time: new Date().toTimeString().substring(0, 5),
-                                  status: 'arrived',
+                                  is_confirmed: false,
                                   created_by: tcUserEmail
                                 })
                                 .select()
