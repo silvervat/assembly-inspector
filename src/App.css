@@ -16819,16 +16819,18 @@ button.stat-toggle.off:hover {
   display: flex;
   flex-direction: column;
   height: 100%;
-  max-height: 100vh;
   background: var(--modus-bg-secondary);
   overflow: hidden;
+  contain: strict;
 }
 
 .tools-content {
   flex: 1;
   padding: 12px;
   overflow-y: auto;
+  overflow-x: hidden;
   min-height: 0;
+  contain: content;
 }
 
 .tools-section {

@@ -32,7 +32,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.859';
+export const APP_VERSION = '3.0.860';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -1152,7 +1152,7 @@ export default function App() {
               text: assemblyMark,
               start: { positionX: posX, positionY: posY, positionZ: topZ },
               end: { positionX: posX, positionY: posY, positionZ: topZ },
-              color: '#000000'
+              color: '#1e3a8a'
             });
           }
 
@@ -1211,10 +1211,10 @@ export default function App() {
             createdIds.push(Number(result.id));
           }
 
-          // Color markups black using editMarkup (addTextMarkup color param doesn't work reliably)
+          // Color markups dark blue using editMarkup (addTextMarkup color param doesn't work reliably)
           for (const id of createdIds) {
             try {
-              await (api.markup as any)?.editMarkup?.(id, { color: '#000000' });
+              await (api.markup as any)?.editMarkup?.(id, { color: '#1e3a8a' });
             } catch (e) {
               console.warn('Could not set color for markup', id, e);
             }
