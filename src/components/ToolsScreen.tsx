@@ -571,6 +571,12 @@ export default function ToolsScreen({
             }
             setStepsMarkups(newMarkups);
             stepsMarkupsRef.current = newMarkups;
+            // Update counter to match remaining markups count
+            // so new items get sequential numbers
+            const remainingCount = newMarkups.size;
+            setStepsCounter(remainingCount);
+            stepsCounterRef.current = remainingCount;
+            console.log('Steps counter updated to:', remainingCount);
           }
         }
 
