@@ -32,7 +32,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.865';
+export const APP_VERSION = '3.0.866';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -944,16 +944,10 @@ export default function App() {
 
       const key = e.key.toLowerCase();
 
-      // ALT+SHIFT+S - Expand SidePanel and open global search modal
+      // ALT+SHIFT+S - Open global search modal
       if (key === 's') {
         e.preventDefault();
         e.stopPropagation();
-        try {
-          // First expand the SidePanel (extension panel)
-          await api.ui.setUI({ name: 'SidePanel', state: 'expanded' });
-        } catch (err) {
-          console.warn('Could not expand SidePanel:', err);
-        }
         setGlobalSearchOpen(true);
         return;
       }
@@ -982,22 +976,37 @@ export default function App() {
         setShortcutLoading('a');
 
         try {
-          // Get all arrived (confirmed) items from database via join
-          const { data: confirmedItems, error } = await supabase
-            .from('trimble_delivery_items')
-            .select('guid_ifc, confirmations:trimble_arrival_confirmations!inner(status)')
+          // First get all confirmed arrival confirmations
+          const { data: confirmations, error: confError } = await supabase
+            .from('trimble_arrival_confirmations')
+            .select('item_id')
             .eq('trimble_project_id', projectId)
-            .eq('confirmations.status', 'confirmed');
+            .eq('status', 'confirmed');
 
-          if (error) throw error;
+          if (confError) throw confError;
 
-          if (!confirmedItems || confirmedItems.length === 0) {
+          if (!confirmations || confirmations.length === 0) {
             showGlobalToast('Saabunud detaile ei leitud', 'info');
             setShortcutLoading(null);
             return;
           }
 
-          const arrivedGuids = confirmedItems.map(i => i.guid_ifc).filter(Boolean) as string[];
+          // Get delivery items by their IDs to get guid_ifc
+          const itemIds = confirmations.map(c => c.item_id).filter(Boolean);
+          const { data: deliveryItems, error: itemError } = await supabase
+            .from('trimble_delivery_items')
+            .select('guid_ifc')
+            .in('id', itemIds);
+
+          if (itemError) throw itemError;
+
+          if (!deliveryItems || deliveryItems.length === 0) {
+            showGlobalToast('Saabunud detaile ei leitud', 'info');
+            setShortcutLoading(null);
+            return;
+          }
+
+          const arrivedGuids = deliveryItems.map(i => i.guid_ifc).filter(Boolean) as string[];
           const arrivedGuidsSet = new Set(arrivedGuids.map(g => g.toLowerCase()));
 
           // Get all objects from database
@@ -1618,97 +1627,43 @@ export default function App() {
         setShortcutLoading('c');
 
         try {
-          // Get selected objects first
+          // Get selected objects BEFORE coloring white (selection persists)
           const selection = await api.viewer.getSelection();
-          const selectedRuntimeIdsByModel: Record<string, Set<number>> = {};
+          const selectedByModel: Record<string, number[]> = {};
+          let totalSelected = 0;
 
           if (selection && selection.length > 0) {
             for (const sel of selection) {
               if (sel.objectRuntimeIds && sel.objectRuntimeIds.length > 0) {
-                if (!selectedRuntimeIdsByModel[sel.modelId]) {
-                  selectedRuntimeIdsByModel[sel.modelId] = new Set();
+                if (!selectedByModel[sel.modelId]) {
+                  selectedByModel[sel.modelId] = [];
                 }
-                sel.objectRuntimeIds.forEach(id => selectedRuntimeIdsByModel[sel.modelId].add(id));
+                selectedByModel[sel.modelId].push(...sel.objectRuntimeIds);
+                totalSelected += sel.objectRuntimeIds.length;
               }
             }
           }
 
-          const hasSelectedObjects = Object.values(selectedRuntimeIdsByModel).some(s => s.size > 0);
+          // First color the entire model white using the existing function
+          await handleColorModelWhite();
 
-          // Get all objects from database
-          const { data: allObjects } = await supabase
-            .from('trimble_model_objects')
-            .select('guid_ifc')
-            .eq('trimble_project_id', projectId)
-            .not('guid_ifc', 'is', null);
-
-          const allGuids = (allObjects || []).map(o => o.guid_ifc).filter(Boolean) as string[];
-
-          // Find objects in model
-          const foundObjects = await findObjectsInLoadedModels(api, allGuids);
-
-          if (foundObjects.size === 0) {
-            showGlobalToast('Mudel pole laaditud', 'error');
-            setShortcutLoading(null);
-            return;
-          }
-
-          // Separate selected and non-selected objects
-          const whiteObjects: { modelId: string; runtimeId: number }[] = [];
-          const greenObjects: { modelId: string; runtimeId: number }[] = [];
-
-          for (const [, found] of foundObjects) {
-            const selectedSet = selectedRuntimeIdsByModel[found.modelId];
-            if (hasSelectedObjects && selectedSet && selectedSet.has(found.runtimeId)) {
-              greenObjects.push(found);
-            } else {
-              whiteObjects.push(found);
-            }
-          }
-
-          // Group by model for coloring
-          const whiteByModel: Record<string, number[]> = {};
-          const greenByModel: Record<string, number[]> = {};
-
-          for (const obj of whiteObjects) {
-            if (!whiteByModel[obj.modelId]) whiteByModel[obj.modelId] = [];
-            whiteByModel[obj.modelId].push(obj.runtimeId);
-          }
-          for (const obj of greenObjects) {
-            if (!greenByModel[obj.modelId]) greenByModel[obj.modelId] = [];
-            greenByModel[obj.modelId].push(obj.runtimeId);
-          }
-
-          // Color white first
-          const white = { r: 255, g: 255, b: 255, a: 255 };
-          for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+          // If we have selected objects, color them dark green
+          if (totalSelected > 0) {
+            const darkGreen = { r: 22, g: 101, b: 52, a: 255 }; // #166534
             const BATCH_SIZE = 500;
-            for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
-              const batch = runtimeIds.slice(i, i + BATCH_SIZE);
-              await api.viewer.setObjectState(
-                { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-                { color: white }
-              );
-            }
-          }
 
-          // Color selected dark green
-          const darkGreen = { r: 22, g: 101, b: 52, a: 255 }; // #166534
-          for (const [modelId, runtimeIds] of Object.entries(greenByModel)) {
-            const BATCH_SIZE = 500;
-            for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
-              const batch = runtimeIds.slice(i, i + BATCH_SIZE);
-              await api.viewer.setObjectState(
-                { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-                { color: darkGreen }
-              );
+            for (const [modelId, runtimeIds] of Object.entries(selectedByModel)) {
+              for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+                const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+                await api.viewer.setObjectState(
+                  { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+                  { color: darkGreen }
+                );
+              }
             }
-          }
-
-          if (hasSelectedObjects) {
-            showGlobalToast(`Mudel valge, ${greenObjects.length} valitud detaili tumeroheliseks`, 'success');
+            showGlobalToast(`Mudel valge, ${totalSelected} detaili tumeroheliseks`, 'success');
           } else {
-            showGlobalToast('Mudel värvitud valgeks (valik puudub)', 'success');
+            showGlobalToast('Mudel värvitud valgeks (valik puudub)', 'info');
           }
         } catch (err) {
           console.error('ALT+SHIFT+C error:', err);
