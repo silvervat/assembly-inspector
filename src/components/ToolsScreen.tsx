@@ -3,7 +3,7 @@ import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import * as XLSX from 'xlsx-js-style';
 import html2canvas from 'html2canvas';
 import { TrimbleExUser, supabase, MarkeerijPreset } from '../supabase';
-import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet, FiTarget, FiDatabase, FiPlus, FiEye, FiSave, FiShare2, FiInfo } from 'react-icons/fi';
+import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet, FiTarget, FiDatabase, FiPlus, FiEye, FiSave, FiShare2, FiInfo, FiList, FiPlay, FiPause } from 'react-icons/fi';
 import PartDatabasePanel from './PartDatabasePanel';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
@@ -104,7 +104,7 @@ export default function ToolsScreen({
   const [hasSelection, setHasSelection] = useState(false);
 
   // Accordion state - which section is expanded (null = all collapsed by default)
-  const [expandedSection, setExpandedSection] = useState<'crane' | 'export' | 'markup' | 'marker' | 'markeerija' | 'partdb' | null>(null);
+  const [expandedSection, setExpandedSection] = useState<'crane' | 'export' | 'markup' | 'marker' | 'markeerija' | 'steps' | 'partdb' | null>(null);
 
   // Marker (Märgista) feature state
   const [markerCategories, setMarkerCategories] = useState<MarkerCategory[]>([
@@ -147,6 +147,16 @@ export default function ToolsScreen({
   // Auto height staggering - alternates heights for close markups
   const [autoStaggerHeight, setAutoStaggerHeight] = useState(false);
 
+  // Steps marker (Sammude markeerija) state
+  const [stepsMode, setStepsMode] = useState<'numbers' | 'letters'>('numbers');
+  const [stepsColor, setStepsColor] = useState({ r: 0, g: 63, b: 135 }); // Trimble blue
+  const [stepsHeight, setStepsHeight] = useState(100); // cm
+  const [stepsAutoHeight, setStepsAutoHeight] = useState(false);
+  const [stepsActive, setStepsActive] = useState(false); // Is steps marking mode active
+  const [stepsMarkups, setStepsMarkups] = useState<Map<string, { markupId: number; stepIndex: number }>>(new Map()); // guidIfc -> markupId
+  const [stepsCounter, setStepsCounter] = useState(0); // Current step number
+  const [stepsPrevSelection, setStepsPrevSelection] = useState<Set<string>>(new Set()); // Previous selection GUIDs
+
   // Kinnitustarvikud (fasteners/bolts with washerCount=0) loading state
   const [kinnitustarvikudLoading, setKinnitustarvikudLoading] = useState(false);
 
@@ -172,7 +182,7 @@ export default function ToolsScreen({
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Toggle section expansion (accordion style) with auto-scroll
-  const toggleSection = (section: 'crane' | 'export' | 'markup' | 'marker' | 'markeerija' | 'partdb') => {
+  const toggleSection = (section: 'crane' | 'export' | 'markup' | 'marker' | 'markeerija' | 'steps' | 'partdb') => {
     const isExpanding = expandedSection !== section;
     setExpandedSection(prev => prev === section ? null : section);
 
@@ -478,6 +488,191 @@ export default function ToolsScreen({
       console.warn('Failed to save markeerija settings:', e);
     }
   }, [markeerijaSett]);
+
+  // Steps marker (Sammude markeerija) - listen for selection changes
+  useEffect(() => {
+    if (expandedSection !== 'steps' || !stepsActive) return;
+
+    const handleStepsSelection = async () => {
+      try {
+        const selection = await api.viewer.getSelection();
+        const currentGuids = new Set<string>();
+
+        // Collect all currently selected GUIDs
+        if (selection && selection.length > 0) {
+          for (const modelSel of selection) {
+            if (!modelSel.objectRuntimeIds || modelSel.objectRuntimeIds.length === 0) continue;
+
+            // Get GUIDs for selected objects
+            const guids = await api.viewer.convertToObjectIds(modelSel.modelId, modelSel.objectRuntimeIds);
+            if (guids) {
+              guids.forEach(g => {
+                if (g) currentGuids.add(g.toLowerCase());
+              });
+            }
+          }
+        }
+
+        // Find newly added objects (in current but not in previous)
+        const newlySelected: string[] = [];
+        for (const guid of currentGuids) {
+          if (!stepsPrevSelection.has(guid) && !stepsMarkups.has(guid)) {
+            newlySelected.push(guid);
+          }
+        }
+
+        // Find removed objects (in previous but not in current)
+        const deselected: string[] = [];
+        for (const guid of stepsPrevSelection) {
+          if (!currentGuids.has(guid) && stepsMarkups.has(guid)) {
+            deselected.push(guid);
+          }
+        }
+
+        // Create markups for newly selected objects
+        if (newlySelected.length > 0) {
+          let nextIndex = stepsCounter;
+          const newMarkups = new Map(stepsMarkups);
+
+          for (const guidLower of newlySelected) {
+            // Find the object in the model to get its position
+            const foundMap = await findObjectsInLoadedModels(api, [guidLower]);
+            const found = foundMap.get(guidLower);
+            if (!found) continue;
+
+            try {
+              const bboxes = await api.viewer.getObjectBoundingBoxes(found.modelId, [found.runtimeId]);
+              if (!bboxes || bboxes.length === 0) continue;
+
+              const box = bboxes[0].boundingBox;
+              const centerX = ((box.min.x + box.max.x) / 2) * 1000;
+              const centerY = ((box.min.y + box.max.y) / 2) * 1000;
+              const centerZ = ((box.min.z + box.max.z) / 2) * 1000;
+
+              // Generate step label
+              const stepLabel = stepsMode === 'numbers'
+                ? String(nextIndex + 1)
+                : String.fromCharCode(65 + (nextIndex % 26)) + (nextIndex >= 26 ? String(Math.floor(nextIndex / 26)) : '');
+
+              // Calculate height
+              let heightMm = stepsHeight * 10; // cm to mm
+
+              // Apply auto-stagger if enabled
+              if (stepsAutoHeight && newMarkups.size > 0) {
+                const PROXIMITY_THRESHOLD = 4000; // 4m
+                const HEIGHT_LEVELS = [200, 1400, 2800, 4200, 5600]; // mm
+                const usedHeights = new Set<number>();
+
+                // Check nearby markups
+                for (const [otherGuid] of newMarkups) {
+                  const otherFound = foundMap.get(otherGuid) || (await findObjectsInLoadedModels(api, [otherGuid])).get(otherGuid);
+                  if (!otherFound) continue;
+
+                  try {
+                    const otherBbox = await api.viewer.getObjectBoundingBoxes(otherFound.modelId, [otherFound.runtimeId]);
+                    if (otherBbox && otherBbox.length > 0) {
+                      const otherBox = otherBbox[0].boundingBox;
+                      const ox = ((otherBox.min.x + otherBox.max.x) / 2) * 1000;
+                      const oy = ((otherBox.min.y + otherBox.max.y) / 2) * 1000;
+                      const dx = centerX - ox;
+                      const dy = centerY - oy;
+                      const distance = Math.sqrt(dx * dx + dy * dy);
+
+                      if (distance < PROXIMITY_THRESHOLD) {
+                        // Find the height used by this markup
+                        for (const level of HEIGHT_LEVELS) {
+                          if (Math.abs(level - heightMm) < 100) {
+                            usedHeights.add(level);
+                          }
+                        }
+                      }
+                    }
+                  } catch (e) {
+                    // Ignore bbox errors
+                  }
+                }
+
+                // Find first available height
+                for (const level of HEIGHT_LEVELS) {
+                  if (!usedHeights.has(level)) {
+                    heightMm = level;
+                    break;
+                  }
+                }
+              }
+
+              // Create the markup
+              const markupData = {
+                text: stepLabel,
+                start: { positionX: centerX, positionY: centerY, positionZ: centerZ },
+                end: { positionX: centerX, positionY: centerY, positionZ: centerZ + heightMm },
+                color: { r: stepsColor.r, g: stepsColor.g, b: stepsColor.b, a: 255 }
+              };
+
+              const result = await (api.markup as any)?.addTextMarkup?.([markupData]);
+              if (result && result[0]?.id != null) {
+                newMarkups.set(guidLower, { markupId: result[0].id, stepIndex: nextIndex });
+                nextIndex++;
+              }
+            } catch (e) {
+              console.warn('Could not create step markup for', guidLower, e);
+            }
+          }
+
+          setStepsMarkups(newMarkups);
+          setStepsCounter(nextIndex);
+        }
+
+        // Remove markups for deselected objects
+        if (deselected.length > 0) {
+          const newMarkups = new Map(stepsMarkups);
+          const idsToRemove: number[] = [];
+
+          for (const guid of deselected) {
+            const data = newMarkups.get(guid);
+            if (data) {
+              idsToRemove.push(data.markupId);
+              newMarkups.delete(guid);
+            }
+          }
+
+          if (idsToRemove.length > 0) {
+            try {
+              await (api.markup as any)?.removeTextMarkup?.(idsToRemove);
+            } catch (e) {
+              console.warn('Error removing step markups:', e);
+            }
+          }
+
+          setStepsMarkups(newMarkups);
+        }
+
+        // Update previous selection
+        setStepsPrevSelection(currentGuids);
+      } catch (e) {
+        console.error('Error in steps selection handler:', e);
+      }
+    };
+
+    // Listen for selection changes
+    const listener = () => handleStepsSelection();
+    (api.viewer as any).addEventListener?.('onSelectionChanged', listener);
+
+    // Also run once immediately
+    handleStepsSelection();
+
+    return () => {
+      (api.viewer as any).removeEventListener?.('onSelectionChanged', listener);
+    };
+  }, [api, expandedSection, stepsActive, stepsMode, stepsColor, stepsHeight, stepsAutoHeight, stepsCounter, stepsMarkups, stepsPrevSelection]);
+
+  // Cleanup steps markups when section is collapsed or deactivated
+  useEffect(() => {
+    if (expandedSection !== 'steps' && stepsMarkups.size > 0) {
+      // Section collapsed - optionally keep markups, just deactivate
+      setStepsActive(false);
+    }
+  }, [expandedSection, stepsMarkups.size]);
 
   // Track selected objects and load properties for markeerija
   useEffect(() => {
@@ -3563,6 +3758,303 @@ export default function ToolsScreen({
               </p>
               </>
               )}
+            </>
+          )}
+        </div>
+
+        {/* Steps Marker Section - Collapsible */}
+        <div className="tools-section" ref={(el) => { sectionRefs.current['steps'] = el; }}>
+          <div
+            className="tools-section-header tools-section-header-clickable"
+            onClick={() => toggleSection('steps')}
+          >
+            {expandedSection === 'steps' ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
+            <FiList size={18} style={{ color: '#8b5cf6' }} />
+            <h3>Sammude markeerija</h3>
+            {stepsMarkups.size > 0 && (
+              <span style={{
+                marginLeft: 'auto',
+                background: '#8b5cf6',
+                color: 'white',
+                padding: '2px 8px',
+                borderRadius: '10px',
+                fontSize: '11px',
+                fontWeight: 600
+              }}>
+                {stepsMarkups.size}
+              </span>
+            )}
+          </div>
+
+          {expandedSection === 'steps' && (
+            <>
+              <p className="tools-section-desc">
+                Vali mudelist detailid järjest ja igale luuakse automaatselt järjekorranumbri markup. Hoia CTRL all mitu detaili valimiseks.
+              </p>
+
+              {/* Settings row */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
+                {/* Mode selector: Numbers or Letters */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '12px', color: '#4b5563', minWidth: '80px' }}>Režiim:</span>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <button
+                      onClick={() => setStepsMode('numbers')}
+                      style={{
+                        padding: '6px 12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '6px 0 0 6px',
+                        background: stepsMode === 'numbers' ? '#8b5cf6' : '#fff',
+                        color: stepsMode === 'numbers' ? '#fff' : '#374151',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      1, 2, 3...
+                    </button>
+                    <button
+                      onClick={() => setStepsMode('letters')}
+                      style={{
+                        padding: '6px 12px',
+                        border: '1px solid #d1d5db',
+                        borderLeft: 'none',
+                        borderRadius: '0 6px 6px 0',
+                        background: stepsMode === 'letters' ? '#8b5cf6' : '#fff',
+                        color: stepsMode === 'letters' ? '#fff' : '#374151',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      A, B, C...
+                    </button>
+                  </div>
+                </div>
+
+                {/* Color picker */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '12px', color: '#4b5563', minWidth: '80px' }}>Värv:</span>
+                  <input
+                    type="color"
+                    value={`#${((1 << 24) + (stepsColor.r << 16) + (stepsColor.g << 8) + stepsColor.b).toString(16).slice(1)}`}
+                    onChange={(e) => {
+                      const hex = e.target.value;
+                      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                      if (result) {
+                        setStepsColor({
+                          r: parseInt(result[1], 16),
+                          g: parseInt(result[2], 16),
+                          b: parseInt(result[3], 16)
+                        });
+                      }
+                    }}
+                    style={{
+                      width: '36px',
+                      height: '28px',
+                      padding: '2px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  />
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '4px',
+                      background: `rgb(${stepsColor.r}, ${stepsColor.g}, ${stepsColor.b})`,
+                      border: '1px solid #d1d5db'
+                    }}
+                  />
+                </div>
+
+                {/* Height input */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '12px', color: stepsAutoHeight ? '#9ca3af' : '#4b5563', minWidth: '80px' }}>Kõrgus:</span>
+                  <input
+                    type="number"
+                    value={stepsHeight}
+                    onChange={(e) => setStepsHeight(Math.max(10, Math.min(1000, parseInt(e.target.value) || 100)))}
+                    disabled={stepsAutoHeight}
+                    style={{
+                      width: '70px',
+                      padding: '6px 10px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      background: stepsAutoHeight ? '#f3f4f6' : '#fff',
+                      color: stepsAutoHeight ? '#9ca3af' : '#1f2937'
+                    }}
+                    min={10}
+                    max={1000}
+                  />
+                  <span style={{ fontSize: '12px', color: stepsAutoHeight ? '#9ca3af' : '#6b7280' }}>cm</span>
+                </div>
+
+                {/* Auto height toggle */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '12px', color: '#4b5563', minWidth: '80px' }}>Auto kõrgused:</span>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={stepsAutoHeight}
+                      onChange={(e) => setStepsAutoHeight(e.target.checked)}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <span style={{
+                      fontSize: '12px',
+                      color: stepsAutoHeight ? '#8b5cf6' : '#6b7280',
+                      fontWeight: stepsAutoHeight ? 500 : 400
+                    }}>
+                      {stepsAutoHeight ? 'Sees' : 'Väljas'}
+                    </span>
+                  </label>
+                  <button
+                    onClick={() => alert('Kui sisse lülitatud, siis lähestikku olevad markupid (< 4m vahe) saavad automaatselt erinevad kõrgused:\n\n• 1. markup: 20 cm\n• 2. markup: 140 cm\n• 3. markup: 280 cm\n• jne.\n\nSee aitab vältida markupite kattumist.')}
+                    style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', color: '#9ca3af' }}
+                    title="Info"
+                    type="button"
+                  >
+                    <FiInfo size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                <button
+                  onClick={() => {
+                    if (stepsActive) {
+                      setStepsActive(false);
+                    } else {
+                      // Reset counters when starting fresh
+                      setStepsCounter(0);
+                      setStepsPrevSelection(new Set());
+                      setStepsActive(true);
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '12px 16px',
+                    background: stepsActive
+                      ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+                      : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: '#fff',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                  }}
+                >
+                  {stepsActive ? (
+                    <>
+                      <FiPause size={16} />
+                      Peata märkimine
+                    </>
+                  ) : (
+                    <>
+                      <FiPlay size={16} />
+                      Alusta märkimist
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Status indicator */}
+              {stepsActive && (
+                <div style={{
+                  padding: '12px',
+                  background: '#f0fdf4',
+                  border: '1px solid #86efac',
+                  borderRadius: '8px',
+                  marginBottom: '12px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534' }}>
+                    <div style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      background: '#22c55e',
+                      animation: 'pulse 2s infinite'
+                    }} />
+                    <span style={{ fontSize: '12px', fontWeight: 500 }}>
+                      Märkimine aktiivne - vali mudelist detaile
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '11px', color: '#4b5563', marginTop: '4px' }}>
+                    Järgmine samm: {stepsMode === 'numbers'
+                      ? stepsCounter + 1
+                      : String.fromCharCode(65 + (stepsCounter % 26)) + (stepsCounter >= 26 ? String(Math.floor(stepsCounter / 26)) : '')}
+                  </p>
+                </div>
+              )}
+
+              {/* Markups count and clear button */}
+              {stepsMarkups.size > 0 && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 12px',
+                  background: '#f5f3ff',
+                  border: '1px solid #c4b5fd',
+                  borderRadius: '8px'
+                }}>
+                  <span style={{ fontSize: '12px', color: '#5b21b6' }}>
+                    <strong>{stepsMarkups.size}</strong> sammu markeeritud
+                  </span>
+                  <button
+                    onClick={async () => {
+                      // Remove all step markups
+                      const idsToRemove = Array.from(stepsMarkups.values()).map(d => d.markupId);
+                      if (idsToRemove.length > 0) {
+                        try {
+                          await (api.markup as any)?.removeTextMarkup?.(idsToRemove);
+                        } catch (e) {
+                          console.warn('Error removing step markups:', e);
+                        }
+                      }
+                      setStepsMarkups(new Map());
+                      setStepsCounter(0);
+                      setStepsPrevSelection(new Set());
+                      showToast('Sammud eemaldatud', 'success');
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '6px 12px',
+                      background: '#fff',
+                      border: '1px solid #c4b5fd',
+                      borderRadius: '6px',
+                      fontSize: '11px',
+                      fontWeight: 500,
+                      color: '#7c3aed',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <FiTrash2 size={12} />
+                    Eemalda sammud
+                  </button>
+                </div>
+              )}
+
+              {/* Instructions */}
+              <p style={{
+                marginTop: '12px',
+                fontSize: '11px',
+                color: '#6b7280',
+                lineHeight: 1.4
+              }}>
+                Hoia CTRL all ja klõpsa detailidel järjest. Kui valid detaili maha, eemaldatakse ka markup. Uuesti alustamiseks peata ja alusta uuesti.
+              </p>
             </>
           )}
         </div>
