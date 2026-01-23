@@ -15405,6 +15405,41 @@ button.stat-toggle.off:hover {
   margin-top: 8px;
 }
 
+/* Compact issue form */
+.issue-form-compact {
+  padding: 12px;
+}
+
+.issue-form-compact .form-row {
+  margin-bottom: 8px;
+}
+
+.issue-form-compact .form-group label {
+  margin-bottom: 2px;
+}
+
+.issue-form-compact .form-group input,
+.issue-form-compact .form-group select,
+.issue-form-compact .form-group textarea {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.issue-form-compact .form-group textarea {
+  min-height: 50px;
+}
+
+.issue-form-compact .form-actions {
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+/* File drop zone */
+.file-drop-zone.dragging {
+  border-color: #2563eb !important;
+  background: #eff6ff !important;
+}
+
 .secondary-button {
   display: flex;
   align-items: center;

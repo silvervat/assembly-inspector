@@ -182,6 +182,8 @@ export default function IssuesScreen({
   const [showForm, setShowForm] = useState(false);
   const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
   const [newIssueObjects, setNewIssueObjects] = useState<SelectedObject[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -224,6 +226,7 @@ export default function IssuesScreen({
   // Refs
   const syncingToModelRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formFileInputRef = useRef<HTMLInputElement>(null);
 
   // Property mappings
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
@@ -248,13 +251,46 @@ export default function IssuesScreen({
           const props = propsArray?.[i];
           const guid = guids?.[i] || '';
 
-          // Extract assembly mark using property mappings
+          // Extract assembly mark using property mappings with normalized name comparison
           let assemblyMark = '';
-          if (props?.propertySets && propertyMappings) {
-            const mapping = propertyMappings;
-            const set = props.propertySets[mapping.assembly_mark_set];
-            if (set) {
-              assemblyMark = String(set[mapping.assembly_mark_prop] || '');
+          const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+
+          if (propertyMappings) {
+            const mappingSetNorm = normalize(propertyMappings.assembly_mark_set);
+            const mappingPropNorm = normalize(propertyMappings.assembly_mark_prop);
+
+            // Try propertySets format first
+            if (props?.propertySets) {
+              for (const [setName, setProps] of Object.entries(props.propertySets)) {
+                if (normalize(setName) === mappingSetNorm && setProps) {
+                  for (const [propName, propValue] of Object.entries(setProps as Record<string, unknown>)) {
+                    if (normalize(propName) === mappingPropNorm && propValue) {
+                      assemblyMark = String(propValue);
+                      break;
+                    }
+                  }
+                }
+                if (assemblyMark) break;
+              }
+            }
+
+            // Try properties array format if propertySets didn't work
+            if (!assemblyMark && props?.properties && Array.isArray(props.properties)) {
+              for (const pset of props.properties) {
+                const setName = (pset as { set?: string; name?: string }).set || (pset as { name?: string }).name || '';
+                if (normalize(setName) === mappingSetNorm) {
+                  const propsObj = (pset as { properties?: Record<string, unknown> }).properties;
+                  if (propsObj) {
+                    for (const [propName, propValue] of Object.entries(propsObj)) {
+                      if (normalize(propName) === mappingPropNorm && propValue) {
+                        assemblyMark = String(propValue);
+                        break;
+                      }
+                    }
+                  }
+                }
+                if (assemblyMark) break;
+              }
             }
           }
 
@@ -709,11 +745,44 @@ export default function IssuesScreen({
 
         if (objectsError) throw objectsError;
 
+        // Upload pending files if any
+        if (pendingFiles.length > 0) {
+          for (const file of pendingFiles) {
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const ext = file.name.split('.').pop() || 'jpg';
+            const filename = `${projectId}/${newIssue.id}/${timestamp}.${ext}`;
+
+            const { error: uploadError } = await supabase.storage
+              .from('issue-attachments')
+              .upload(filename, file);
+
+            if (!uploadError) {
+              const { data: urlData } = supabase.storage
+                .from('issue-attachments')
+                .getPublicUrl(filename);
+
+              await supabase
+                .from('issue_attachments')
+                .insert({
+                  issue_id: newIssue.id,
+                  file_name: file.name,
+                  file_url: urlData.publicUrl,
+                  file_size: file.size,
+                  mime_type: file.type,
+                  attachment_type: file.type.startsWith('image/') ? 'photo' : 'document',
+                  uploaded_by: tcUserEmail,
+                  uploaded_by_name: tcUserName
+                });
+            }
+          }
+        }
+
         setMessage('✅ Mittevastavus loodud');
       }
 
       setShowForm(false);
       setNewIssueObjects([]);
+      setPendingFiles([]);
       await loadIssues();
       await colorModelByIssueStatus();
 
@@ -721,7 +790,7 @@ export default function IssuesScreen({
       console.error('Error saving issue:', e);
       setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
     }
-  }, [formData, editingIssue, newIssueObjects, projectId, tcUserEmail, tcUserName, loadIssues, colorModelByIssueStatus]);
+  }, [formData, editingIssue, newIssueObjects, pendingFiles, projectId, tcUserEmail, tcUserName, loadIssues, colorModelByIssueStatus]);
 
   const handleDeleteIssue = useCallback(async (issueId: string) => {
     if (!confirm('Kas oled kindel, et soovid mittevastavust kustutada?')) return;
@@ -1564,36 +1633,41 @@ export default function IssuesScreen({
               </button>
             </div>
 
-            <div className="issue-form">
-              {/* Selected objects */}
+            <div className="issue-form issue-form-compact">
+              {/* Selected objects - compact inline tags */}
               {!editingIssue && (
-                <div className="form-section">
-                  <label>Valitud detailid ({newIssueObjects.length})</label>
+                <div className="form-section" style={{ marginBottom: '12px' }}>
+                  <label style={{ marginBottom: '4px' }}>Detailid ({newIssueObjects.length})</label>
                   {newIssueObjects.length === 0 ? (
                     <div style={{
-                      padding: '12px',
+                      padding: '8px 12px',
                       background: '#fef3c7',
-                      borderRadius: '6px',
+                      borderRadius: '4px',
                       color: '#92400e',
-                      fontSize: '13px',
+                      fontSize: '12px',
                       textAlign: 'center'
                     }}>
-                      Vali mudelist detailid mida mittevastavus puudutab
+                      Vali mudelist detailid
                     </div>
                   ) : (
-                    <div className="selected-objects-list">
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                       {newIssueObjects.map((obj, index) => (
-                        <div key={index} className="selected-object" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontWeight: 600 }}>{obj.assemblyMark || 'Tundmatu mark'}</span>
-                            {obj.productName && <span className="product-name" style={{ color: '#6b7280', fontSize: '12px' }}>{obj.productName}</span>}
-                          </div>
-                          {obj.guidIfc && (
-                            <span style={{ fontSize: '10px', color: '#9ca3af', fontFamily: 'monospace' }}>
-                              {obj.guidIfc}
-                            </span>
-                          )}
-                        </div>
+                        <span
+                          key={index}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '2px 8px',
+                            background: '#e0e7ff',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            fontWeight: 500,
+                            color: '#3730a3'
+                          }}
+                          title={obj.guidIfc || undefined}
+                        >
+                          {obj.assemblyMark || obj.productName || 'Element'}
+                        </span>
                       ))}
                     </div>
                   )}
@@ -1665,23 +1739,147 @@ export default function IssuesScreen({
                   <textarea
                     value={formData.description}
                     onChange={e => setFormData(f => ({ ...f, description: e.target.value }))}
-                    placeholder="Detailne kirjeldus mittevastavusest"
-                    rows={4}
+                    placeholder="Detailne kirjeldus"
+                    rows={2}
                   />
                 </div>
               </div>
 
               <div className="form-row">
                 <div className="form-group full">
-                  <label>Asukoht objektil</label>
+                  <label>Asukoht</label>
                   <input
                     type="text"
                     value={formData.location}
                     onChange={e => setFormData(f => ({ ...f, location: e.target.value }))}
-                    placeholder="Nt. vasakpoolne serv, keevitusõmblus nr.2"
+                    placeholder="Nt. vasakpoolne serv"
                   />
                 </div>
               </div>
+
+              {/* File upload section */}
+              {!editingIssue && (
+                <div className="form-section" style={{ marginBottom: '12px' }}>
+                  <label style={{ marginBottom: '4px' }}>Fotod/failid</label>
+                  <div
+                    className={`file-drop-zone ${isDraggingFiles ? 'dragging' : ''}`}
+                    onDragOver={(e) => { e.preventDefault(); setIsDraggingFiles(true); }}
+                    onDragLeave={() => setIsDraggingFiles(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDraggingFiles(false);
+                      const files = Array.from(e.dataTransfer.files);
+                      setPendingFiles(prev => [...prev, ...files]);
+                    }}
+                    onClick={() => formFileInputRef.current?.click()}
+                    style={{
+                      border: `2px dashed ${isDraggingFiles ? '#2563eb' : '#d1d5db'}`,
+                      borderRadius: '6px',
+                      padding: pendingFiles.length > 0 ? '8px' : '16px',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      background: isDraggingFiles ? '#eff6ff' : '#f9fafb',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <input
+                      ref={formFileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/*,.pdf,.doc,.docx"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        if (e.target.files) {
+                          setPendingFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                    {pendingFiles.length === 0 ? (
+                      <div style={{ color: '#6b7280', fontSize: '12px' }}>
+                        <FiCamera size={20} style={{ marginBottom: '4px', opacity: 0.5 }} />
+                        <div>Lohista failid siia või kliki</div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {pendingFiles.map((file, idx) => (
+                          <div
+                            key={idx}
+                            style={{
+                              position: 'relative',
+                              width: '48px',
+                              height: '48px',
+                              borderRadius: '4px',
+                              overflow: 'hidden',
+                              border: '1px solid #e5e7eb'
+                            }}
+                          >
+                            {file.type.startsWith('image/') ? (
+                              <img
+                                src={URL.createObjectURL(file)}
+                                alt={file.name}
+                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              />
+                            ) : (
+                              <div style={{
+                                width: '100%',
+                                height: '100%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: '#f3f4f6',
+                                fontSize: '10px',
+                                color: '#6b7280'
+                              }}>
+                                {file.name.split('.').pop()?.toUpperCase()}
+                              </div>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPendingFiles(prev => prev.filter((_, i) => i !== idx));
+                              }}
+                              style={{
+                                position: 'absolute',
+                                top: '-4px',
+                                right: '-4px',
+                                width: '16px',
+                                height: '16px',
+                                borderRadius: '50%',
+                                background: '#ef4444',
+                                color: 'white',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '10px',
+                                padding: 0
+                              }}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                        <div
+                          style={{
+                            width: '48px',
+                            height: '48px',
+                            borderRadius: '4px',
+                            border: '1px dashed #d1d5db',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#9ca3af'
+                          }}
+                        >
+                          <FiPlus size={16} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="form-actions">
                 <button
