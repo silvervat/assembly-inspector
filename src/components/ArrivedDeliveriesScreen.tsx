@@ -5249,7 +5249,7 @@ export default function ArrivedDeliveriesScreen({
                   .from('trimble_arrived_vehicles')
                   .insert({
                     vehicle_id: vehicle.id,
-                    project_id: projectId,
+                    trimble_project_id: projectId,
                     arrival_date: new Date().toISOString().split('T')[0],
                     arrival_time: new Date().toTimeString().substring(0, 5),
                     status: 'arrived',
@@ -5474,7 +5474,7 @@ export default function ArrivedDeliveriesScreen({
                                 .from('trimble_arrived_vehicles')
                                 .insert({
                                   vehicle_id: vehicle.id,
-                                  project_id: projectId,
+                                  trimble_project_id: projectId,
                                   arrival_date: new Date().toISOString().split('T')[0],
                                   arrival_time: new Date().toTimeString().substring(0, 5),
                                   status: 'arrived',

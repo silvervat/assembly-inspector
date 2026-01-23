@@ -20,7 +20,7 @@ import {
   FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload,
   FiTruck, FiPackage, FiLayers, FiClock, FiMessageSquare, FiDroplet,
   FiEye, FiEyeOff, FiZoomIn, FiAlertTriangle, FiExternalLink, FiTag,
-  FiCamera, FiImage, FiGrid
+  FiCamera, FiImage
 } from 'react-icons/fi';
 import './DeliveryScheduleScreen.css';
 
@@ -8039,28 +8039,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 <button onClick={() => { setShowImportExportMenu(false); setShowExportModal(true); }}>
                   <FiDownload size={14} /> Eksport
                 </button>
+                <div className="dropdown-divider" />
                 <button onClick={() => {
                   setShowImportExportMenu(false);
-                  // Build table data from items
-                  const data = items.map(item => {
-                    const vehicle = vehicles.find(v => v.id === item.vehicle_id);
-                    return {
-                      id: `${item.id}`,
-                      itemId: item.id,
-                      vehicleCode: vehicle?.vehicle_code || '',
-                      date: item.scheduled_date || '',
-                      time: vehicle?.unload_start_time || '',
-                      guidIfc: item.guid_ifc || item.guid || '',
-                      assemblyMark: item.assembly_mark || '',
-                      weight: item.cast_unit_weight || '',
-                      vehicleId: item.vehicle_id || '',
-                      modified: false
-                    };
-                  });
-                  setTableEditorData(data);
-                  setShowTableEditor(true);
+                  const baseUrl = window.location.origin + (import.meta.env.BASE_URL || '/');
+                  const url = `${baseUrl}?popup=spreadsheet&projectId=${projectId}`;
+                  window.open(url, '_blank', 'width=1200,height=800,menubar=no,toolbar=no,location=no,status=no');
                 }}>
-                  <FiGrid size={14} /> Tabeli redaktor
+                  <FiEdit2 size={14} /> Ava tabelina
                 </button>
               </div>
             )}
