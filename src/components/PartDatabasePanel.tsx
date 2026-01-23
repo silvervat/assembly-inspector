@@ -41,9 +41,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
     setSelectedMark(assemblyMark || null);
 
     try {
-      // Use lowercase GUID for exact matching (stored in lowercase in DB)
-      const guidLower = guidIfc.toLowerCase();
-
+      // GUIDs are stored with original case in DB - query with original case
       const [
         deliveryResult,
         installationScheduleResult,
@@ -57,13 +55,13 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
           .from('trimble_delivery_items')
           .select(`*, vehicle:trimble_delivery_vehicles(id, vehicle_code, scheduled_date, factory:trimble_delivery_factories(id, factory_name, factory_code))`)
           .eq('trimble_project_id', projectId)
-          .eq('guid_ifc', guidLower),
-        supabase.from('installation_schedule').select('*').eq('project_id', projectId).eq('guid_ifc', guidLower),
-        supabase.from('installations').select('*').eq('project_id', projectId).eq('guid_ifc', guidLower),
-        supabase.from('preassemblies').select('*').eq('project_id', projectId).eq('guid_ifc', guidLower),
-        supabase.from('organizer_group_items').select(`*, group:organizer_groups!inner(id, name, color, description, trimble_project_id)`).eq('group.trimble_project_id', projectId).eq('guid_ifc', guidLower),
-        supabase.from('inspections').select('*').eq('project_id', projectId).eq('guid_ifc', guidLower),
-        supabase.from('issue_objects').select(`*, issue:issues!inner(*, comments:issue_comments(*), attachments:issue_attachments(*))`).eq('issue.trimble_project_id', projectId).eq('guid_ifc', guidLower)
+          .eq('guid_ifc', guidIfc),
+        supabase.from('installation_schedule').select('*').eq('project_id', projectId).eq('guid_ifc', guidIfc),
+        supabase.from('installations').select('*').eq('project_id', projectId).eq('guid_ifc', guidIfc),
+        supabase.from('preassemblies').select('*').eq('project_id', projectId).eq('guid_ifc', guidIfc),
+        supabase.from('organizer_group_items').select(`*, group:organizer_groups!inner(id, name, color, description, trimble_project_id)`).eq('group.trimble_project_id', projectId).eq('guid_ifc', guidIfc),
+        supabase.from('inspections').select('*').eq('project_id', projectId).eq('guid_ifc', guidIfc),
+        supabase.from('issue_objects').select(`*, issue:issues!inner(*, comments:issue_comments(*), attachments:issue_attachments(*))`).eq('issue.trimble_project_id', projectId).eq('guid_ifc', guidIfc)
       ]);
 
       // Query arrival confirmations using delivery item IDs (two-step approach because PostgREST doesn't support filtering on nested tables)
@@ -179,7 +177,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
               .from('trimble_model_objects')
               .select('assembly_mark')
               .eq('trimble_project_id', projectId)
-              .eq('guid_ifc', guids[0].toLowerCase())
+              .eq('guid_ifc', guids[0])
               .maybeSingle();
             if (dbObject?.assembly_mark) {
               assemblyMark = dbObject.assembly_mark;
