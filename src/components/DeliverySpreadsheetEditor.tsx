@@ -353,17 +353,12 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
     });
   };
 
-  // Handle paste from clipboard
-  const handlePaste = async (e: ClipboardEvent) => {
-    if (selectedCells.size === 0) return;
-
-    const text = e.clipboardData?.getData('text');
-    if (!text) return;
-
-    e.preventDefault();
+  // Paste text into selected cells
+  const doPaste = (text: string) => {
+    if (selectedCells.size === 0 || !text) return;
 
     // Parse pasted data (tab-separated columns, newline-separated rows)
-    const pastedRows = text.split('\n').map(line => line.split('\t'));
+    const pastedRows = text.split(/\r?\n/).filter(line => line.length > 0).map(line => line.split('\t'));
 
     // Find top-left of selection
     let minRow = Infinity, minFieldIdx = Infinity;
@@ -389,25 +384,27 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
           if (!EDITABLE_FIELDS.includes(field)) return;
 
           const updatedRow = { ...updated[targetRow] };
+          const trimmedValue = value.trim();
+
           switch (field) {
             case 'vehicle_code': {
-              const vehicle = vehicles.find(v => v.vehicle_code.toLowerCase() === value.toLowerCase());
+              const vehicle = vehicles.find(v => v.vehicle_code.toLowerCase() === trimmedValue.toLowerCase());
               if (vehicle) {
                 updatedRow.vehicle_id = vehicle.id;
                 updatedRow.vehicle_code = vehicle.vehicle_code;
                 updatedRow.scheduled_date = vehicle.scheduled_date;
                 updatedRow.unload_start_time = vehicle.unload_start_time || null;
-              } else if (value.trim() === '') {
+              } else if (trimmedValue === '') {
                 updatedRow.vehicle_id = null;
                 updatedRow.vehicle_code = '';
               }
               break;
             }
             case 'scheduled_date':
-              updatedRow.scheduled_date = parseDate(value);
+              updatedRow.scheduled_date = parseDate(trimmedValue) || (trimmedValue === '' ? null : updatedRow.scheduled_date);
               break;
             case 'unload_start_time':
-              updatedRow.unload_start_time = parseTime(value);
+              updatedRow.unload_start_time = parseTime(trimmedValue) || (trimmedValue === '' ? null : updatedRow.unload_start_time);
               break;
           }
           updatedRow.isModified =
@@ -418,10 +415,12 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
       });
       return updated;
     });
+
+    setMessage({ text: `Kleebitud ${pastedRows.length} rida`, type: 'success' });
   };
 
   // Handle keyboard navigation and actions
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = async (e: React.KeyboardEvent) => {
     if (editingCell) {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -431,6 +430,20 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
       } else if (e.key === 'Tab') {
         e.preventDefault();
         commitCellEdit();
+      }
+      return;
+    }
+
+    // Ctrl+V - paste from clipboard
+    if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+      e.preventDefault();
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text && selectedCells.size > 0) {
+          doPaste(text);
+        }
+      } catch (err) {
+        console.warn('Could not read clipboard:', err);
       }
       return;
     }
@@ -482,15 +495,21 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
     }
   };
 
-  // Setup paste listener
+  // Setup paste listener (fallback for when Ctrl+V doesn't work via keyboard)
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const pasteHandler = (e: Event) => handlePaste(e as ClipboardEvent);
-    container.addEventListener('paste', pasteHandler);
-    return () => container.removeEventListener('paste', pasteHandler);
-  }, [selectedCells, vehicles, rows]);
+    const pasteHandler = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData('text');
+      if (text && selectedCells.size > 0) {
+        e.preventDefault();
+        doPaste(text);
+      }
+    };
+    container.addEventListener('paste', pasteHandler as EventListener);
+    return () => container.removeEventListener('paste', pasteHandler as EventListener);
+  }, [selectedCells, vehicles]);
 
   // Save all changes
   const saveChanges = async () => {
