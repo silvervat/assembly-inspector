@@ -69,6 +69,16 @@ const guideCategories: GuideCategory[] = [
         id: 'alt_shift_d',
         title: 'ALT + SHIFT + D',
         description: 'Lisab valitud detailidele kaherealised markupid veoki lühendi ja tarnekuupäevaga. Iga veok saab erineva värvi, lähedased markupid saavad erineva kõrguse.'
+      },
+      {
+        id: 'alt_shift_r',
+        title: 'ALT + SHIFT + R',
+        description: 'Eemaldab kõik markupid mudelis. Kasulik kui on vaja kiiresti kõik markupid kustutada ilma Tööriistad lehele minemata.'
+      },
+      {
+        id: 'alt_shift_c',
+        title: 'ALT + SHIFT + C',
+        description: 'Värvib kogu mudeli valgeks (nagu ALT+SHIFT+W), aga mudelis valitud detailid värvitakse tumeroheliseks. Kasulik kindlate detailide esiletoomiseks.'
       }
     ]
   }

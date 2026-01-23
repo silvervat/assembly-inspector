@@ -32,7 +32,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.862';
+export const APP_VERSION = '3.0.863';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -1565,6 +1565,154 @@ export default function App() {
         } catch (err) {
           console.error('ALT+SHIFT+D error:', err);
           showGlobalToast('Viga tarne markupite loomisel', 'error');
+        } finally {
+          setShortcutLoading(null);
+        }
+        return;
+      }
+
+      // ALT+SHIFT+R - Remove all markups
+      if (key === 'r') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (shortcutLoading) return;
+        setShortcutLoading('r');
+
+        try {
+          const allMarkups = await (api.markup as any)?.getTextMarkups?.();
+          if (!allMarkups || allMarkups.length === 0) {
+            showGlobalToast('Markupe pole', 'info');
+            setShortcutLoading(null);
+            return;
+          }
+
+          const allIds = allMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
+          if (allIds.length === 0) {
+            showGlobalToast('Markupe pole', 'info');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Remove in batches
+          const BATCH_SIZE = 50;
+          for (let i = 0; i < allIds.length; i += BATCH_SIZE) {
+            const batch = allIds.slice(i, i + BATCH_SIZE);
+            await (api.markup as any)?.removeTextMarkup?.(batch);
+          }
+
+          showGlobalToast(`${allIds.length} markupit eemaldatud`, 'success');
+        } catch (err) {
+          console.error('ALT+SHIFT+R error:', err);
+          showGlobalToast('Viga markupite eemaldamisel', 'error');
+        } finally {
+          setShortcutLoading(null);
+        }
+        return;
+      }
+
+      // ALT+SHIFT+C - Color model white, selected objects dark green
+      if (key === 'c') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (shortcutLoading) return;
+        setShortcutLoading('c');
+
+        try {
+          // Get selected objects first
+          const selection = await api.viewer.getSelection();
+          const selectedRuntimeIdsByModel: Record<string, Set<number>> = {};
+
+          if (selection && selection.length > 0) {
+            for (const sel of selection) {
+              if (sel.objectRuntimeIds && sel.objectRuntimeIds.length > 0) {
+                if (!selectedRuntimeIdsByModel[sel.modelId]) {
+                  selectedRuntimeIdsByModel[sel.modelId] = new Set();
+                }
+                sel.objectRuntimeIds.forEach(id => selectedRuntimeIdsByModel[sel.modelId].add(id));
+              }
+            }
+          }
+
+          const hasSelectedObjects = Object.values(selectedRuntimeIdsByModel).some(s => s.size > 0);
+
+          // Get all objects from database
+          const { data: allObjects } = await supabase
+            .from('trimble_model_objects')
+            .select('guid_ifc')
+            .eq('trimble_project_id', projectId)
+            .not('guid_ifc', 'is', null);
+
+          const allGuids = (allObjects || []).map(o => o.guid_ifc).filter(Boolean) as string[];
+
+          // Find objects in model
+          const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+
+          if (foundObjects.size === 0) {
+            showGlobalToast('Mudel pole laaditud', 'error');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Separate selected and non-selected objects
+          const whiteObjects: { modelId: string; runtimeId: number }[] = [];
+          const greenObjects: { modelId: string; runtimeId: number }[] = [];
+
+          for (const [, found] of foundObjects) {
+            const selectedSet = selectedRuntimeIdsByModel[found.modelId];
+            if (hasSelectedObjects && selectedSet && selectedSet.has(found.runtimeId)) {
+              greenObjects.push(found);
+            } else {
+              whiteObjects.push(found);
+            }
+          }
+
+          // Group by model for coloring
+          const whiteByModel: Record<string, number[]> = {};
+          const greenByModel: Record<string, number[]> = {};
+
+          for (const obj of whiteObjects) {
+            if (!whiteByModel[obj.modelId]) whiteByModel[obj.modelId] = [];
+            whiteByModel[obj.modelId].push(obj.runtimeId);
+          }
+          for (const obj of greenObjects) {
+            if (!greenByModel[obj.modelId]) greenByModel[obj.modelId] = [];
+            greenByModel[obj.modelId].push(obj.runtimeId);
+          }
+
+          // Color white first
+          const white = { r: 255, g: 255, b: 255, a: 255 };
+          for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+            const BATCH_SIZE = 500;
+            for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+              const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+                { color: white }
+              );
+            }
+          }
+
+          // Color selected dark green
+          const darkGreen = { r: 22, g: 101, b: 52, a: 255 }; // #166534
+          for (const [modelId, runtimeIds] of Object.entries(greenByModel)) {
+            const BATCH_SIZE = 500;
+            for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+              const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+                { color: darkGreen }
+              );
+            }
+          }
+
+          if (hasSelectedObjects) {
+            showGlobalToast(`Mudel valge, ${greenObjects.length} valitud detaili tumeroheliseks`, 'success');
+          } else {
+            showGlobalToast('Mudel värvitud valgeks (valik puudub)', 'success');
+          }
+        } catch (err) {
+          console.error('ALT+SHIFT+C error:', err);
+          showGlobalToast('Viga värvimisel', 'error');
         } finally {
           setShortcutLoading(null);
         }
