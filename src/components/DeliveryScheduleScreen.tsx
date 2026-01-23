@@ -8534,7 +8534,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         <FiPlus /> Lisa määramata {unassignedCount} veokisse
                       </button>
                     )}
-                    {assignedCount > 0 && (
+                    {assignedCount > 0 && unassignedCount > 0 && (
                       <button
                         className="add-btn"
                         onClick={() => {
