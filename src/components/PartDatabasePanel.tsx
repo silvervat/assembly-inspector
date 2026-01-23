@@ -139,10 +139,12 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
             for (const set of sets) {
               const setName = set.name || set.setName || '';
               if (normalizeName(setName) === targetSetName) {
-                const properties = set.properties || {};
-                for (const [key, val] of Object.entries(properties)) {
-                  if (normalizeName(key) === targetPropName) {
-                    assemblyMark = String(val);
+                const properties = set.properties || [];
+                // Properties is an array of {name, value, displayValue} objects
+                for (const prop of properties) {
+                  const propName = (prop as any).name || '';
+                  if (normalizeName(propName) === targetPropName) {
+                    assemblyMark = String((prop as any).displayValue ?? (prop as any).value ?? '');
                     break;
                   }
                 }
@@ -153,11 +155,12 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
             if (!assemblyMark) {
               for (const set of sets) {
                 const setName = set.name || set.setName || '';
-                const properties = set.properties || {};
+                const properties = set.properties || [];
                 if (setName.toLowerCase().includes('tekla') || setName.toLowerCase().includes('assembly')) {
-                  for (const [key, val] of Object.entries(properties)) {
-                    if (key.toLowerCase().includes('mark')) {
-                      assemblyMark = String(val);
+                  for (const prop of properties) {
+                    const propName = ((prop as any).name || '').toLowerCase();
+                    if (propName.includes('mark')) {
+                      assemblyMark = String((prop as any).displayValue ?? (prop as any).value ?? '');
                       break;
                     }
                   }
