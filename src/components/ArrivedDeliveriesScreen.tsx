@@ -5462,14 +5462,20 @@ export default function ArrivedDeliveriesScreen({
                         setItemsListSaving(true);
                         try {
                           let updated = 0;
+                          // Track newly created arrival records to avoid duplicates
+                          const newlyCreatedArrivals = new Map<string, ArrivedVehicle>();
+
                           for (const [itemId, newStatus] of itemsListPendingChanges) {
                             const item = items.find(i => i.id === itemId);
                             if (!item) continue;
                             const vehicle = getVehicle(item.vehicle_id);
-                            let arrivedVehicle = vehicle ? getArrivedVehicle(vehicle.id) : null;
+                            if (!vehicle) continue;
+
+                            // Check existing arrivals, then newly created ones
+                            let arrivedVehicle = getArrivedVehicle(vehicle.id) || newlyCreatedArrivals.get(vehicle.id);
 
                             // Create arrival record if doesn't exist
-                            if (!arrivedVehicle && vehicle) {
+                            if (!arrivedVehicle) {
                               const { data, error } = await supabase
                                 .from('trimble_arrived_vehicles')
                                 .insert({
@@ -5485,6 +5491,7 @@ export default function ArrivedDeliveriesScreen({
 
                               if (!error && data) {
                                 arrivedVehicle = data;
+                                newlyCreatedArrivals.set(vehicle.id, data);
                                 // Create confirmation records for all vehicle items
                                 const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
                                 await supabase.from('trimble_arrival_confirmations').insert(

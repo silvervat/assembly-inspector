@@ -5717,15 +5717,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const foundObjects = await findObjectsInLoadedModels(api, allGuids);
       console.log(`Found ${foundObjects.size} objects in loaded models`);
 
-      // Step 3: Get schedule item GUIDs (for identifying which to color)
-      const scheduleGuids = new Set(
-        items.map(i => i.guid_ifc || i.guid).filter((g): g is string => !!g)
+      // Step 3: Get GUIDs to color (use filtered items when searching)
+      const isSearching = searchQuery.trim().length > 0;
+      const itemsToColor = isSearching ? filteredItems : items;
+      const colorGuids = new Set(
+        itemsToColor.map(i => i.guid_ifc || i.guid).filter((g): g is string => !!g)
       );
 
-      // Step 4: Build arrays for white coloring (non-schedule items) and collect by model
+      // Step 4: Build arrays for white coloring (items NOT in colorGuids)
       const whiteByModel: Record<string, number[]> = {};
       for (const [guid, found] of foundObjects) {
-        if (!scheduleGuids.has(guid)) {
+        if (!colorGuids.has(guid)) {
           if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
           whiteByModel[found.modelId].push(found.runtimeId);
         }
@@ -5748,7 +5750,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
       }
 
-      // Step 6: Color schedule items by vehicle or date
+      // Step 6: Color items by vehicle or date (using filtered items when searching)
       if (mode === 'vehicle') {
         // Generate colors for each vehicle
         const vehicleIds = vehicles.map(v => v.id);
@@ -5756,9 +5758,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setVehicleColors(colors);
         setDateColors({});
 
-        // Build runtime ID mapping for schedule items
+        // Build runtime ID mapping for items to color
         const scheduleByGuid = new Map<string, { modelId: string; runtimeId: number }>();
-        for (const item of items) {
+        for (const item of itemsToColor) {
           const guid = item.guid_ifc || item.guid;
           if (guid && foundObjects.has(guid)) {
             const found = foundObjects.get(guid)!;
@@ -5769,7 +5771,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         // Apply colors to items by vehicle
         let coloredCount = 0;
         for (const vehicle of vehicles) {
-          const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
+          const vehicleItems = itemsToColor.filter(i => i.vehicle_id === vehicle.id);
           if (vehicleItems.length === 0) continue;
 
           const color = colors[vehicle.id];
@@ -5792,7 +5794,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
             );
             coloredCount += runtimeIds.length;
-            setMessage(`Värvin veokid... ${coloredCount}/${scheduleGuids.size}`);
+            setMessage(`Värvin veokid... ${coloredCount}/${colorGuids.size}`);
           }
         }
       } else if (mode === 'date') {
@@ -5804,9 +5806,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setDateColors(colors);
         setVehicleColors({});
 
-        // Build runtime ID mapping for schedule items
+        // Build runtime ID mapping for items to color
         const scheduleByGuid = new Map<string, { modelId: string; runtimeId: number }>();
-        for (const item of items) {
+        for (const item of itemsToColor) {
           const guid = item.guid_ifc || item.guid;
           if (guid && foundObjects.has(guid)) {
             const found = foundObjects.get(guid)!;
@@ -5824,7 +5826,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           // Group by model
           const byModel: Record<string, number[]> = {};
           for (const vehicle of dateVehicles) {
-            const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
+            const vehicleItems = itemsToColor.filter(i => i.vehicle_id === vehicle.id);
             for (const item of vehicleItems) {
               const guid = item.guid_ifc || item.guid;
               if (guid && scheduleByGuid.has(guid)) {
@@ -5841,12 +5843,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
             );
             coloredCount += runtimeIds.length;
-            setMessage(`Värvin kuupäevad... ${coloredCount}/${scheduleGuids.size}`);
+            setMessage(`Värvin kuupäevad... ${coloredCount}/${colorGuids.size}`);
           }
         }
       }
 
-      setMessage(`✓ Värvitud! Valged=${whiteCount}, Graafikudetaile=${scheduleGuids.size}`);
+      setMessage(`✓ Värvitud! Valged=${whiteCount}, Graafikudetaile=${colorGuids.size}`);
     } catch (e) {
       console.error('Error applying color mode:', e);
       setMessage('Viga värvimisel');
@@ -8626,18 +8628,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           >
             {hidePastDates ? <FiEyeOff /> : <FiEye />}
           </button>
-          <FiSearch />
-          <input
-            type="text"
-            placeholder="Otsi..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <button className="clear-search" onClick={() => setSearchQuery('')}>
-              <FiX />
-            </button>
-          )}
+          <div className="search-input-wrapper">
+            <FiSearch className="search-icon" />
+            <input
+              type="text"
+              placeholder="Otsi..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button className="clear-search" onClick={() => setSearchQuery('')}>
+                <FiX size={12} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* List */}

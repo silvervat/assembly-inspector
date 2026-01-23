@@ -255,42 +255,41 @@ export default function IssuesScreen({
           let assemblyMark = '';
           const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
 
-          if (propertyMappings) {
+          if (propertyMappings && props?.properties && Array.isArray(props.properties)) {
             const mappingSetNorm = normalize(propertyMappings.assembly_mark_set);
             const mappingPropNorm = normalize(propertyMappings.assembly_mark_prop);
 
-            // Try propertySets format first
-            if (props?.propertySets) {
-              for (const [setName, setProps] of Object.entries(props.propertySets)) {
-                if (normalize(setName) === mappingSetNorm && setProps) {
-                  for (const [propName, propValue] of Object.entries(setProps as Record<string, unknown>)) {
-                    if (normalize(propName) === mappingPropNorm && propValue) {
-                      assemblyMark = String(propValue);
-                      break;
-                    }
-                  }
-                }
-                if (assemblyMark) break;
-              }
-            }
+            // Iterate through property sets (Trimble API format: array of {set, properties: [{name, value, displayValue}]})
+            for (const pset of props.properties) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const setName = (pset as any).set || (pset as any).name || '';
+              const setNameNorm = normalize(setName);
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const propArray = (pset as any).properties || [];
 
-            // Try properties array format if propertySets didn't work
-            if (!assemblyMark && props?.properties && Array.isArray(props.properties)) {
-              for (const pset of props.properties) {
-                const setName = (pset as { set?: string; name?: string }).set || (pset as { name?: string }).name || '';
-                if (normalize(setName) === mappingSetNorm) {
-                  const propsObj = (pset as { properties?: Record<string, unknown> }).properties;
-                  if (propsObj) {
-                    for (const [propName, propValue] of Object.entries(propsObj)) {
-                      if (normalize(propName) === mappingPropNorm && propValue) {
-                        assemblyMark = String(propValue);
-                        break;
-                      }
-                    }
-                  }
+              for (const prop of propArray) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const propName = (prop as any).name || '';
+                const propNameNorm = normalize(propName);
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                if (!propValue) continue;
+
+                // Check if this matches the configured assembly mark mapping
+                if (setNameNorm === mappingSetNorm && propNameNorm === mappingPropNorm) {
+                  assemblyMark = String(propValue);
+                  break;
                 }
-                if (assemblyMark) break;
+                // Fallback: look for common patterns
+                if (!assemblyMark && propNameNorm.includes('cast') && propNameNorm.includes('mark')) {
+                  assemblyMark = String(propValue);
+                }
+                if (!assemblyMark && propNameNorm.includes('assembly') && propNameNorm.includes('mark')) {
+                  assemblyMark = String(propValue);
+                }
               }
+              if (assemblyMark) break;
             }
           }
 
