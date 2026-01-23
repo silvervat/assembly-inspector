@@ -580,6 +580,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Export modal
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showTableEditor, setShowTableEditor] = useState(false);
+  const [tableEditorData, setTableEditorData] = useState<Array<{
+    id: string;
+    itemId: string;
+    vehicleCode: string;
+    date: string;
+    time: string;
+    guidIfc: string;
+    assemblyMark: string;
+    weight: string;
+    vehicleId: string;
+    modified: boolean;
+  }>>([]);
+  const [tableEditorSaving, setTableEditorSaving] = useState(false);
   const [exportLanguage, setExportLanguage] = useState<'et' | 'en'>('et');
   const [exportColumns, setExportColumns] = useState([
     { id: 'nr', label: 'Nr', labelEn: 'No', enabled: true },
@@ -10126,6 +10140,269 @@ ${importText.split('\n').slice(0, 5).join('\n')}
               </button>
               <button className="submit-btn primary" onClick={exportToExcel}>
                 <FiDownload /> {exportLanguage === 'en' ? 'Export' : 'Ekspordi'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Table Editor Modal */}
+      {showTableEditor && (
+        <div className="modal-overlay" onClick={() => setShowTableEditor(false)}>
+          <div
+            className="modal table-editor-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '95vw',
+              maxWidth: '1400px',
+              height: '85vh',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            <div className="modal-header" style={{ flexShrink: 0 }}>
+              <h2>Tabeli redaktor</h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>
+                  {tableEditorData.length} rida
+                  {tableEditorData.filter(r => r.modified).length > 0 && (
+                    <span style={{ color: '#f59e0b', marginLeft: '8px' }}>
+                      ({tableEditorData.filter(r => r.modified).length} muudetud)
+                    </span>
+                  )}
+                </span>
+                <button className="close-btn" onClick={() => setShowTableEditor(false)}>
+                  <FiX />
+                </button>
+              </div>
+            </div>
+
+            <div className="modal-body" style={{ flex: 1, overflow: 'auto', padding: 0 }}>
+              <table style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: '12px'
+              }}>
+                <thead style={{
+                  position: 'sticky',
+                  top: 0,
+                  background: '#f8fafc',
+                  zIndex: 10
+                }}>
+                  <tr>
+                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '40px' }}>#</th>
+                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '100px' }}>Veok</th>
+                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '110px' }}>Kuupäev</th>
+                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '80px' }}>Kellaaeg</th>
+                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '120px' }}>Assembly Mark</th>
+                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '80px' }}>Kaal</th>
+                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left' }}>GUID</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableEditorData.map((row, idx) => (
+                    <tr
+                      key={row.id}
+                      style={{
+                        background: row.modified ? '#fef3c7' : (idx % 2 === 0 ? '#fff' : '#f8fafc')
+                      }}
+                    >
+                      <td style={{ padding: '4px 8px', borderBottom: '1px solid #e2e8f0', color: '#94a3b8' }}>
+                        {idx + 1}
+                      </td>
+                      <td style={{ padding: '2px', borderBottom: '1px solid #e2e8f0' }}>
+                        <input
+                          type="text"
+                          value={row.vehicleCode}
+                          onChange={(e) => {
+                            setTableEditorData(prev => prev.map((r, i) =>
+                              i === idx ? { ...r, vehicleCode: e.target.value, modified: true } : r
+                            ));
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '4px 6px',
+                            border: '1px solid transparent',
+                            borderRadius: '3px',
+                            fontSize: '12px',
+                            background: 'transparent'
+                          }}
+                          onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                          onBlur={(e) => e.target.style.borderColor = 'transparent'}
+                        />
+                      </td>
+                      <td style={{ padding: '2px', borderBottom: '1px solid #e2e8f0' }}>
+                        <input
+                          type="date"
+                          value={row.date}
+                          onChange={(e) => {
+                            setTableEditorData(prev => prev.map((r, i) =>
+                              i === idx ? { ...r, date: e.target.value, modified: true } : r
+                            ));
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '4px 6px',
+                            border: '1px solid transparent',
+                            borderRadius: '3px',
+                            fontSize: '12px',
+                            background: 'transparent'
+                          }}
+                          onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                          onBlur={(e) => e.target.style.borderColor = 'transparent'}
+                        />
+                      </td>
+                      <td style={{ padding: '2px', borderBottom: '1px solid #e2e8f0' }}>
+                        <input
+                          type="time"
+                          value={row.time}
+                          onChange={(e) => {
+                            setTableEditorData(prev => prev.map((r, i) =>
+                              i === idx ? { ...r, time: e.target.value, modified: true } : r
+                            ));
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '4px 6px',
+                            border: '1px solid transparent',
+                            borderRadius: '3px',
+                            fontSize: '12px',
+                            background: 'transparent'
+                          }}
+                          onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                          onBlur={(e) => e.target.style.borderColor = 'transparent'}
+                        />
+                      </td>
+                      <td style={{ padding: '2px', borderBottom: '1px solid #e2e8f0' }}>
+                        <input
+                          type="text"
+                          value={row.assemblyMark}
+                          onChange={(e) => {
+                            setTableEditorData(prev => prev.map((r, i) =>
+                              i === idx ? { ...r, assemblyMark: e.target.value, modified: true } : r
+                            ));
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '4px 6px',
+                            border: '1px solid transparent',
+                            borderRadius: '3px',
+                            fontSize: '12px',
+                            background: 'transparent'
+                          }}
+                          onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                          onBlur={(e) => e.target.style.borderColor = 'transparent'}
+                        />
+                      </td>
+                      <td style={{ padding: '2px', borderBottom: '1px solid #e2e8f0' }}>
+                        <input
+                          type="text"
+                          value={row.weight}
+                          onChange={(e) => {
+                            setTableEditorData(prev => prev.map((r, i) =>
+                              i === idx ? { ...r, weight: e.target.value, modified: true } : r
+                            ));
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '4px 6px',
+                            border: '1px solid transparent',
+                            borderRadius: '3px',
+                            fontSize: '12px',
+                            background: 'transparent'
+                          }}
+                          onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                          onBlur={(e) => e.target.style.borderColor = 'transparent'}
+                        />
+                      </td>
+                      <td style={{ padding: '2px', borderBottom: '1px solid #e2e8f0' }}>
+                        <input
+                          type="text"
+                          value={row.guidIfc}
+                          onChange={(e) => {
+                            setTableEditorData(prev => prev.map((r, i) =>
+                              i === idx ? { ...r, guidIfc: e.target.value, modified: true } : r
+                            ));
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '4px 6px',
+                            border: '1px solid transparent',
+                            borderRadius: '3px',
+                            fontSize: '11px',
+                            fontFamily: 'monospace',
+                            background: 'transparent'
+                          }}
+                          onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                          onBlur={(e) => e.target.style.borderColor = 'transparent'}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="modal-footer" style={{ flexShrink: 0 }}>
+              <button className="cancel-btn" onClick={() => setShowTableEditor(false)}>
+                Tühista
+              </button>
+              <button
+                className="submit-btn primary"
+                disabled={tableEditorSaving || tableEditorData.filter(r => r.modified).length === 0}
+                onClick={async () => {
+                  setTableEditorSaving(true);
+                  try {
+                    const modifiedRows = tableEditorData.filter(r => r.modified);
+                    let updated = 0;
+
+                    for (const row of modifiedRows) {
+                      // Find or create vehicle by code
+                      let targetVehicleId = row.vehicleId;
+                      const existingVehicle = vehicles.find(v => v.vehicle_code === row.vehicleCode);
+
+                      if (existingVehicle) {
+                        targetVehicleId = existingVehicle.id;
+                        // Update vehicle time if changed
+                        if (row.time && row.time !== existingVehicle.unload_start_time) {
+                          await supabase
+                            .from('trimble_delivery_vehicles')
+                            .update({
+                              unload_start_time: row.time,
+                              scheduled_date: row.date || existingVehicle.scheduled_date
+                            })
+                            .eq('id', existingVehicle.id);
+                        }
+                      }
+
+                      // Update item
+                      await supabase
+                        .from('trimble_delivery_items')
+                        .update({
+                          vehicle_id: targetVehicleId || null,
+                          scheduled_date: row.date || null,
+                          assembly_mark: row.assemblyMark,
+                          cast_unit_weight: row.weight || null,
+                          guid_ifc: row.guidIfc || null
+                        })
+                        .eq('id', row.itemId);
+
+                      updated++;
+                    }
+
+                    // Reload data
+                    await loadVehicles();
+                    await loadItems();
+                    setMessage(`✓ ${updated} rida salvestatud`);
+                    setShowTableEditor(false);
+                  } catch (e: any) {
+                    setMessage('Viga: ' + e.message);
+                  } finally {
+                    setTableEditorSaving(false);
+                  }
+                }}
+              >
+                {tableEditorSaving ? 'Salvestamine...' : `Salvesta (${tableEditorData.filter(r => r.modified).length})`}
               </button>
             </div>
           </div>
