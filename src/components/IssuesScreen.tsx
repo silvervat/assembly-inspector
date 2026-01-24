@@ -7,6 +7,7 @@ import {
   IssueStatus,
   IssuePriority,
   IssueSource,
+  IssueFixedCategory,
   IssueAssignment,
   IssueComment,
   IssueAttachment,
@@ -14,7 +15,7 @@ import {
   IssueActivityLog,
   ISSUE_STATUS_CONFIG,
   ISSUE_PRIORITY_CONFIG,
-  ISSUE_SOURCE_CONFIG,
+  ISSUE_FIXED_CATEGORY_CONFIG,
   ACTIVITY_ACTION_LABELS
 } from '../supabase';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
@@ -23,8 +24,8 @@ import * as XLSX from 'xlsx-js-style';
 import {
   FiPlus, FiSearch, FiChevronDown, FiChevronRight,
   FiEdit2, FiTrash2, FiX, FiCamera, FiDownload,
-  FiRefreshCw, FiFilter, FiUser, FiClock, FiAlertTriangle,
-  FiAlertCircle, FiCheckCircle, FiXCircle, FiLoader, FiCheckSquare,
+  FiRefreshCw, FiFilter, FiUser, FiAlertTriangle, FiAlertCircle,
+  FiCheckCircle, FiLoader, FiCheckSquare,
   FiTarget, FiMessageSquare, FiActivity, FiLayers, FiSend,
   FiArrowUp, FiArrowDown, FiMinus, FiAlertOctagon, FiEye, FiLink
 } from 'react-icons/fi';
@@ -84,15 +85,12 @@ interface IssueFilters {
 const COLOR_BATCH_SIZE = 100;
 const WHITE_COLOR = { r: 255, g: 255, b: 255, a: 255 };
 
-// Status icons mapping
+// Status icons mapping (4 statuses only)
 const STATUS_ICONS: Record<IssueStatus, React.ReactNode> = {
   nonconformance: <FiAlertTriangle size={14} />,
-  problem: <FiAlertCircle size={14} />,
-  pending: <FiClock size={14} />,
   in_progress: <FiLoader size={14} />,
   completed: <FiCheckCircle size={14} />,
-  closed: <FiCheckSquare size={14} />,
-  cancelled: <FiXCircle size={14} />
+  closed: <FiCheckSquare size={14} />
 };
 
 // Priority icons mapping
@@ -175,7 +173,7 @@ export default function IssuesScreen({
   const [_selectedIssue, _setSelectedIssue] = useState<Issue | null>(null);
   const [highlightedIssueId, setHighlightedIssueId] = useState<string | null>(null);
   const [expandedStatuses, setExpandedStatuses] = useState<Set<IssueStatus>>(
-    new Set(['nonconformance', 'problem', 'pending', 'in_progress'])
+    new Set(['nonconformance', 'in_progress'])
   );
 
   // Form state
@@ -192,6 +190,7 @@ export default function IssuesScreen({
     priority: 'medium' as IssuePriority,
     source: 'inspection' as IssueSource,
     category_id: '',
+    fixed_category: '' as IssueFixedCategory | '',
     due_date: '',
     estimated_hours: '',
     estimated_cost: ''
@@ -952,6 +951,7 @@ export default function IssuesScreen({
       priority: 'medium',
       source: 'inspection',
       category_id: '',
+      fixed_category: '',
       due_date: today, // Default to today as discovery date
       estimated_hours: '',
       estimated_cost: ''
@@ -963,6 +963,11 @@ export default function IssuesScreen({
   const handleSubmitIssue = useCallback(async () => {
     if (!formData.title.trim()) {
       setMessage('⚠️ Pealkiri on kohustuslik');
+      return;
+    }
+
+    if (!formData.fixed_category) {
+      setMessage('⚠️ Kategooria valimine on kohustuslik');
       return;
     }
 
@@ -984,6 +989,7 @@ export default function IssuesScreen({
             priority: formData.priority,
             source: formData.source,
             category_id: formData.category_id || null,
+            fixed_category: formData.fixed_category || null,
             due_date: formData.due_date || null,
             estimated_hours: formData.estimated_hours ? parseFloat(formData.estimated_hours) : null,
             estimated_cost: formData.estimated_cost ? parseFloat(formData.estimated_cost) : null,
@@ -1008,6 +1014,7 @@ export default function IssuesScreen({
             priority: formData.priority,
             source: formData.source,
             category_id: formData.category_id || null,
+            fixed_category: formData.fixed_category || null,
             due_date: formData.due_date || null,
             estimated_hours: formData.estimated_hours ? parseFloat(formData.estimated_hours) : null,
             estimated_cost: formData.estimated_cost ? parseFloat(formData.estimated_cost) : null,
@@ -1583,29 +1590,27 @@ export default function IssuesScreen({
     }
   }, [filteredIssues]);
 
-  // Group issues by status
+  // Group issues by status (4 statuses only)
   const issuesByStatus = useMemo(() => {
     const grouped: Record<IssueStatus, Issue[]> = {
       nonconformance: [],
-      problem: [],
-      pending: [],
       in_progress: [],
       completed: [],
-      closed: [],
-      cancelled: []
+      closed: []
     };
 
     for (const issue of filteredIssues) {
-      grouped[issue.status].push(issue);
+      if (grouped[issue.status]) {
+        grouped[issue.status].push(issue);
+      }
     }
 
     return grouped;
   }, [filteredIssues]);
 
-  // Status order for display
+  // Status order for display (4 statuses only)
   const statusOrder: IssueStatus[] = [
-    'nonconformance', 'problem', 'pending', 'in_progress',
-    'completed', 'closed', 'cancelled'
+    'nonconformance', 'in_progress', 'completed', 'closed'
   ];
 
   // Clear message after 3 seconds
@@ -1844,6 +1849,19 @@ export default function IssuesScreen({
                           <span className="issue-card-title-truncated" title={`${issue.issue_number}: ${issue.title}`}>
                             {issue.title.length > 25 ? issue.title.substring(0, 25) + '...' : issue.title}
                           </span>
+                          {/* Category badge */}
+                          {issue.fixed_category && ISSUE_FIXED_CATEGORY_CONFIG[issue.fixed_category] && (
+                            <span
+                              className="category-badge-mini"
+                              style={{
+                                backgroundColor: ISSUE_FIXED_CATEGORY_CONFIG[issue.fixed_category].bgColor,
+                                color: ISSUE_FIXED_CATEGORY_CONFIG[issue.fixed_category].color
+                              }}
+                              title={ISSUE_FIXED_CATEGORY_CONFIG[issue.fixed_category].label}
+                            >
+                              {ISSUE_FIXED_CATEGORY_CONFIG[issue.fixed_category].label.substring(0, 3).toUpperCase()}
+                            </span>
+                          )}
                           {/* Icons for comments and photos */}
                           {(issue.comments_count || 0) > 0 && (
                             <span className="issue-meta-icon" title={`${issue.comments_count} kommentaari`}>
@@ -2026,12 +2044,14 @@ export default function IssuesScreen({
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Allikas</label>
+                  <label>Kategooria *</label>
                   <select
-                    value={formData.source}
-                    onChange={e => setFormData(f => ({ ...f, source: e.target.value as IssueSource }))}
+                    value={formData.fixed_category}
+                    onChange={e => setFormData(f => ({ ...f, fixed_category: e.target.value as IssueFixedCategory | '' }))}
+                    style={{ borderColor: !formData.fixed_category ? '#dc2626' : undefined }}
                   >
-                    {Object.entries(ISSUE_SOURCE_CONFIG).map(([key, config]) => (
+                    <option value="">-- Vali kategooria --</option>
+                    {Object.entries(ISSUE_FIXED_CATEGORY_CONFIG).map(([key, config]) => (
                       <option key={key} value={key}>{config.label}</option>
                     ))}
                   </select>
@@ -2273,6 +2293,23 @@ export default function IssuesScreen({
                     {ISSUE_PRIORITY_CONFIG[detailIssue.priority].label}
                   </span>
                 </div>
+                {detailIssue.fixed_category && ISSUE_FIXED_CATEGORY_CONFIG[detailIssue.fixed_category] && (
+                  <div className="info-item">
+                    <span className="info-label">Kategooria</span>
+                    <span
+                      className="category-badge"
+                      style={{
+                        backgroundColor: ISSUE_FIXED_CATEGORY_CONFIG[detailIssue.fixed_category].bgColor,
+                        color: ISSUE_FIXED_CATEGORY_CONFIG[detailIssue.fixed_category].color,
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        fontSize: '11px'
+                      }}
+                    >
+                      {ISSUE_FIXED_CATEGORY_CONFIG[detailIssue.fixed_category].label}
+                    </span>
+                  </div>
+                )}
                 <div className="info-item">
                   <span className="info-label">Avastatud</span>
                   <span>{formatDateTime(detailIssue.detected_at)}</span>
@@ -2434,6 +2471,7 @@ export default function IssuesScreen({
                       priority: detailIssue.priority,
                       source: detailIssue.source,
                       category_id: detailIssue.category_id || '',
+                      fixed_category: detailIssue.fixed_category || '',
                       due_date: detailIssue.due_date || '',
                       estimated_hours: detailIssue.estimated_hours?.toString() || '',
                       estimated_cost: detailIssue.estimated_cost?.toString() || ''

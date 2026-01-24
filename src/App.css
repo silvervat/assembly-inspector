@@ -15287,6 +15287,15 @@ button.stat-toggle.off:hover {
   flex-shrink: 0;
 }
 
+.category-badge-mini {
+  font-size: 8px;
+  font-weight: 600;
+  padding: 1px 3px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
 .issue-card-actions-inline {
   display: flex;
   gap: 2px;

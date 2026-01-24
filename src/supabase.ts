@@ -1267,12 +1267,9 @@ export interface OrganizerGroupTree extends OrganizerGroup {
 
 export type IssueStatus =
   | 'nonconformance'
-  | 'problem'
-  | 'pending'
   | 'in_progress'
   | 'completed'
-  | 'closed'
-  | 'cancelled';
+  | 'closed';
 
 export type IssuePriority = 'low' | 'medium' | 'high' | 'critical';
 
@@ -1317,6 +1314,7 @@ export interface Issue {
 
   // Details
   category_id?: string;
+  fixed_category?: IssueFixedCategory;
   title: string;
   description?: string;
   location?: string;
@@ -1536,41 +1534,55 @@ export const ISSUE_STATUS_CONFIG: Record<IssueStatus, {
     modelColor: { r: 255, g: 0, b: 0, a: 255 },
     icon: 'alert-triangle', order: 0
   },
-  problem: {
-    label: 'Probleem', labelEn: 'Problem',
-    color: '#EA580C', bgColor: '#FFEDD5',
-    modelColor: { r: 255, g: 140, b: 0, a: 255 },
-    icon: 'alert-circle', order: 1
-  },
-  pending: {
-    label: 'Ootel', labelEn: 'Pending',
-    color: '#CA8A04', bgColor: '#FEF9C3',
-    modelColor: { r: 255, g: 215, b: 0, a: 255 },
-    icon: 'clock', order: 2
-  },
   in_progress: {
-    label: 'Töös', labelEn: 'In Progress',
+    label: 'TÖÖS', labelEn: 'In Progress',
     color: '#2563EB', bgColor: '#DBEAFE',
     modelColor: { r: 0, g: 100, b: 255, a: 255 },
-    icon: 'loader', order: 3
+    icon: 'loader', order: 1
   },
   completed: {
-    label: 'Valmis', labelEn: 'Completed',
+    label: 'VALMIS', labelEn: 'Completed',
     color: '#16A34A', bgColor: '#DCFCE7',
     modelColor: { r: 0, g: 255, b: 100, a: 255 },
-    icon: 'check-circle', order: 4
+    icon: 'check-circle', order: 2
   },
   closed: {
-    label: 'Lõpetatud', labelEn: 'Closed',
+    label: 'LÕPETATUD', labelEn: 'Closed',
     color: '#4B5563', bgColor: '#F3F4F6',
     modelColor: { r: 100, g: 100, b: 100, a: 255 },
-    icon: 'check-square', order: 5
+    icon: 'check-square', order: 3
+  }
+};
+
+// Fixed issue categories
+export type IssueFixedCategory = 'production' | 'installation' | 'design' | 'other';
+
+export const ISSUE_FIXED_CATEGORY_CONFIG: Record<IssueFixedCategory, {
+  label: string;
+  labelEn: string;
+  color: string;
+  bgColor: string;
+  icon: string;
+}> = {
+  production: {
+    label: 'Tootmisviga', labelEn: 'Production Error',
+    color: '#7C3AED', bgColor: '#EDE9FE',
+    icon: 'package'
   },
-  cancelled: {
-    label: 'Tühistatud', labelEn: 'Cancelled',
-    color: '#9CA3AF', bgColor: '#F9FAFB',
-    modelColor: { r: 180, g: 180, b: 180, a: 255 },
-    icon: 'x-circle', order: 6
+  installation: {
+    label: 'Paigaldusviga', labelEn: 'Installation Error',
+    color: '#0891B2', bgColor: '#CFFAFE',
+    icon: 'tool'
+  },
+  design: {
+    label: 'Projekteerimisviga', labelEn: 'Design Error',
+    color: '#DB2777', bgColor: '#FCE7F3',
+    icon: 'pen-tool'
+  },
+  other: {
+    label: 'Muu', labelEn: 'Other',
+    color: '#6B7280', bgColor: '#F3F4F6',
+    icon: 'more-horizontal'
   }
 };
 
