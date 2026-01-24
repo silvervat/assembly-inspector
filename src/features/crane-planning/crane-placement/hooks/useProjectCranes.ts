@@ -15,11 +15,10 @@ interface UseProjectCranesResult {
 // Fields that exist only on the client side (not in database yet)
 // To persist these, run this SQL in Supabase:
 // ALTER TABLE project_cranes
-// ADD COLUMN IF NOT EXISTS max_radius_limit_m FLOAT DEFAULT 0,
 // ADD COLUMN IF NOT EXISTS label_height_mm INTEGER DEFAULT 500,
 // ADD COLUMN IF NOT EXISTS label_color JSONB DEFAULT '{"r": 50, "g": 50, "b": 50, "a": 255}'::jsonb;
 // Then remove these from CLIENT_ONLY_FIELDS
-const CLIENT_ONLY_FIELDS = ['label_color', 'label_height_mm', 'max_radius_limit_m', 'crane_model', 'counterweight_config'];
+const CLIENT_ONLY_FIELDS = ['label_color', 'label_height_mm', 'crane_model', 'counterweight_config'];
 
 // Remove client-only fields before sending to database
 function filterForDatabase(data: Partial<ProjectCrane>): Record<string, unknown> {
