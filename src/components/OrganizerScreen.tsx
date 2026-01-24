@@ -3472,7 +3472,7 @@ export default function OrganizerScreen({
       }
       setShowDeleteConfirm(false);
       setDeleteGroupData(null);
-      await loadData();
+      await loadData(true); // Force refresh to bypass cache
       // Auto-recolor if coloring mode is active
       if (colorByGroup) {
         setTimeout(() => colorModelByGroups(), 150);

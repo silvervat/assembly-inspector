@@ -15280,6 +15280,13 @@ button.stat-toggle.off:hover {
   font-family: monospace;
 }
 
+.issue-meta-icon {
+  display: flex;
+  align-items: center;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
 .issue-card-actions-inline {
   display: flex;
   gap: 2px;
@@ -15588,15 +15595,15 @@ button.stat-toggle.off:hover {
 
 /* Issue detail */
 .issue-detail {
-  padding: 16px;
+  padding: 10px 12px;
   overflow-y: auto;
 }
 
 .issue-detail h3 {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: #1e293b;
-  margin: 0 0 12px 0;
+  margin: 0 0 8px 0;
 }
 
 .status-change-bar {
@@ -15630,11 +15637,11 @@ button.stat-toggle.off:hover {
 .detail-info-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  padding: 12px;
+  gap: 8px;
+  padding: 8px 10px;
   background: #f8fafc;
-  border-radius: 8px;
-  margin-bottom: 16px;
+  border-radius: 6px;
+  margin-bottom: 10px;
 }
 
 .info-item {
@@ -15659,17 +15666,61 @@ button.stat-toggle.off:hover {
 }
 
 .detail-section {
-  margin-bottom: 16px;
+  margin-bottom: 10px;
+}
+
+/* Quick action buttons in detail view */
+.detail-quick-actions {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.icon-action-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.icon-action-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.icon-action-btn.danger:hover {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+.icon-action-btn.primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: white;
+}
+
+.icon-action-btn.primary:hover {
+  background: #1d4ed8;
 }
 
 .detail-section h4 {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 5px;
+  font-size: 11px;
   font-weight: 600;
   color: #64748b;
-  margin: 0 0 8px 0;
+  margin: 0 0 5px 0;
   text-transform: uppercase;
 }
 
@@ -16031,12 +16082,14 @@ button.stat-toggle.off:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
   background: #ef4444;
   color: white;
-  border-radius: 10px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
   font-size: 11px;
   font-weight: 600;
   margin-left: 8px;

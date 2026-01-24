@@ -1379,6 +1379,8 @@ export interface IssueObject {
   cast_unit_weight?: string;
   cast_unit_position_code?: string;
   is_primary: boolean;
+  is_sub_detail: boolean; // True if this is a sub-detail of another object
+  parent_object_id?: string; // References another issue_object.id if is_sub_detail
   sort_order: number;
   added_by: string;
   added_at: string;

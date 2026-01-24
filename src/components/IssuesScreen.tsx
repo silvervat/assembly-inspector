@@ -231,6 +231,7 @@ export default function IssuesScreen({
   const [showSubDetailsModal, setShowSubDetailsModal] = useState(false);
   const [subDetails, setSubDetails] = useState<{
     id: number;
+    guidIfc: string;
     name: string;
     type: string;
     profile: string;
@@ -238,6 +239,11 @@ export default function IssuesScreen({
   }[]>([]);
   const [selectedSubDetails, setSelectedSubDetails] = useState<Set<number>>(new Set());
   const [subDetailModelId, setSubDetailModelId] = useState<string>('');
+  const [_parentObjectGuid, setParentObjectGuid] = useState<string>('');
+  const [highlightedSubDetailId, setHighlightedSubDetailId] = useState<number | null>(null);
+
+  // Status group menu state
+  const [_statusMenuOpen, _setStatusMenuOpen] = useState<string | null>(null);
 
   // Real-time selection state (for continuous monitoring)
   const [currentSelectedObjects, setCurrentSelectedObjects] = useState<SelectedObject[]>([]);
@@ -316,8 +322,10 @@ export default function IssuesScreen({
   }, []);
 
   // Load sub-details for selected assembly
-  const loadSubDetails = useCallback(async (modelId: string, runtimeId: number) => {
+  const loadSubDetails = useCallback(async (modelId: string, runtimeId: number, parentGuid: string) => {
     try {
+      setMessage('Laadin alamdetaile...');
+
       // Get children of the selected assembly
       const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
 
@@ -328,11 +336,13 @@ export default function IssuesScreen({
 
       const childIds = children.map((c: any) => c.id);
       const childProps: any[] = await api.viewer.getObjectProperties(modelId, childIds);
+      const childGuids = await api.viewer.convertToObjectIds(modelId, childIds);
       const colors = generateSubDetailColors(children.length);
 
-      // Map children with their properties and colors
+      // Map children with their properties, GUIDs and colors
       const subDetailsList = children.map((child: any, index: number) => {
         const props = childProps[index] || {};
+        const guid = childGuids?.[index] || '';
         // Try to get type and profile from properties
         let type = props.name || 'Element';
         let profile = '';
@@ -354,6 +364,7 @@ export default function IssuesScreen({
 
         return {
           id: child.id,
+          guidIfc: guid,
           name: props.name || `Element ${index + 1}`,
           type: type,
           profile: profile,
@@ -364,34 +375,29 @@ export default function IssuesScreen({
       // Disable assembly selection to allow sub-detail selection
       await disableAssemblySelection();
 
-      // Color model white first
-      const { data: modelObjects } = await supabase
-        .from('trimble_model_objects')
-        .select('guid_ifc')
-        .eq('trimble_project_id', projectId);
-
-      if (modelObjects && modelObjects.length > 0) {
-        const guids = modelObjects.map(obj => obj.guid_ifc).filter((g): g is string => !!g);
-        const foundObjects = await findObjectsInLoadedModels(api, guids);
-
-        const allByModel: Record<string, number[]> = {};
-        for (const [, found] of foundObjects) {
-          if (!allByModel[found.modelId]) allByModel[found.modelId] = [];
-          allByModel[found.modelId].push(found.runtimeId);
-        }
-
-        for (const [mId, runtimeIds] of Object.entries(allByModel)) {
-          for (let i = 0; i < runtimeIds.length; i += COLOR_BATCH_SIZE) {
-            const batch = runtimeIds.slice(i, i + COLOR_BATCH_SIZE);
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId: mId, objectRuntimeIds: batch }] },
-              { color: WHITE_COLOR }
-            );
+      // Color model white first - get ALL objects from all models
+      setMessage('Värvin mudeli valgeks...');
+      const models = await (api.viewer as any).getModels();
+      for (const model of models) {
+        try {
+          const allObjects = await (api.viewer as any).getObjects(model.id, { loaded: true });
+          if (allObjects && allObjects.length > 0) {
+            const allRuntimeIds = allObjects.map((obj: any) => obj.id);
+            for (let i = 0; i < allRuntimeIds.length; i += COLOR_BATCH_SIZE) {
+              const batch = allRuntimeIds.slice(i, i + COLOR_BATCH_SIZE);
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: batch }] },
+                { color: WHITE_COLOR }
+              );
+            }
           }
+        } catch (e) {
+          console.warn('Could not color model:', model.id, e);
         }
       }
 
       // Color each sub-detail with its unique color
+      setMessage('Värvin alamdetaile...');
       for (const subDetail of subDetailsList) {
         await api.viewer.setObjectState(
           { modelObjectIds: [{ modelId, objectRuntimeIds: [subDetail.id] }] },
@@ -408,14 +414,17 @@ export default function IssuesScreen({
 
       setSubDetails(subDetailsList);
       setSubDetailModelId(modelId);
+      setParentObjectGuid(parentGuid);
       setSelectedSubDetails(new Set());
+      setHighlightedSubDetailId(null);
       setShowSubDetailsModal(true);
+      setMessage('');
 
     } catch (e) {
       console.error('Error loading sub-details:', e);
       setMessage('⚠️ Alamdetailide laadimine ebaõnnestus');
     }
-  }, [api, projectId, disableAssemblySelection, generateSubDetailColors]);
+  }, [api, disableAssemblySelection, generateSubDetailColors]);
 
   // Handle sub-detail click - zoom to it
   const handleSubDetailClick = useCallback(async (subDetailId: number) => {
@@ -448,10 +457,52 @@ export default function IssuesScreen({
     setShowSubDetailsModal(false);
     setSubDetails([]);
     setSelectedSubDetails(new Set());
+    setHighlightedSubDetailId(null);
+    setParentObjectGuid('');
     await enableAssemblySelection();
     // Restore issue coloring
     await colorModelByIssueStatus();
   }, [enableAssemblySelection]);
+
+  // Listen for selection changes when sub-details modal is open
+  useEffect(() => {
+    if (!showSubDetailsModal || subDetails.length === 0) return;
+
+    const checkSubDetailSelection = async () => {
+      try {
+        const selection = await api.viewer.getSelection();
+        if (!selection || selection.length === 0) {
+          setHighlightedSubDetailId(null);
+          return;
+        }
+
+        const firstSel = selection[0];
+        if (!firstSel.objectRuntimeIds || firstSel.objectRuntimeIds.length === 0) {
+          setHighlightedSubDetailId(null);
+          return;
+        }
+
+        const selectedRuntimeId = firstSel.objectRuntimeIds[0];
+        const found = subDetails.find(sd => sd.id === selectedRuntimeId);
+        if (found) {
+          setHighlightedSubDetailId(found.id);
+          // Auto-scroll to highlighted item
+          const element = document.getElementById(`sub-detail-${found.id}`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        } else {
+          setHighlightedSubDetailId(null);
+        }
+      } catch (e) {
+        // Ignore errors
+      }
+    };
+
+    // Poll for selection changes
+    const interval = setInterval(checkSubDetailSelection, 300);
+    return () => clearInterval(interval);
+  }, [api, showSubDetailsModal, subDetails]);
 
   // Helper function to extract selected objects from current model selection
   const getSelectedObjectsFromModel = useCallback(async (): Promise<SelectedObject[]> => {
@@ -587,25 +638,31 @@ export default function IssuesScreen({
     try {
       setLoading(true);
 
-      // Load issues with objects
+      // Load issues with objects, assignments, and counts
       const { data: issuesData, error: issuesError } = await supabase
         .from('issues')
         .select(`
           *,
           category:issue_categories(*),
           objects:issue_objects(*),
-          assignments:issue_assignments(*)
+          assignments:issue_assignments(*),
+          comments:issue_comments(count),
+          attachments:issue_attachments(count)
         `)
         .eq('trimble_project_id', projectId)
         .order('detected_at', { ascending: false });
 
       if (issuesError) throw issuesError;
 
-      // Count comments and attachments
-      const issuesWithCounts = (issuesData || []).map((issue: Issue) => ({
+      // Process issues with counts
+      const issuesWithCounts = (issuesData || []).map((issue: any) => ({
         ...issue,
         objects: issue.objects || [],
-        assignments: (issue.assignments || []).filter((a: IssueAssignment) => a.is_active)
+        assignments: (issue.assignments || []).filter((a: IssueAssignment) => a.is_active),
+        comments_count: issue.comments?.[0]?.count || 0,
+        attachments_count: issue.attachments?.[0]?.count || 0,
+        comments: undefined, // Remove the raw count array
+        attachments: undefined // Remove the raw count array
       }));
 
       setIssues(issuesWithCounts);
@@ -1784,10 +1841,20 @@ export default function IssuesScreen({
                         onClick={() => openIssueDetail(issue)}
                       >
                         <div className="issue-card-row">
-                          <span className="issue-number">{issue.issue_number}</span>
-                          <span className="issue-card-title-truncated" title={issue.title}>
-                            {issue.title.length > 20 ? issue.title.substring(0, 20) + '...' : issue.title}
+                          <span className="issue-card-title-truncated" title={`${issue.issue_number}: ${issue.title}`}>
+                            {issue.title.length > 25 ? issue.title.substring(0, 25) + '...' : issue.title}
                           </span>
+                          {/* Icons for comments and photos */}
+                          {(issue.comments_count || 0) > 0 && (
+                            <span className="issue-meta-icon" title={`${issue.comments_count} kommentaari`}>
+                              <FiMessageSquare size={10} />
+                            </span>
+                          )}
+                          {(issue.attachments_count || 0) > 0 && (
+                            <span className="issue-meta-icon" title={`${issue.attachments_count} pilti`}>
+                              <FiCamera size={10} />
+                            </span>
+                          )}
                           <span
                             className="priority-badge small"
                             style={{
@@ -1843,24 +1910,24 @@ export default function IssuesScreen({
                   className="sub-details-btn"
                   onClick={async () => {
                     const obj = newIssueObjects[0];
-                    await loadSubDetails(obj.modelId, obj.runtimeId);
+                    await loadSubDetails(obj.modelId, obj.runtimeId, obj.guidIfc || '');
                   }}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: '6px',
-                    padding: '6px 10px',
-                    marginBottom: '8px',
+                    padding: '4px 8px',
+                    marginBottom: '6px',
                     background: '#f0f9ff',
                     border: '1px solid #bae6fd',
                     borderRadius: '4px',
                     color: '#0369a1',
-                    fontSize: '12px',
+                    fontSize: '11px',
                     fontWeight: 500,
                     cursor: 'pointer'
                   }}
                 >
-                  <FiLink size={14} />
+                  <FiLink size={12} />
                   Lisa seotud alamdetailid
                 </button>
               )}
@@ -2353,6 +2420,47 @@ export default function IssuesScreen({
                 </div>
               </div>
 
+              {/* Quick action buttons */}
+              <div className="detail-quick-actions">
+                <button
+                  className="icon-action-btn"
+                  onClick={() => {
+                    setEditingIssue(detailIssue);
+                    setFormData({
+                      title: detailIssue.title,
+                      description: detailIssue.description || '',
+                      location: detailIssue.location || '',
+                      status: detailIssue.status,
+                      priority: detailIssue.priority,
+                      source: detailIssue.source,
+                      category_id: detailIssue.category_id || '',
+                      due_date: detailIssue.due_date || '',
+                      estimated_hours: detailIssue.estimated_hours?.toString() || '',
+                      estimated_cost: detailIssue.estimated_cost?.toString() || ''
+                    });
+                    setShowDetail(false);
+                    setShowForm(true);
+                  }}
+                  title="Muuda"
+                >
+                  <FiEdit2 size={14} />
+                </button>
+                <button
+                  className="icon-action-btn danger"
+                  onClick={() => handleDeleteIssue(detailIssue.id)}
+                  title="Kustuta"
+                >
+                  <FiTrash2 size={14} />
+                </button>
+                <button
+                  className="icon-action-btn primary"
+                  onClick={() => selectIssueInModel(detailIssue)}
+                  title="Näita mudelis"
+                >
+                  <FiEye size={14} />
+                </button>
+              </div>
+
               {/* Comments */}
               <div className="detail-section">
                 <h4>
@@ -2366,8 +2474,8 @@ export default function IssuesScreen({
                         <span className="comment-author">
                           {comment.author_name || comment.author_email}
                         </span>
-                        <span className="comment-date">
-                          {formatRelativeTime(comment.created_at)}
+                        <span className="comment-date" title={formatDateTime(comment.created_at)}>
+                          {formatDateTime(comment.created_at)} ({formatRelativeTime(comment.created_at)})
                         </span>
                       </div>
                       <p className="comment-text">{comment.comment_text}</p>
@@ -2422,46 +2530,6 @@ export default function IssuesScreen({
                 </div>
               </div>
 
-              {/* Actions */}
-              <div className="detail-actions">
-                <button
-                  className="secondary-button"
-                  onClick={() => {
-                    setEditingIssue(detailIssue);
-                    setFormData({
-                      title: detailIssue.title,
-                      description: detailIssue.description || '',
-                      location: detailIssue.location || '',
-                      status: detailIssue.status,
-                      priority: detailIssue.priority,
-                      source: detailIssue.source,
-                      category_id: detailIssue.category_id || '',
-                      due_date: detailIssue.due_date || '',
-                      estimated_hours: detailIssue.estimated_hours?.toString() || '',
-                      estimated_cost: detailIssue.estimated_cost?.toString() || ''
-                    });
-                    setShowDetail(false);
-                    setShowForm(true);
-                  }}
-                >
-                  <FiEdit2 size={14} />
-                  Muuda
-                </button>
-                <button
-                  className="danger-button"
-                  onClick={() => handleDeleteIssue(detailIssue.id)}
-                >
-                  <FiTrash2 size={14} />
-                  Kustuta
-                </button>
-                <button
-                  className="primary-button"
-                  onClick={() => selectIssueInModel(detailIssue)}
-                >
-                  <FiEye size={14} />
-                  Näita mudelis
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -2538,90 +2606,87 @@ export default function IssuesScreen({
       {/* Sub-details Modal */}
       {showSubDetailsModal && (
         <div className="modal-overlay" onClick={closeSubDetailsModal}>
-          <div className="modal-content sub-details-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Alam-detailid ({subDetails.length} tk)</h3>
+          <div className="modal-content sub-details-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '360px' }}>
+            <div className="modal-header" style={{ padding: '8px 12px' }}>
+              <h3 style={{ fontSize: '13px' }}>Alam-detailid ({subDetails.length})</h3>
               <button onClick={closeSubDetailsModal}>
-                <FiX size={20} />
+                <FiX size={16} />
               </button>
             </div>
-            <div style={{ padding: '12px', maxHeight: '400px', overflowY: 'auto' }}>
-              <p style={{ marginBottom: '12px', fontSize: '11px', color: '#64748b' }}>
-                Klõpsa alamdetailil, et seda mudelis näha. Kasuta "Seo" nuppu, et siduda alamdetail mittevastavusega.
+            <div style={{ padding: '8px', maxHeight: '350px', overflowY: 'auto' }}>
+              <p style={{ margin: '0 0 6px', fontSize: '10px', color: '#64748b' }}>
+                Vali mudelist või klõpsa listis. "Seo" seob alamdetaili mittevastavusega.
               </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                {subDetails.map((detail) => (
-                  <div
-                    key={detail.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '8px 10px',
-                      background: selectedSubDetails.has(detail.id) ? '#ecfdf5' : '#f8fafc',
-                      border: `1px solid ${selectedSubDetails.has(detail.id) ? '#a7f3d0' : '#e2e8f0'}`,
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s'
-                    }}
-                    onClick={() => handleSubDetailClick(detail.id)}
-                  >
-                    {/* Color indicator */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                {subDetails.map((detail) => {
+                  const isHighlighted = highlightedSubDetailId === detail.id;
+                  const isSelected = selectedSubDetails.has(detail.id);
+                  return (
                     <div
+                      key={detail.id}
+                      id={`sub-detail-${detail.id}`}
                       style={{
-                        width: '16px',
-                        height: '16px',
-                        borderRadius: '3px',
-                        background: `rgb(${detail.color.r}, ${detail.color.g}, ${detail.color.b})`,
-                        border: '1px solid rgba(0,0,0,0.1)',
-                        flexShrink: 0
-                      }}
-                    />
-
-                    {/* Detail info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: '12px', color: '#1e293b' }}>
-                        {detail.type}
-                      </div>
-                      {detail.profile && (
-                        <div style={{ fontSize: '10px', color: '#64748b' }}>
-                          {detail.profile}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Link button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSubDetailForIssue(detail.id);
-                      }}
-                      style={{
-                        padding: '4px 8px',
-                        fontSize: '10px',
-                        fontWeight: 500,
-                        background: selectedSubDetails.has(detail.id) ? '#059669' : '#f1f5f9',
-                        color: selectedSubDetails.has(detail.id) ? 'white' : '#64748b',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '4px'
+                        gap: '6px',
+                        padding: '4px 6px',
+                        background: isHighlighted ? '#dbeafe' : isSelected ? '#ecfdf5' : '#f8fafc',
+                        border: `1px solid ${isHighlighted ? '#3b82f6' : isSelected ? '#a7f3d0' : '#e2e8f0'}`,
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        transition: 'all 0.1s'
                       }}
+                      onClick={() => handleSubDetailClick(detail.id)}
                     >
-                      <FiLink size={10} />
-                      {selectedSubDetails.has(detail.id) ? 'Seotud' : 'Seo'}
-                    </button>
-                  </div>
-                ))}
+                      {/* Color indicator */}
+                      <div
+                        style={{
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '2px',
+                          background: `rgb(${detail.color.r}, ${detail.color.g}, ${detail.color.b})`,
+                          border: '1px solid rgba(0,0,0,0.1)',
+                          flexShrink: 0
+                        }}
+                      />
+
+                      {/* Detail info - single line */}
+                      <div style={{ flex: 1, minWidth: 0, fontSize: '11px', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <span style={{ fontWeight: 500 }}>{detail.type}</span>
+                        {detail.profile && <span style={{ color: '#64748b', marginLeft: '4px' }}>{detail.profile}</span>}
+                      </div>
+
+                      {/* Link button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSubDetailForIssue(detail.id);
+                        }}
+                        style={{
+                          padding: '2px 6px',
+                          fontSize: '9px',
+                          fontWeight: 500,
+                          background: isSelected ? '#059669' : '#e2e8f0',
+                          color: isSelected ? 'white' : '#64748b',
+                          border: 'none',
+                          borderRadius: '3px',
+                          cursor: 'pointer',
+                          flexShrink: 0
+                        }}
+                      >
+                        {isSelected ? '✓' : 'Seo'}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Action buttons */}
-              <div style={{ marginTop: '16px', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <div style={{ marginTop: '10px', display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                 <button
                   className="secondary-button"
                   onClick={closeSubDetailsModal}
+                  style={{ padding: '4px 10px', fontSize: '11px' }}
                 >
                   Tühista
                 </button>
@@ -2630,10 +2695,12 @@ export default function IssuesScreen({
                   onClick={closeSubDetailsModal}
                   disabled={selectedSubDetails.size === 0}
                   style={{
+                    padding: '4px 10px',
+                    fontSize: '11px',
                     opacity: selectedSubDetails.size === 0 ? 0.5 : 1
                   }}
                 >
-                  Kinnita ({selectedSubDetails.size} valitud)
+                  Kinnita ({selectedSubDetails.size})
                 </button>
               </div>
             </div>
