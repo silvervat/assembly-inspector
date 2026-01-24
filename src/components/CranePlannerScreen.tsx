@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import {
   FiPlus, FiEdit2, FiTrash2, FiEye, FiEyeOff, FiMapPin, FiRotateCw,
@@ -18,10 +18,51 @@ import {
   CRANE_TYPE_LABELS,
   DEFAULT_CRANE_COLOR,
   DEFAULT_RADIUS_COLOR,
-  DEFAULT_LABEL_COLOR
+  DEFAULT_LABEL_COLOR,
+  LoadChart,
+  LoadChartDataPoint
 } from '../supabase';
 
 import { InspectionMode } from './MainMenu';
+
+/**
+ * Calculate max capacity chart data across all boom lengths for the selected counterweight.
+ * Applies deductions (hook weight, lifting block) and safety factor by division.
+ * Formula: net_capacity = (max_gross_capacity - hook_weight_kg - lifting_block_kg) / safety_factor
+ */
+function calculateMaxCapacityChartData(
+  loadCharts: LoadChart[],
+  hookWeightKg: number,
+  liftingBlockKg: number,
+  safetyFactor: number
+): LoadChartDataPoint[] {
+  // Collect all unique radii and find max capacity for each
+  const radiusMaxCapacity = new Map<number, number>();
+
+  for (const chart of loadCharts) {
+    if (!chart.chart_data) continue;
+    for (const point of chart.chart_data) {
+      const currentMax = radiusMaxCapacity.get(point.radius_m) || 0;
+      if (point.capacity_kg > currentMax) {
+        radiusMaxCapacity.set(point.radius_m, point.capacity_kg);
+      }
+    }
+  }
+
+  // Convert to array and apply deductions
+  const result: LoadChartDataPoint[] = [];
+  const totalDeduction = hookWeightKg + liftingBlockKg;
+
+  for (const [radius, grossCapacity] of radiusMaxCapacity) {
+    // Apply safety factor by division: net = (gross - deductions) / safety_factor
+    const netCapacity = Math.max(0, (grossCapacity - totalDeduction) / safetyFactor);
+    result.push({ radius_m: radius, capacity_kg: netCapacity });
+  }
+
+  // Sort by radius ascending
+  result.sort((a, b) => a.radius_m - b.radius_m);
+  return result;
+}
 
 interface CranePlannerScreenProps {
   api: WorkspaceAPI.WorkspaceAPI;
@@ -122,6 +163,30 @@ export default function CranePlannerScreen({
   const { counterweights } = useCounterweights(selectedCraneModelId);
   const { loadCharts } = useLoadCharts(selectedCraneModelId, selectedCounterweightId);
 
+  // Available boom lengths from load charts for selected counterweight
+  const availableBoomLengths = useMemo(() => {
+    if (!loadCharts || loadCharts.length === 0) return [];
+    return [...new Set(loadCharts.map(lc => lc.boom_length_m))].sort((a, b) => a - b);
+  }, [loadCharts]);
+
+  // Track if we should skip boom length auto-selection (when loading existing crane)
+  const skipBoomLengthAutoSelectRef = useRef(false);
+
+  // Auto-select boom length when counterweight changes
+  useEffect(() => {
+    // Skip when loading existing crane
+    if (skipBoomLengthAutoSelectRef.current) {
+      skipBoomLengthAutoSelectRef.current = false;
+      return;
+    }
+    // If no available boom lengths, nothing to do
+    if (availableBoomLengths.length === 0) return;
+    // If current boom length is not in available list, select first available
+    if (!availableBoomLengths.includes(config.boom_length_m)) {
+      setConfig(prev => ({ ...prev, boom_length_m: availableBoomLengths[0] }));
+    }
+  }, [availableBoomLengths, config.boom_length_m]);
+
   // Event listener ref for position picking
   const pickingListenerRef = useRef<((e: any) => void) | null>(null);
 
@@ -216,12 +281,15 @@ export default function CranePlannerScreen({
         // Clear IDs only AFTER successful removal to prevent race condition
         previewMarkupIdsRef.current = [];
 
-        const chartData = loadCharts.find(lc =>
-          lc.counterweight_config_id === selectedCounterweightId &&
-          lc.boom_length_m === config.boom_length_m
-        )?.chart_data;
+        // Calculate max capacity across all boom lengths with deductions and safety factor
+        const chartData = calculateMaxCapacityChartData(
+          loadCharts,
+          config.hook_weight_kg,
+          config.lifting_block_kg,
+          config.safety_factor
+        );
 
-        const groups = await drawCraneToModelGrouped(api, previewCrane, selectedCraneModel, chartData);
+        const groups = await drawCraneToModelGrouped(api, previewCrane, selectedCraneModel, chartData.length > 0 ? chartData : undefined);
         previewMarkupGroupsRef.current = groups;
         previewMarkupIdsRef.current = groups.all;
       }
@@ -380,6 +448,9 @@ export default function CranePlannerScreen({
   // Track original crane markup IDs when editing (to restore if cancelled)
   const originalCraneMarkupsRef = useRef<{ craneId: string; markupIds: number[] } | null>(null);
 
+  // Track when we're loading existing crane data to skip default resets
+  const skipModelDefaultsRef = useRef(false);
+
   // Start editing existing crane
   const startEditing = useCallback(async (crane: ProjectCrane) => {
     // Remove existing crane markups from model so they don't overlap with preview
@@ -390,6 +461,9 @@ export default function CranePlannerScreen({
       originalCraneMarkupsRef.current = { craneId: crane.id, markupIds: [...crane.markup_ids] };
     }
 
+    // Skip default resets when loading existing crane data
+    skipModelDefaultsRef.current = true;
+    skipBoomLengthAutoSelectRef.current = true;
     setSelectedCraneModelId(crane.crane_model_id);
     setSelectedCounterweightId(crane.counterweight_config_id || '');
     setPickedPosition({ x: crane.position_x, y: crane.position_y, z: crane.position_z });
@@ -433,13 +507,17 @@ export default function CranePlannerScreen({
       const originalCrane = projectCranes.find(c => c.id === originalCraneMarkupsRef.current?.craneId);
       if (originalCrane && originalCrane.crane_model) {
         console.log('[CranePlanner] Restoring original crane markups after cancel');
-        const chartData = loadCharts.find(lc =>
-          lc.counterweight_config_id === originalCrane.counterweight_config_id &&
-          lc.boom_length_m === originalCrane.boom_length_m
-        )?.chart_data;
+        // Calculate max capacity across all boom lengths with the crane's deductions and safety factor
+        const craneLoadCharts = loadCharts.filter(lc => lc.counterweight_config_id === originalCrane.counterweight_config_id);
+        const chartData = calculateMaxCapacityChartData(
+          craneLoadCharts,
+          originalCrane.hook_weight_kg,
+          originalCrane.lifting_block_kg,
+          originalCrane.safety_factor
+        );
 
         // Redraw the original crane
-        const newMarkupIds = await drawCraneToModel(api, originalCrane, originalCrane.crane_model, chartData);
+        const newMarkupIds = await drawCraneToModel(api, originalCrane, originalCrane.crane_model, chartData.length > 0 ? chartData : undefined);
         await updateMarkupIds(originalCrane.id, newMarkupIds);
       }
       originalCraneMarkupsRef.current = null;
@@ -594,6 +672,11 @@ export default function CranePlannerScreen({
 
   // Update crane model selection
   useEffect(() => {
+    // Skip defaults when loading existing crane (editing mode)
+    if (skipModelDefaultsRef.current) {
+      skipModelDefaultsRef.current = false;
+      return;
+    }
     if (selectedCraneModel?.default_boom_length_m) {
       setConfig(prev => ({ ...prev, boom_length_m: selectedCraneModel.default_boom_length_m }));
     }
@@ -669,17 +752,19 @@ export default function CranePlannerScreen({
     if (savedCrane && selectedCraneModel) {
       // Draw crane to model
       try {
-        // Get load chart data for labels
-        const chartData = loadCharts.find(lc =>
-          lc.counterweight_config_id === selectedCounterweightId &&
-          lc.boom_length_m === config.boom_length_m
-        )?.chart_data;
+        // Calculate max capacity across all boom lengths with deductions and safety factor
+        const chartData = calculateMaxCapacityChartData(
+          loadCharts,
+          config.hook_weight_kg,
+          config.lifting_block_kg,
+          config.safety_factor
+        );
 
         const markupIds = await drawCraneToModel(
           api,
           { ...savedCrane, ...craneData } as ProjectCrane,
           selectedCraneModel,
-          chartData
+          chartData.length > 0 ? chartData : undefined
         );
 
         // Save markup IDs
@@ -713,13 +798,16 @@ export default function CranePlannerScreen({
     if (!crane.crane_model) return;
 
     if (visible) {
-      // Draw crane
-      const chartData = loadCharts.find(lc =>
-        lc.counterweight_config_id === crane.counterweight_config_id &&
-        lc.boom_length_m === crane.boom_length_m
-      )?.chart_data;
+      // Draw crane - filter load charts for this crane's counterweight
+      const craneLoadCharts = loadCharts.filter(lc => lc.counterweight_config_id === crane.counterweight_config_id);
+      const chartData = calculateMaxCapacityChartData(
+        craneLoadCharts,
+        crane.hook_weight_kg,
+        crane.lifting_block_kg,
+        crane.safety_factor
+      );
 
-      const markupIds = await drawCraneToModel(api, crane, crane.crane_model, chartData);
+      const markupIds = await drawCraneToModel(api, crane, crane.crane_model, chartData.length > 0 ? chartData : undefined);
       await updateMarkupIds(crane.id, markupIds);
     } else {
       // Remove crane
@@ -1594,13 +1682,29 @@ export default function CranePlannerScreen({
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '20px' }}>
                   <div>
                     <label style={labelStyle}>Noole pikkus (m)</label>
-                    <input
-                      type="number"
-                      style={inputStyle}
-                      value={config.boom_length_m}
-                      onChange={e => setConfig(prev => ({ ...prev, boom_length_m: parseFloat(e.target.value) || 0 }))}
-                      step="1"
-                    />
+                    {availableBoomLengths.length > 0 ? (
+                      <select
+                        style={inputStyle}
+                        value={config.boom_length_m}
+                        onChange={e => setConfig(prev => ({ ...prev, boom_length_m: parseFloat(e.target.value) }))}
+                      >
+                        {availableBoomLengths.map(length => (
+                          <option key={length} value={length}>
+                            {length}m
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div style={{
+                        ...inputStyle,
+                        backgroundColor: '#f3f4f6',
+                        color: '#6b7280',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}>
+                        {selectedCounterweightId ? 'Laen...' : 'Vali esmalt vastukaal'}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label style={labelStyle}>Raadiuse samm (m)</label>
