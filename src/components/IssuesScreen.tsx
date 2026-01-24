@@ -1372,6 +1372,13 @@ export default function IssuesScreen({
         .order('created_at', { ascending: true });
       setIssueComments(comments || []);
 
+      // Update issues list comment count
+      setIssues(prev => prev.map(issue =>
+        issue.id === detailIssue.id
+          ? { ...issue, comments_count: (issue.comments_count || 0) + 1 }
+          : issue
+      ));
+
     } catch (e: unknown) {
       console.error('Error adding comment:', e);
       setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
@@ -1433,6 +1440,13 @@ export default function IssuesScreen({
         .eq('issue_id', detailIssue.id)
         .order('created_at', { ascending: true });
       setIssueComments(comments || []);
+
+      // Update issues list comment count
+      setIssues(prev => prev.map(issue =>
+        issue.id === detailIssue.id
+          ? { ...issue, comments_count: Math.max(0, (issue.comments_count || 0) - 1) }
+          : issue
+      ));
 
     } catch (e: unknown) {
       console.error('Error deleting comment:', e);
