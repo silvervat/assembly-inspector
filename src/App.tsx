@@ -33,7 +33,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.889';
+export const APP_VERSION = '3.0.890';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -979,17 +979,32 @@ export default function App() {
         setShortcutLoading('a');
 
         try {
-          // First get all confirmed arrival confirmations
+          // Get arrived vehicles for this project
+          const { data: arrivedVehicles, error: vehicleError } = await supabase
+            .from('trimble_arrived_vehicles')
+            .select('id')
+            .eq('trimble_project_id', projectId);
+
+          if (vehicleError) throw vehicleError;
+
+          if (!arrivedVehicles || arrivedVehicles.length === 0) {
+            showGlobalToast('Saabunud veokeid ei leitud', 'info');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Get confirmed confirmations for these vehicles
+          const vehicleIds = arrivedVehicles.map(v => v.id);
           const { data: confirmations, error: confError } = await supabase
             .from('trimble_arrival_confirmations')
             .select('item_id')
-            .eq('trimble_project_id', projectId)
+            .in('arrived_vehicle_id', vehicleIds)
             .eq('status', 'confirmed');
 
           if (confError) throw confError;
 
           if (!confirmations || confirmations.length === 0) {
-            showGlobalToast('Saabunud detaile ei leitud', 'info');
+            showGlobalToast('Kinnitatud saabumisi ei leitud', 'info');
             setShortcutLoading(null);
             return;
           }
@@ -1950,6 +1965,110 @@ export default function App() {
         } catch (err) {
           console.error('ALT+SHIFT+2 error:', err);
           showGlobalToast('Viga kopeerimisel', 'error');
+        }
+        return;
+      }
+
+      // ALT+SHIFT+3 - Color installed elements dark blue (same as Installations page)
+      if (key === '3') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (shortcutLoading) return;
+        setShortcutLoading('3');
+
+        try {
+          // Get all installed items from database
+          const { data: installations, error: instError } = await supabase
+            .from('installations')
+            .select('guid_ifc')
+            .eq('project_id', projectId);
+
+          if (instError) throw instError;
+
+          if (!installations || installations.length === 0) {
+            showGlobalToast('Paigaldatud detaile ei leitud', 'info');
+            setShortcutLoading(null);
+            return;
+          }
+
+          const installedGuids = installations.map(i => i.guid_ifc).filter(Boolean) as string[];
+          const installedGuidsSet = new Set(installedGuids.map(g => g.toLowerCase()));
+
+          // Get all objects from database
+          const { data: allObjects } = await supabase
+            .from('trimble_model_objects')
+            .select('guid_ifc')
+            .eq('trimble_project_id', projectId)
+            .not('guid_ifc', 'is', null);
+
+          const allGuids = (allObjects || []).map(o => o.guid_ifc).filter(Boolean) as string[];
+
+          // Find objects in model
+          const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+
+          if (foundObjects.size === 0) {
+            showGlobalToast('Mudel pole laaditud', 'error');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Separate installed and non-installed
+          const installedObjects: { modelId: string; runtimeId: number }[] = [];
+          const whiteObjects: { modelId: string; runtimeId: number }[] = [];
+
+          for (const [guid, found] of foundObjects) {
+            if (installedGuidsSet.has(guid.toLowerCase())) {
+              installedObjects.push(found);
+            } else {
+              whiteObjects.push(found);
+            }
+          }
+
+          // Group by model for coloring
+          const installedByModel: Record<string, number[]> = {};
+          const whiteByModel: Record<string, number[]> = {};
+
+          for (const obj of installedObjects) {
+            if (!installedByModel[obj.modelId]) installedByModel[obj.modelId] = [];
+            installedByModel[obj.modelId].push(obj.runtimeId);
+          }
+          for (const obj of whiteObjects) {
+            if (!whiteByModel[obj.modelId]) whiteByModel[obj.modelId] = [];
+            whiteByModel[obj.modelId].push(obj.runtimeId);
+          }
+
+          // Color white first
+          const white = { r: 255, g: 255, b: 255, a: 255 };
+          for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+            const BATCH_SIZE = 500;
+            for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+              const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+                { color: white }
+              );
+            }
+          }
+
+          // Color installed dark blue (same as InstallationsScreen: #0a3a67)
+          const darkBlue = { r: 10, g: 58, b: 103, a: 255 };
+          for (const [modelId, runtimeIds] of Object.entries(installedByModel)) {
+            const BATCH_SIZE = 500;
+            for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+              const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+                { color: darkBlue }
+              );
+            }
+          }
+
+          showGlobalToast(`${installedObjects.length} paigaldatud detaili tumesiniseks`, 'success');
+        } catch (err) {
+          console.error('ALT+SHIFT+3 error:', err);
+          showGlobalToast('Viga värvimisel', 'error');
+        } finally {
+          setShortcutLoading(null);
         }
         return;
       }
