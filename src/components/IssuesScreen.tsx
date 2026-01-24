@@ -226,7 +226,7 @@ export default function IssuesScreen({
   const [_assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(true);
   const [showAssemblyModal, setShowAssemblyModal] = useState(false);
 
-  // Sub-details modal state
+  // Sub-details modal state - supports multiple parents
   const [showSubDetailsModal, setShowSubDetailsModal] = useState(false);
   const [loadingSubDetails, setLoadingSubDetails] = useState(false);
   const [subDetails, setSubDetails] = useState<{
@@ -237,9 +237,10 @@ export default function IssuesScreen({
     profile: string;
     color: { r: number; g: number; b: number; a: number };
   }[]>([]);
-  const [selectedSubDetails, setSelectedSubDetails] = useState<Set<number>>(new Set());
+  const [selectedSubDetailsByParent, setSelectedSubDetailsByParent] = useState<Map<string, Set<number>>>(new Map());
+  const [currentSubDetailsParentGuid, setCurrentSubDetailsParentGuid] = useState<string>('');
   const [subDetailModelId, setSubDetailModelId] = useState<string>('');
-  const [_parentObjectForSubDetails, setParentObjectForSubDetails] = useState<SelectedObject | null>(null);
+  const [lockedParentObjects, setLockedParentObjects] = useState<SelectedObject[]>([]);
   const [highlightedSubDetailId, setHighlightedSubDetailId] = useState<number | null>(null);
 
   // Status group menu state
@@ -250,6 +251,7 @@ export default function IssuesScreen({
 
   // Refs
   const syncingToModelRef = useRef(false);
+  const blockSelectionUpdateRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -322,12 +324,13 @@ export default function IssuesScreen({
   }, []);
 
   // Load sub-details for selected assembly
-  const loadSubDetails = useCallback(async (modelId: string, runtimeId: number, _parentGuid: string, parentObj?: SelectedObject) => {
+  const loadSubDetails = useCallback(async (modelId: string, runtimeId: number, parentGuid: string, _parentObj?: SelectedObject) => {
     try {
       setLoadingSubDetails(true);
-      if (parentObj) {
-        setParentObjectForSubDetails(parentObj);
-      }
+
+      // Lock the current parent objects so they don't change
+      setLockedParentObjects([...newIssueObjects]);
+      setCurrentSubDetailsParentGuid(parentGuid);
 
       // Get children of the selected assembly
       const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
@@ -417,7 +420,6 @@ export default function IssuesScreen({
 
       setSubDetails(subDetailsList);
       setSubDetailModelId(modelId);
-      setSelectedSubDetails(new Set());
       setHighlightedSubDetailId(null);
       setShowSubDetailsModal(true);
       setLoadingSubDetails(false);
@@ -426,8 +428,9 @@ export default function IssuesScreen({
       console.error('Error loading sub-details:', e);
       setMessage('⚠️ Alamdetailide laadimine ebaõnnestus');
       setLoadingSubDetails(false);
+      setLockedParentObjects([]);
     }
-  }, [api, disableAssemblySelection, generateSubDetailColors]);
+  }, [api, disableAssemblySelection, generateSubDetailColors, newIssueObjects]);
 
   // Handle sub-detail click - zoom to it
   const handleSubDetailClick = useCallback(async (subDetailId: number) => {
@@ -442,36 +445,55 @@ export default function IssuesScreen({
     }
   }, [api, subDetailModelId]);
 
-  // Toggle sub-detail for linking to issue
+  // Toggle sub-detail for linking to issue (per parent)
   const toggleSubDetailForIssue = useCallback((subDetailId: number) => {
-    setSelectedSubDetails(prev => {
-      const next = new Set(prev);
-      if (next.has(subDetailId)) {
-        next.delete(subDetailId);
+    if (!currentSubDetailsParentGuid) return;
+
+    setSelectedSubDetailsByParent(prev => {
+      const next = new Map(prev);
+      const parentSet = new Set(next.get(currentSubDetailsParentGuid) || []);
+
+      if (parentSet.has(subDetailId)) {
+        parentSet.delete(subDetailId);
       } else {
-        next.add(subDetailId);
+        parentSet.add(subDetailId);
       }
+
+      next.set(currentSubDetailsParentGuid, parentSet);
       return next;
     });
-  }, []);
+  }, [currentSubDetailsParentGuid]);
 
   // Close sub-details modal and restore assembly selection
   const closeSubDetailsModal = useCallback(async () => {
+    // FIRST: Block polling from overwriting newIssueObjects
+    blockSelectionUpdateRef.current = true;
+
+    // SECOND: Restore locked parent objects to newIssueObjects
+    if (lockedParentObjects.length > 0) {
+      setNewIssueObjects([...lockedParentObjects]);
+    }
+
+    // THIRD: Close the modal
     setShowSubDetailsModal(false);
     setSubDetails([]);
-    setSelectedSubDetails(new Set());
     setHighlightedSubDetailId(null);
-    setParentObjectForSubDetails(null);
+    setCurrentSubDetailsParentGuid('');
     setLoadingSubDetails(false);
-    // Clear model selection to avoid confusion with "Lisa uus mittevastavus"
+
+    // Clear model selection to avoid confusion
     try {
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
     } catch (e) {
       console.warn('Could not clear selection:', e);
     }
     await enableAssemblySelection();
-    // Note: issue coloring will be restored by the regular polling/refresh
-  }, [api, enableAssemblySelection]);
+
+    // Allow polling to update again after a delay
+    setTimeout(() => {
+      blockSelectionUpdateRef.current = false;
+    }, 1000);
+  }, [api, enableAssemblySelection, lockedParentObjects]);
 
   // Listen for selection changes when sub-details modal is open
   useEffect(() => {
@@ -621,7 +643,8 @@ export default function IssuesScreen({
 
         // If form is open and not editing, update the form's objects too
         // BUT NOT when sub-details modal is open (parent details should be locked)
-        if (showForm && !editingIssue && !showSubDetailsModal) {
+        // Also skip if blockSelectionUpdateRef is set (after modal close)
+        if (showForm && !editingIssue && !showSubDetailsModal && !blockSelectionUpdateRef.current) {
           setNewIssueObjects(objects);
         }
       } catch (e) {
@@ -1204,6 +1227,8 @@ export default function IssuesScreen({
       setShowForm(false);
       setNewIssueObjects([]);
       setPendingFiles([]);
+      setSelectedSubDetailsByParent(new Map());
+      setLockedParentObjects([]);
       await loadIssues();
       await colorModelByIssueStatus();
 
@@ -2145,66 +2170,14 @@ export default function IssuesScreen({
             </div>
 
             <div className="issue-form issue-form-compact">
-              {/* Sub-details button - only show when exactly one detail is selected */}
-              {!editingIssue && newIssueObjects.length === 1 && (
-                <button
-                  type="button"
-                  className="sub-details-btn"
-                  disabled={loadingSubDetails}
-                  onClick={async () => {
-                    const obj = newIssueObjects[0];
-                    await loadSubDetails(obj.modelId, obj.runtimeId, obj.guidIfc || '', obj);
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '4px 8px',
-                    marginBottom: '6px',
-                    background: loadingSubDetails ? '#e0f2fe' : '#f0f9ff',
-                    border: '1px solid #bae6fd',
-                    borderRadius: '4px',
-                    color: '#0369a1',
-                    fontSize: '11px',
-                    fontWeight: 500,
-                    cursor: loadingSubDetails ? 'wait' : 'pointer',
-                    opacity: loadingSubDetails ? 0.7 : 1
-                  }}
-                >
-                  {loadingSubDetails ? (
-                    <>
-                      <FiLoader size={12} className="spinning" />
-                      Laadin alamdetaile...
-                    </>
-                  ) : (
-                    <>
-                      <FiLink size={12} />
-                      Lisa seotud alamdetailid
-                    </>
-                  )}
-                </button>
-              )}
-
-              {/* Selected sub-details display */}
-              {!editingIssue && selectedSubDetails.size > 0 && (
-                <div style={{
-                  padding: '6px 8px',
-                  marginBottom: '8px',
-                  background: '#ecfdf5',
-                  border: '1px solid #a7f3d0',
-                  borderRadius: '4px',
-                  fontSize: '11px',
-                  color: '#065f46'
-                }}>
-                  <strong>{selectedSubDetails.size} alamdetaili seotud</strong>
-                </div>
-              )}
-
-              {/* Selected objects - compact inline tags */}
+              {/* Selected objects - compact inline tags with sub-details button per object */}
               {!editingIssue && (
                 <div className="form-section" style={{ marginBottom: '8px' }}>
-                  <label style={{ marginBottom: '2px', fontSize: '11px' }}>Detailid ({newIssueObjects.length})</label>
-                  {newIssueObjects.length === 0 ? (
+                  <label style={{ marginBottom: '2px', fontSize: '11px' }}>
+                    Detailid ({(showSubDetailsModal ? lockedParentObjects : newIssueObjects).length})
+                    {showSubDetailsModal && <span style={{ color: '#059669', marginLeft: '4px' }}>(lukustatud)</span>}
+                  </label>
+                  {(showSubDetailsModal ? lockedParentObjects : newIssueObjects).length === 0 ? (
                     <div style={{
                       padding: '6px 10px',
                       background: '#fef3c7',
@@ -2216,25 +2189,79 @@ export default function IssuesScreen({
                       Vali mudelist detailid (Assembly Selection peab olema sisse lülitatud)
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
-                      {newIssueObjects.map((obj, index) => (
-                        <span
-                          key={index}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            padding: '2px 6px',
-                            background: '#e0e7ff',
-                            borderRadius: '3px',
-                            fontSize: '11px',
-                            fontWeight: 500,
-                            color: '#3730a3'
-                          }}
-                          title={obj.guidIfc || undefined}
-                        >
-                          {obj.assemblyMark || obj.productName || 'Element'}
-                        </span>
-                      ))}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {(showSubDetailsModal ? lockedParentObjects : newIssueObjects).map((obj, index) => {
+                        const parentGuid = obj.guidIfc || `obj-${index}`;
+                        const parentSubDetails = selectedSubDetailsByParent.get(parentGuid);
+                        const subDetailCount = parentSubDetails?.size || 0;
+
+                        return (
+                          <div
+                            key={index}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '4px 6px',
+                              background: currentSubDetailsParentGuid === parentGuid ? '#dbeafe' : '#f1f5f9',
+                              border: currentSubDetailsParentGuid === parentGuid ? '1px solid #3b82f6' : '1px solid #e2e8f0',
+                              borderRadius: '4px'
+                            }}
+                          >
+                            <span
+                              style={{
+                                flex: 1,
+                                fontSize: '11px',
+                                fontWeight: 500,
+                                color: '#1e293b'
+                              }}
+                              title={obj.guidIfc || undefined}
+                            >
+                              {obj.assemblyMark || obj.productName || 'Element'}
+                            </span>
+
+                            {/* Sub-details count badge */}
+                            {subDetailCount > 0 && (
+                              <span style={{
+                                padding: '1px 5px',
+                                background: '#dcfce7',
+                                color: '#166534',
+                                borderRadius: '10px',
+                                fontSize: '9px',
+                                fontWeight: 600
+                              }}>
+                                +{subDetailCount}
+                              </span>
+                            )}
+
+                            {/* Sub-details button */}
+                            <button
+                              type="button"
+                              disabled={loadingSubDetails}
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                await loadSubDetails(obj.modelId, obj.runtimeId, parentGuid, obj);
+                              }}
+                              style={{
+                                padding: '2px 6px',
+                                background: currentSubDetailsParentGuid === parentGuid ? '#3b82f6' : '#e2e8f0',
+                                color: currentSubDetailsParentGuid === parentGuid ? 'white' : '#64748b',
+                                border: 'none',
+                                borderRadius: '3px',
+                                fontSize: '9px',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '3px'
+                              }}
+                              title="Vali alamdetailid"
+                            >
+                              <FiLink size={10} />
+                              Alamd.
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -2884,6 +2911,46 @@ export default function IssuesScreen({
         </div>
       )}
 
+      {/* Full-screen loading indicator for sub-details */}
+      {loadingSubDetails && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 10000
+        }}>
+          <div style={{
+            width: '50px',
+            height: '50px',
+            border: '4px solid #e2e8f0',
+            borderTop: '4px solid #3b82f6',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite'
+          }} />
+          <div style={{
+            marginTop: '16px',
+            color: 'white',
+            fontSize: '18px',
+            fontWeight: 600
+          }}>
+            Laadin alamdetaile...
+          </div>
+          <style>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
+        </div>
+      )}
+
       {/* Sub-details Modal */}
       {showSubDetailsModal && (
         <div className="modal-overlay" onClick={closeSubDetailsModal}>
@@ -2901,7 +2968,8 @@ export default function IssuesScreen({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {subDetails.map((detail) => {
                   const isHighlighted = highlightedSubDetailId === detail.id;
-                  const isSelected = selectedSubDetails.has(detail.id);
+                  const currentParentSubDetails = selectedSubDetailsByParent.get(currentSubDetailsParentGuid);
+                  const isSelected = currentParentSubDetails?.has(detail.id) || false;
                   return (
                     <div
                       key={detail.id}
@@ -2974,14 +3042,12 @@ export default function IssuesScreen({
                 <button
                   className="primary-button"
                   onClick={closeSubDetailsModal}
-                  disabled={selectedSubDetails.size === 0}
                   style={{
                     padding: '4px 10px',
-                    fontSize: '11px',
-                    opacity: selectedSubDetails.size === 0 ? 0.5 : 1
+                    fontSize: '11px'
                   }}
                 >
-                  Kinnita ({selectedSubDetails.size})
+                  Kinnita ({selectedSubDetailsByParent.get(currentSubDetailsParentGuid)?.size || 0})
                 </button>
               </div>
             </div>
