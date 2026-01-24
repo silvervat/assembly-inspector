@@ -25,6 +25,12 @@ interface AdminScreenProps {
   onNavigate?: (mode: InspectionMode | null) => void;
   onColorModelWhite?: () => void;
   onOpenPartDatabase?: () => void;
+  // Calibration props for measurement system
+  calibrationMode?: 'off' | 'pickingPoint1' | 'pickingPoint2';
+  calibrationPoint1?: { x: number; y: number; z: number } | null;
+  calibrationPoint2?: { x: number; y: number; z: number } | null;
+  onStartCalibration?: () => void;
+  onCancelCalibration?: () => void;
 }
 
 interface PropertySet {
@@ -216,7 +222,21 @@ const RESOURCE_TYPES = [
   { key: 'keevitaja', label: 'Keevitaja', icon: `${import.meta.env.BASE_URL}icons/keevitaja.png` },
 ] as const;
 
-export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, user, onNavigate, onColorModelWhite, onOpenPartDatabase }: AdminScreenProps) {
+export default function AdminScreen({
+  api,
+  onBackToMenu,
+  projectId,
+  userEmail,
+  user,
+  onNavigate,
+  onColorModelWhite,
+  onOpenPartDatabase,
+  calibrationMode = 'off',
+  calibrationPoint1 = null,
+  calibrationPoint2 = null,
+  onStartCalibration,
+  onCancelCalibration
+}: AdminScreenProps) {
   // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin'
   const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin'>('main');
 
@@ -7210,6 +7230,224 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   }}
                 />
               </div>
+            </div>
+
+            {/* CALIBRATION section - Building orientation */}
+            <div className="function-section" style={{ background: calibrationMode !== 'off' ? '#fef3c7' : undefined, border: calibrationMode !== 'off' ? '2px solid #f59e0b' : undefined }}>
+              <h4>🧭 Hoone kalibreerimine</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+                Määra hoone suund valides 2 punkti pika profiili teljel. Seejärel arvutatakse mõõtmed õigesti ka nurga all oleva hoone jaoks.
+              </p>
+              <div style={{ marginBottom: '12px', padding: '8px', background: '#f0f9ff', borderRadius: '6px', fontSize: '11px' }}>
+                <strong>Juhend:</strong>
+                <ol style={{ margin: '4px 0 0 16px', padding: 0 }}>
+                  <li>Vajuta "Alusta kalibreerimist"</li>
+                  <li>Vali mudelist punkt 1 (pika profiili ühes otsas)</li>
+                  <li>Vali punkt 2 (sama profiili teises otsas)</li>
+                  <li>Hoone pöördenurk arvutatakse automaatselt</li>
+                </ol>
+              </div>
+
+              {/* Calibration status and controls */}
+              <div style={{ marginBottom: '12px' }}>
+                {calibrationMode === 'off' ? (
+                  <button
+                    onClick={onStartCalibration}
+                    style={{
+                      padding: '8px 16px',
+                      background: '#3b82f6',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      fontSize: '12px'
+                    }}
+                  >
+                    🎯 Alusta kalibreerimist
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <span style={{
+                      padding: '6px 12px',
+                      background: '#fbbf24',
+                      color: '#78350f',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      animation: 'pulse 2s infinite'
+                    }}>
+                      {calibrationMode === 'pickingPoint1' ? '⏳ Vali punkt 1...' : '⏳ Vali punkt 2...'}
+                    </span>
+                    <button
+                      onClick={onCancelCalibration}
+                      style={{
+                        padding: '6px 12px',
+                        background: '#ef4444',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '11px'
+                      }}
+                    >
+                      ❌ Tühista
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Display picked points and calculated angle */}
+              {(calibrationPoint1 || calibrationPoint2) && (
+                <div style={{ padding: '8px', background: '#ecfdf5', borderRadius: '6px', fontSize: '11px', marginBottom: '12px' }}>
+                  <strong>Kalibreeringu andmed:</strong>
+                  {calibrationPoint1 && (
+                    <div style={{ marginTop: '4px' }}>
+                      📍 Punkt 1: X={calibrationPoint1.x.toFixed(3)}m, Y={calibrationPoint1.y.toFixed(3)}m, Z={calibrationPoint1.z.toFixed(3)}m
+                    </div>
+                  )}
+                  {calibrationPoint2 && (
+                    <div style={{ marginTop: '4px' }}>
+                      📍 Punkt 2: X={calibrationPoint2.x.toFixed(3)}m, Y={calibrationPoint2.y.toFixed(3)}m, Z={calibrationPoint2.z.toFixed(3)}m
+                    </div>
+                  )}
+                  {calibrationPoint1 && calibrationPoint2 && (
+                    <>
+                      <div style={{ marginTop: '8px', padding: '6px', background: '#d1fae5', borderRadius: '4px' }}>
+                        🧭 <strong>Hoone pöördenurk:</strong> {(Math.atan2(
+                          calibrationPoint2.y - calibrationPoint1.y,
+                          calibrationPoint2.x - calibrationPoint1.x
+                        ) * 180 / Math.PI).toFixed(2)}°
+                      </div>
+                      <div style={{ marginTop: '4px', color: '#059669' }}>
+                        ✅ Kalibreerimine aktiivne! Mõõtmisfunktsioonid kasutavad nüüd seda nurka.
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Calibrated measurement button */}
+              {calibrationPoint1 && calibrationPoint2 && (
+                <div className="function-grid">
+                  <FunctionButton
+                    name="📐 Kalibreeritud mõõdud"
+                    result={functionResults["calibratedMeasurement"]}
+                    onClick={async () => {
+                      updateFunctionResult("calibratedMeasurement", { status: 'pending' });
+                      try {
+                        const sel = await api.viewer.getSelection();
+                        if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                        const modelId = sel[0].modelId;
+                        const runtimeIds = sel.flatMap(s => s.objectRuntimeIds || []);
+
+                        const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+                        if (!bboxes || bboxes.length === 0) throw new Error('Bounding box pole saadaval');
+
+                        // Calculate calibration angle
+                        const angle = Math.atan2(
+                          calibrationPoint2!.y - calibrationPoint1!.y,
+                          calibrationPoint2!.x - calibrationPoint1!.x
+                        );
+                        const angleDeg = angle * 180 / Math.PI;
+
+                        // Process each object
+                        const results = bboxes.map((bbox: any, idx: number) => {
+                          if (!bbox?.boundingBox) return { id: runtimeIds[idx], error: 'no bbox' };
+                          const b = bbox.boundingBox;
+
+                          // Get center point
+                          const centerX = (b.min.x + b.max.x) / 2;
+                          const centerY = (b.min.y + b.max.y) / 2;
+                          const centerZ = (b.min.z + b.max.z) / 2;
+
+                          // Get all 8 corners of the bounding box
+                          const corners = [
+                            { x: b.min.x, y: b.min.y },
+                            { x: b.max.x, y: b.min.y },
+                            { x: b.min.x, y: b.max.y },
+                            { x: b.max.x, y: b.max.y }
+                          ];
+
+                          // Rotate corners to building-local coordinates
+                          const cosA = Math.cos(-angle);
+                          const sinA = Math.sin(-angle);
+                          const origin = calibrationPoint1!;
+
+                          const rotatedCorners = corners.map(c => ({
+                            x: cosA * (c.x - origin.x) - sinA * (c.y - origin.y),
+                            y: sinA * (c.x - origin.x) + cosA * (c.y - origin.y)
+                          }));
+
+                          // Find min/max in rotated coordinates
+                          const minLocalX = Math.min(...rotatedCorners.map(c => c.x));
+                          const maxLocalX = Math.max(...rotatedCorners.map(c => c.x));
+                          const minLocalY = Math.min(...rotatedCorners.map(c => c.y));
+                          const maxLocalY = Math.max(...rotatedCorners.map(c => c.y));
+
+                          const localWidth = maxLocalX - minLocalX;
+                          const localDepth = maxLocalY - minLocalY;
+                          const height = b.max.z - b.min.z;
+
+                          // Sort dimensions
+                          const dims = [
+                            { label: 'Hoone-X (pikkus)', value: localWidth },
+                            { label: 'Hoone-Y (laius)', value: localDepth },
+                            { label: 'Z (kõrgus)', value: height }
+                          ].sort((a, b) => b.value - a.value);
+
+                          return {
+                            id: runtimeIds[idx],
+                            worldBbox: {
+                              width_mm: Math.round(Math.abs(b.max.x - b.min.x) * 1000),
+                              depth_mm: Math.round(Math.abs(b.max.y - b.min.y) * 1000),
+                              height_mm: Math.round(Math.abs(b.max.z - b.min.z) * 1000)
+                            },
+                            calibratedDimensions: {
+                              pikkus_mm: Math.round(dims[0].value * 1000),
+                              laius_mm: Math.round(dims[1].value * 1000),
+                              kõrgus_mm: Math.round(dims[2].value * 1000),
+                              pikkus_telg: dims[0].label,
+                              laius_telg: dims[1].label,
+                              kõrgus_telg: dims[2].label
+                            },
+                            center: { x: centerX, y: centerY, z: centerZ },
+                            calibrationAngle: angleDeg.toFixed(2) + '°'
+                          };
+                        });
+
+                        let output = `🧭 KALIBREERITUD MÕÕDUD\n`;
+                        output += `═══════════════════════════════════════\n`;
+                        output += `Hoone pöördenurk: ${angleDeg.toFixed(2)}°\n\n`;
+
+                        results.forEach((r: any, i: number) => {
+                          if (r.error) {
+                            output += `${i + 1}. VIGA: ${r.error}\n`;
+                            return;
+                          }
+                          output += `${i + 1}. Objekt (ID: ${r.id})\n`;
+                          output += `   📦 Maailma koordinaadid (bbox):\n`;
+                          output += `      X: ${r.worldBbox.width_mm} mm\n`;
+                          output += `      Y: ${r.worldBbox.depth_mm} mm\n`;
+                          output += `      Z: ${r.worldBbox.height_mm} mm\n`;
+                          output += `   🏠 Hoone koordinaadid (kalibreeritud):\n`;
+                          output += `      Pikkus: ${r.calibratedDimensions.pikkus_mm} mm (${r.calibratedDimensions.pikkus_telg})\n`;
+                          output += `      Laius: ${r.calibratedDimensions.laius_mm} mm (${r.calibratedDimensions.laius_telg})\n`;
+                          output += `      Kõrgus: ${r.calibratedDimensions.kõrgus_mm} mm\n\n`;
+                        });
+
+                        updateFunctionResult("calibratedMeasurement", {
+                          status: 'success',
+                          result: output
+                        });
+                      } catch (e: any) {
+                        updateFunctionResult("calibratedMeasurement", { status: 'error', error: e.message });
+                      }
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
             {/* MEASUREMENT section */}
