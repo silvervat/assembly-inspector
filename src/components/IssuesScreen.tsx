@@ -23,7 +23,7 @@ import { findObjectsInLoadedModels } from '../utils/navigationHelper';
 import * as XLSX from 'xlsx-js-style';
 import {
   FiPlus, FiSearch, FiChevronDown, FiChevronRight,
-  FiEdit2, FiTrash2, FiX, FiCamera, FiDownload,
+  FiEdit2, FiTrash2, FiX, FiCamera, FiDownload, FiFile,
   FiRefreshCw, FiFilter, FiUser, FiAlertTriangle, FiAlertCircle,
   FiCheckCircle, FiLoader, FiCheckSquare, FiMoreVertical,
   FiTarget, FiMessageSquare, FiActivity, FiLayers, FiSend,
@@ -2685,11 +2685,11 @@ export default function IssuesScreen({
                 </div>
               </div>
 
-              {/* Photos */}
+              {/* Photos and Files */}
               <div className="detail-section">
                 <h4>
                   <FiCamera size={14} />
-                  Pildid ({issueAttachments.filter(a => a.attachment_type === 'photo').length})
+                  Fotod/failid ({issueAttachments.length})
                   <button
                     className="add-btn"
                     onClick={() => fileInputRef.current?.click()}
@@ -2701,7 +2701,7 @@ export default function IssuesScreen({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
                   multiple
                   style={{ display: 'none' }}
                   onChange={e => {
@@ -2710,21 +2710,65 @@ export default function IssuesScreen({
                   }}
                 />
                 <p className="paste-hint">Võid ka kleepida pildi (Ctrl+V)</p>
-                <div className="photos-grid">
-                  {issueAttachments.filter(a => a.attachment_type === 'photo').map(photo => (
-                    <div key={photo.id} className="photo-item">
-                      <img src={photo.file_url} alt={photo.file_name} />
-                      <div className="photo-actions">
-                        <a href={photo.file_url} download={photo.file_name} target="_blank" rel="noopener noreferrer">
+
+                {/* Photos grid */}
+                {issueAttachments.filter(a => a.attachment_type === 'photo').length > 0 && (
+                  <div className="photos-grid">
+                    {issueAttachments.filter(a => a.attachment_type === 'photo').map(photo => (
+                      <div key={photo.id} className="photo-item">
+                        <img src={photo.file_url} alt={photo.file_name} />
+                        <div className="photo-actions">
+                          <a href={photo.file_url} download={photo.file_name} target="_blank" rel="noopener noreferrer">
+                            <FiDownload size={14} />
+                          </a>
+                          <button onClick={() => handleDeleteAttachment(photo)}>
+                            <FiTrash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Documents list */}
+                {issueAttachments.filter(a => a.attachment_type !== 'photo').length > 0 && (
+                  <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {issueAttachments.filter(a => a.attachment_type !== 'photo').map(doc => (
+                      <div key={doc.id} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '6px 8px',
+                        background: '#f8fafc',
+                        borderRadius: '4px',
+                        border: '1px solid #e2e8f0'
+                      }}>
+                        <FiFile size={14} style={{ color: '#64748b', flexShrink: 0 }} />
+                        <span style={{ flex: 1, fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {doc.file_name}
+                        </span>
+                        <span style={{ fontSize: '10px', color: '#94a3b8', flexShrink: 0 }}>
+                          {doc.file_size ? `${Math.round(doc.file_size / 1024)} KB` : ''}
+                        </span>
+                        <a
+                          href={doc.file_url}
+                          download={doc.file_name}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#3b82f6', flexShrink: 0 }}
+                        >
                           <FiDownload size={14} />
                         </a>
-                        <button onClick={() => handleDeleteAttachment(photo)}>
+                        <button
+                          onClick={() => handleDeleteAttachment(doc)}
+                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0, flexShrink: 0 }}
+                        >
                           <FiTrash2 size={14} />
                         </button>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Quick action buttons */}
