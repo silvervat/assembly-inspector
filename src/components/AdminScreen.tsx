@@ -10904,17 +10904,19 @@ export default function AdminScreen({
                             }
 
                             // Get bounding box of first selected object
-                            const bbox = await (api.viewer as any).getObjectBoundingBox(modelId, runtimeIds[0]);
+                            const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeIds[0]]);
+                            const bboxResult = bboxes && bboxes.length > 0 ? bboxes[0] : null;
+                            const box = bboxResult?.boundingBox;
 
-                            if (!bbox || !bbox.min || !bbox.max) {
+                            if (!box || !box.min || !box.max) {
                               alert('❌ Ei saanud objekti bounding box-i!');
                               return;
                             }
 
-                            // Calculate center point
-                            const centerX = (bbox.min.x + bbox.max.x) / 2;
-                            const centerY = (bbox.min.y + bbox.max.y) / 2;
-                            const centerZ = (bbox.min.z + bbox.max.z) / 2;
+                            // Calculate center point (coordinates are in meters, convert to mm)
+                            const centerX = ((box.min.x + box.max.x) / 2) * 1000;
+                            const centerY = ((box.min.y + box.max.y) / 2) * 1000;
+                            const centerZ = ((box.min.z + box.max.z) / 2) * 1000;
 
                             setShapeBasePoint({ x: centerX, y: centerY, z: centerZ });
                             alert(`✅ Baaspunkt määratud:\nX: ${centerX.toFixed(0)}mm\nY: ${centerY.toFixed(0)}mm\nZ: ${centerZ.toFixed(0)}mm`);
