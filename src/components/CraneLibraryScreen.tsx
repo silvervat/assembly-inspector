@@ -929,57 +929,141 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
     setParsedTable({ boomLengths, radii, capacities });
   };
 
-  // Download Excel template for 2D table format
+  // Download Excel template for 2D table format - MULTI-COUNTERWEIGHT
   const downloadTemplate = () => {
     const wb = XLSX.utils.book_new();
 
     // Instructions sheet
     const instructions = [
-      ['TÕSTEVÕIME GRAAFIKU MALL - 2D TABEL'],
+      ['TÕSTEVÕIME GRAAFIKU MALL - MITU VASTUKAALU'],
       [''],
       ['Juhised:'],
-      ['1. Täida "Andmed" leht oma kraana tõstevõime andmetega'],
-      ['2. Esimene rida = poomi pikkused (m)'],
-      ['3. Esimene veerg = raadiused (m)'],
-      ['4. Lahtrites = tõstevõime tonnides'],
-      ['5. Tühja lahtri korral ei ole see kombinatsioon võimalik'],
+      ['1. Iga VASTUKAAL on ERALDI LEHEL (sheet)'],
+      ['2. Lehe nimi = vastukaalu kaal tonnides (nt "72t", "60t", "48t")'],
+      ['3. Igal lehel on 2D tabel:'],
+      ['   - Esimene rida = poomi pikkused meetrites'],
+      ['   - Esimene veerg = raadiused meetrites'],
+      ['   - Lahtrites = tõstevõime tonnides'],
       [''],
-      ['Näide (72t vastukaaluga):'],
-      ['- Rida 1: [tühi], 13.2, 17.7, 22.2, 26.7, ... (poomi pikkused)'],
-      ['- Rida 2: 3, 200, 142, 133, 125, ... (tõstevõimed 3m raadiusel)'],
-      ['- Rida 3: 3.5, 142, 133, 125, 117, ... (tõstevõimed 3.5m raadiusel)'],
+      ['Näide:'],
+      ['- Leht "72t" sisaldab 72-tonnise vastukaalu tõstevõimeid'],
+      ['- Leht "60t" sisaldab 60-tonnise vastukaalu tõstevõimeid'],
+      ['- jne...'],
       [''],
-      ['NB! Võid kopeerida tabeli otse tootja PDF-ist!'],
+      ['Malli lehed "72t" ja "48t" on näidisandmetega.'],
+      ['Lisa vajadusel rohkem lehti või kustuta mittevajalikud.'],
+      [''],
+      ['NB! Lehe nimi PEAB olema formaadis "XXt" või "XX.Xt" (nt "72t", "14.4t")'],
     ];
     const wsInstr = XLSX.utils.aoa_to_sheet(instructions);
     wsInstr['!cols'] = [{ wch: 70 }];
     XLSX.utils.book_append_sheet(wb, wsInstr, 'Juhised');
 
-    // Data template sheet - 2D format like the manufacturer chart
-    const dataTemplate = [
-      ['m', 13.2, 17.7, 22.2, 26.7, 31.3, 35.8, 40.3],
-      [3, 200, 143, 133, 125, '', '', ''],
-      [3.5, 142, 133, 125, 117, '', '', ''],
-      [4, 133, 123, 122, 107, '', '', ''],
-      [5, 117, 107, 108, 107, 103, 84, 70],
-      [6, 105, 95, 95, 94, 94, 82, 69],
-      [7, 93, 84, 85, 84, 84, 80, 68],
-      [8, 82, 76, 76, 76, 76, 76, 66],
-      [10, 62, 62, 63, 62, 63, 62, 59],
-      [12, '', '', 53, 53, 53, 52, 53],
-      [14, '', '', 44.5, 44.5, 44.5, 44, 44.5],
-      [16, '', '', '', 38, 37.5, 38.5, 38],
-      [18, '', '', '', 33, 32.5, 33, 32.5],
-      [20, '', '', '', '', 29, 28.8, 29.2],
+    // Example sheet for 72t counterweight
+    const data72t = [
+      ['m', 13.2, 17.7, 22.2, 26.7, 31.3, 35.8, 40.3, 44.8],
+      [3, 200, 143, 133, 125, '', '', '', ''],
+      [3.5, 142, 133, 125, 117, '', '', '', ''],
+      [4, 133, 123, 122, 107, '', '', '', ''],
+      [5, 117, 107, 108, 107, 103, 84, 70, ''],
+      [6, 105, 95, 95, 94, 94, 82, 69, 60],
+      [7, 93, 84, 85, 84, 84, 80, 68, 58],
+      [8, 82, 76, 76, 76, 76, 76, 66, 56],
+      [10, 62, 62, 63, 62, 63, 62, 59, 52],
+      [12, '', '', 53, 53, 53, 52, 53, 47],
+      [14, '', '', 44.5, 44.5, 44.5, 44, 44.5, 42],
+      [16, '', '', '', 38, 37.5, 38.5, 38, 37],
+      [18, '', '', '', 33, 32.5, 33, 32.5, 32],
+      [20, '', '', '', '', 29, 28.8, 29.2, 28],
     ];
-    const wsData = XLSX.utils.aoa_to_sheet(dataTemplate);
-    wsData['!cols'] = [{ wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }];
-    XLSX.utils.book_append_sheet(wb, wsData, 'Andmed');
+    const ws72t = XLSX.utils.aoa_to_sheet(data72t);
+    ws72t['!cols'] = Array(9).fill({ wch: 8 });
+    XLSX.utils.book_append_sheet(wb, ws72t, '72t');
 
-    XLSX.writeFile(wb, 'tostevoimete_2d_mall.xlsx');
+    // Example sheet for 48t counterweight (less capacity)
+    const data48t = [
+      ['m', 13.2, 17.7, 22.2, 26.7, 31.3, 35.8],
+      [3, 150, 120, 110, 100, '', ''],
+      [4, 110, 100, 95, 88, '', ''],
+      [5, 95, 88, 85, 82, 78, 65],
+      [6, 82, 76, 75, 74, 72, 62],
+      [7, 72, 68, 67, 66, 65, 58],
+      [8, 64, 60, 60, 60, 60, 54],
+      [10, 50, 50, 50, 50, 50, 46],
+      [12, '', '', 42, 42, 42, 40],
+      [14, '', '', 36, 36, 36, 35],
+    ];
+    const ws48t = XLSX.utils.aoa_to_sheet(data48t);
+    ws48t['!cols'] = Array(7).fill({ wch: 8 });
+    XLSX.utils.book_append_sheet(wb, ws48t, '48t');
+
+    XLSX.writeFile(wb, 'tostevoimete_mitu_vastukaalu_mall.xlsx');
   };
 
-  // Import Excel file with 2D table
+  // Parse counterweight value from sheet name (e.g., "72t" -> 72, "14.4t" -> 14.4)
+  const parseCounterweightFromSheetName = (name: string): number | null => {
+    const match = name.match(/^(\d+(?:[.,]\d+)?)\s*t?$/i);
+    if (match) {
+      return parseFloat(match[1].replace(',', '.'));
+    }
+    return null;
+  };
+
+  // Parse a single sheet into table data
+  const parseSheetToTable = (rows: any[][]): {
+    boomLengths: number[];
+    radii: number[];
+    capacities: Record<string, number>;
+  } | null => {
+    if (rows.length < 2) return null;
+
+    // First row = boom lengths
+    const headerRow = rows[0];
+    const boomLengths: number[] = [];
+    for (let i = 1; i < headerRow.length; i++) {
+      const val = headerRow[i];
+      if (val !== undefined && val !== null && val !== '') {
+        const boom = parseFloat(String(val).replace(',', '.'));
+        if (!isNaN(boom) && boom > 0) {
+          boomLengths.push(boom);
+        }
+      }
+    }
+
+    if (boomLengths.length === 0) return null;
+
+    const radii: number[] = [];
+    const capacities: Record<string, number> = {};
+
+    // Data rows
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || row.length === 0) continue;
+
+      const radiusVal = row[0];
+      if (radiusVal === undefined || radiusVal === null || radiusVal === '') continue;
+
+      const radius = parseFloat(String(radiusVal).replace(',', '.'));
+      if (isNaN(radius) || radius <= 0) continue;
+
+      radii.push(radius);
+
+      for (let j = 0; j < boomLengths.length; j++) {
+        const capVal = row[j + 1];
+        if (capVal !== undefined && capVal !== null && capVal !== '') {
+          const capacity = parseFloat(String(capVal).replace(',', '.'));
+          if (!isNaN(capacity) && capacity > 0) {
+            capacities[`${radius}_${boomLengths[j]}`] = capacity * 1000; // to kg
+          }
+        }
+      }
+    }
+
+    if (radii.length === 0) return null;
+    return { boomLengths, radii, capacities };
+  };
+
+  // Import Excel file with MULTIPLE counterweights (each sheet = one counterweight)
   const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -989,19 +1073,111 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
 
-      const dataSheet = workbook.Sheets['Andmed'] || workbook.Sheets[workbook.SheetNames[workbook.SheetNames.length > 1 ? 1 : 0]];
-      if (!dataSheet) {
-        alert('Excel fail peab sisaldama "Andmed" lehte!');
+      // Find all sheets that look like counterweight configs (e.g., "72t", "48t")
+      const counterweightSheets: { name: string; weight_kg: number; rows: any[][] }[] = [];
+
+      for (const sheetName of workbook.SheetNames) {
+        const weight = parseCounterweightFromSheetName(sheetName);
+        if (weight !== null) {
+          const sheet = workbook.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1 }) as any[][];
+          counterweightSheets.push({ name: sheetName, weight_kg: weight * 1000, rows });
+        }
+      }
+
+      if (counterweightSheets.length === 0) {
+        // Fallback: try to use old format (single "Andmed" sheet)
+        const dataSheet = workbook.Sheets['Andmed'] || workbook.Sheets[workbook.SheetNames[workbook.SheetNames.length > 1 ? 1 : 0]];
+        if (dataSheet) {
+          const rows = XLSX.utils.sheet_to_json<any[]>(dataSheet, { header: 1 }) as any[][];
+          const text = rows.map(row => row.join('\t')).join('\n');
+          setFormData(prev => ({ ...prev, pastedTable: text }));
+          parseTable(text);
+          setIsAdding(true);
+          alert('Excel ei sisaldanud vastukaalu lehti (nt "72t"). Andmed laeti ühe vastukaaluna - määra vastukaal käsitsi.');
+          return;
+        }
+
+        alert('Excel fail peab sisaldama lehti vastukaalu nimedega (nt "72t", "48t") või "Andmed" lehte!');
         return;
       }
 
-      // Convert to text and parse as 2D table
-      const rows = XLSX.utils.sheet_to_json<any[]>(dataSheet, { header: 1 }) as any[][];
-      const text = rows.map(row => row.join('\t')).join('\n');
+      // Import all counterweight sheets
+      let imported = 0;
+      let skipped = 0;
+      const errors: string[] = [];
 
-      setFormData(prev => ({ ...prev, pastedTable: text }));
-      parseTable(text);
-      setIsAdding(true);
+      for (const { name, weight_kg, rows } of counterweightSheets) {
+        const tableData = parseSheetToTable(rows);
+        if (!tableData || tableData.boomLengths.length === 0) {
+          skipped++;
+          errors.push(`"${name}": tühi või vigane tabel`);
+          continue;
+        }
+
+        // Find or create counterweight
+        const cwName = `${weight_kg / 1000}t`;
+        let counterweightId = counterweights.find(cw => cw.weight_kg === weight_kg)?.id;
+
+        if (!counterweightId) {
+          const newCw = await createCounterweight({
+            name: cwName,
+            weight_kg: weight_kg,
+            description: `Imporditud Excelist`,
+            sort_order: counterweights.length + imported + 1
+          });
+          if (newCw) {
+            counterweightId = newCw.id;
+          } else {
+            errors.push(`"${name}": vastukaalu loomine ebaõnnestus`);
+            continue;
+          }
+        }
+
+        // Create load charts for each boom length
+        for (const boomLength of tableData.boomLengths) {
+          const chartData: LoadChartDataPoint[] = [];
+
+          for (const radius of tableData.radii) {
+            const capacity = tableData.capacities[`${radius}_${boomLength}`];
+            if (capacity && capacity > 0) {
+              chartData.push({ radius_m: radius, capacity_kg: capacity });
+            }
+          }
+
+          if (chartData.length > 0) {
+            // Refresh to get latest load charts
+            const currentCharts = loadCharts;
+            const existingChart = currentCharts.find(
+              lc => lc.counterweight_config_id === counterweightId && lc.boom_length_m === boomLength
+            );
+
+            if (existingChart) {
+              await updateLoadChart(existingChart.id, { chart_data: chartData });
+            } else {
+              await createLoadChart({
+                counterweight_config_id: counterweightId,
+                boom_length_m: boomLength,
+                chart_data: chartData
+              });
+            }
+          }
+        }
+
+        imported++;
+      }
+
+      await refetchCounterweights();
+      await refetchLoadCharts();
+
+      // Show result
+      let message = `Imporditud ${imported} vastukaalu tõstegraafikut!`;
+      if (skipped > 0) {
+        message += `\n\nVahele jäeti ${skipped} lehte:`;
+        errors.forEach(err => { message += `\n- ${err}`; });
+      }
+      alert(message);
+
     } catch (err) {
       console.error('Excel import error:', err);
       alert('Excel importimine ebaõnnestus! Kontrolli faili formaati.');
@@ -1133,7 +1309,7 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
       </div>
 
       <div style={{ padding: '6px 10px', backgroundColor: '#e0f2fe', borderRadius: '4px', marginBottom: '8px', fontSize: '10px', color: '#0369a1' }}>
-        <strong>Vihje:</strong> Kopeeri tabel otse tootja PDF-ist või Excelist. Formaat: esimene rida = poomi pikkused, esimene veerg = raadiused, lahtrites = tonnid.
+        <strong>Vihje:</strong> Exceli import toetab <strong>mitut vastukaalu korraga</strong> - iga leht = üks vastukaal (nt "72t", "48t"). Lae mall alla näite nägemiseks.
       </div>
 
       {/* Add new capacity table */}
