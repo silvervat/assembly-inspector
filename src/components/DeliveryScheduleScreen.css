@@ -1228,9 +1228,9 @@
   position: relative;
 }
 
-/* When menu is open, ensure proper stacking */
+/* When menu is open, ensure proper stacking above backdrop (z-index 999) */
 .delivery-date-group.menu-open {
-  z-index: 100;
+  z-index: 1000;
 }
 
 .date-header {
@@ -1416,7 +1416,7 @@
 }
 
 .delivery-vehicle-group.menu-open {
-  z-index: 100;
+  z-index: 1000;
 }
 
 .delivery-vehicle-group.factory-vehicle {
@@ -2009,7 +2009,7 @@
 }
 
 .delivery-item.menu-open {
-  z-index: 100;
+  z-index: 1000;
 }
 
 /* Item checkbox */
