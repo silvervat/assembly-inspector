@@ -5367,7 +5367,7 @@ export default function ArrivedDeliveriesScreen({
               }
 
               if (arrivedVehicle) {
-                await supabase
+                const { data: updateData } = await supabase
                   .from('trimble_arrival_confirmations')
                   .update({
                     status,
@@ -5375,7 +5375,22 @@ export default function ArrivedDeliveriesScreen({
                     confirmed_by: tcUserEmail
                   })
                   .eq('arrived_vehicle_id', arrivedVehicle.id)
-                  .eq('item_id', itemId);
+                  .eq('item_id', itemId)
+                  .select();
+
+                // If update affected 0 rows, insert new confirmation record
+                if (!updateData || updateData.length === 0) {
+                  await supabase
+                    .from('trimble_arrival_confirmations')
+                    .insert({
+                      trimble_project_id: projectId,
+                      arrived_vehicle_id: arrivedVehicle.id,
+                      item_id: itemId,
+                      status,
+                      confirmed_at: new Date().toISOString(),
+                      confirmed_by: tcUserEmail
+                    });
+                }
                 updated++;
               }
             }
@@ -5598,7 +5613,7 @@ export default function ArrivedDeliveriesScreen({
                             }
 
                             if (arrivedVehicle) {
-                              await supabase
+                              const { data: updateData } = await supabase
                                 .from('trimble_arrival_confirmations')
                                 .update({
                                   status: newStatus,
@@ -5606,7 +5621,22 @@ export default function ArrivedDeliveriesScreen({
                                   confirmed_by: tcUserEmail
                                 })
                                 .eq('arrived_vehicle_id', arrivedVehicle.id)
-                                .eq('item_id', itemId);
+                                .eq('item_id', itemId)
+                                .select();
+
+                              // If update affected 0 rows, insert new confirmation record
+                              if (!updateData || updateData.length === 0) {
+                                await supabase
+                                  .from('trimble_arrival_confirmations')
+                                  .insert({
+                                    trimble_project_id: projectId,
+                                    arrived_vehicle_id: arrivedVehicle.id,
+                                    item_id: itemId,
+                                    status: newStatus,
+                                    confirmed_at: new Date().toISOString(),
+                                    confirmed_by: tcUserEmail
+                                  });
+                              }
                               updated++;
                             }
                           }
