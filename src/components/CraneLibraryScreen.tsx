@@ -1,11 +1,10 @@
 import { useState, useCallback, useRef } from 'react';
-import { FiPlus, FiEdit2, FiTrash2, FiChevronDown, FiChevronRight, FiLoader, FiAlertCircle, FiDatabase, FiSettings, FiUpload, FiImage, FiDownload, FiInfo, FiFileText } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiChevronDown, FiChevronRight, FiLoader, FiAlertCircle, FiDatabase, FiUpload, FiImage, FiDownload, FiInfo, FiFileText } from 'react-icons/fi';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
 import { useCranes } from '../features/crane-planning/crane-library/hooks/useCranes';
 import { useCounterweights } from '../features/crane-planning/crane-library/hooks/useCounterweights';
 import { useLoadCharts } from '../features/crane-planning/crane-library/hooks/useLoadCharts';
-import { parseLoadChartFromPaste } from '../features/crane-planning/load-calculator/utils/liftingCalculations';
 import * as XLSX from 'xlsx';
 import {
   CraneModel,
@@ -33,7 +32,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
   const [isCreating, setIsCreating] = useState(false);
   const [expandedCraneId, setExpandedCraneId] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<CraneType>>(new Set(['mobile', 'crawler', 'loader', 'tower', 'telehandler']));
-  const [activeTab, setActiveTab] = useState<'basic' | 'counterweights' | 'charts'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'charts'>('basic');
   const [activeMainTab, setActiveMainTab] = useState<'library' | 'import'>('library');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -140,7 +139,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
       if (newCrane) {
         setEditingCraneId(newCrane.id);
         setIsCreating(false);
-        setActiveTab('counterweights');
+        setActiveTab('charts');
       }
     }
   };
@@ -223,7 +222,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
               </h2>
             </div>
 
-            {/* Tabs - Compact */}
+            {/* Tabs - Compact (Vastukaalud removed - now part of Tõstegraafikud) */}
             <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb', fontSize: '12px' }}>
               <button
                 onClick={() => setActiveTab('basic')}
@@ -238,22 +237,6 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
                 }}
               >
                 Põhiandmed
-              </button>
-              <button
-                onClick={() => setActiveTab('counterweights')}
-                disabled={isCreating}
-                style={{
-                  padding: '6px 12px',
-                  border: 'none',
-                  backgroundColor: activeTab === 'counterweights' ? '#f3f4f6' : 'white',
-                  borderBottom: activeTab === 'counterweights' ? '2px solid var(--modus-primary)' : '2px solid transparent',
-                  cursor: isCreating ? 'not-allowed' : 'pointer',
-                  fontWeight: activeTab === 'counterweights' ? 600 : 400,
-                  opacity: isCreating ? 0.5 : 1,
-                  fontSize: '12px'
-                }}
-              >
-                Vastukaalud
               </button>
               <button
                 onClick={() => setActiveTab('charts')}
@@ -286,10 +269,6 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
                   uploadingImage={uploadingImage}
                   setUploadingImage={setUploadingImage}
                 />
-              )}
-
-              {activeTab === 'counterweights' && editingCraneId && (
-                <CounterweightsManager craneId={editingCraneId} />
               )}
 
               {activeTab === 'charts' && editingCraneId && (
@@ -870,162 +849,137 @@ function BasicInfoForm({
   );
 }
 
-// Counterweights Manager Component - Compact
-function CounterweightsManager({ craneId }: { craneId: string }) {
-  const { counterweights, loading, createCounterweight, updateCounterweight, deleteCounterweight } = useCounterweights(craneId);
-  const [isAdding, setIsAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ name: '', weight_kg: 0, description: '', sort_order: 0 });
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '5px 8px',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
-    fontSize: '12px'
-  };
-
-  const handleSave = async () => {
-    if (!formData.name || formData.weight_kg <= 0) {
-      alert('Palun täida nimi ja kaal!');
-      return;
-    }
-
-    if (editingId) {
-      await updateCounterweight(editingId, formData);
-    } else {
-      await createCounterweight({
-        ...formData,
-        sort_order: counterweights.length + 1
-      });
-    }
-
-    setIsAdding(false);
-    setEditingId(null);
-    setFormData({ name: '', weight_kg: 0, description: '', sort_order: 0 });
-  };
-
-  if (loading) {
-    return <div style={{ textAlign: 'center', padding: '12px' }}><FiLoader className="animate-spin" size={16} /></div>;
-  }
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-        <h3 style={{ margin: 0, fontSize: '12px', fontWeight: 600 }}>Vastukaalu konfiguratsioonid</h3>
-        {!isAdding && !editingId && (
-          <button onClick={() => setIsAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }}>
-            <FiPlus size={12} /> Lisa
-          </button>
-        )}
-      </div>
-
-      {(isAdding || editingId) && (
-        <div style={{ backgroundColor: '#f9fafb', padding: '10px', borderRadius: '4px', marginBottom: '8px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280' }}>Nimi *</label>
-              <input type="text" style={inputStyle} value={formData.name} onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))} placeholder="Standard 20t" />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280' }}>Kaal (t) *</label>
-              <input type="number" style={inputStyle} value={formData.weight_kg / 1000} onChange={e => setFormData(prev => ({ ...prev, weight_kg: parseFloat(e.target.value) * 1000 }))} step="0.1" />
-            </div>
-            <div style={{ gridColumn: 'span 2' }}>
-              <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280' }}>Kirjeldus</label>
-              <input type="text" style={inputStyle} value={formData.description} onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))} placeholder="Valikuline..." />
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px', marginTop: '8px' }}>
-            <button onClick={() => { setIsAdding(false); setEditingId(null); setFormData({ name: '', weight_kg: 0, description: '', sort_order: 0 }); }} style={{ padding: '4px 10px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }}>Tühista</button>
-            <button onClick={handleSave} style={{ padding: '4px 10px', border: 'none', borderRadius: '4px', backgroundColor: 'var(--modus-primary)', color: 'white', cursor: 'pointer', fontSize: '11px' }}>Salvesta</button>
-          </div>
-        </div>
-      )}
-
-      {counterweights.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>
-          <FiSettings size={24} style={{ opacity: 0.3, marginBottom: '6px' }} />
-          <p style={{ fontSize: '11px', margin: 0 }}>Vastukaalusid pole</p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          {counterweights.map(cw => (
-            <div key={cw.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', backgroundColor: '#f9fafb', borderRadius: '4px' }}>
-              <div>
-                <div style={{ fontWeight: 500, fontSize: '12px' }}>{cw.name}</div>
-                <div style={{ fontSize: '11px', color: '#6b7280' }}>{(cw.weight_kg / 1000).toFixed(1)}t {cw.description && `- ${cw.description}`}</div>
-              </div>
-              <div style={{ display: 'flex', gap: '4px' }}>
-                <button onClick={() => { setEditingId(cw.id); setFormData({ name: cw.name, weight_kg: cw.weight_kg, description: cw.description || '', sort_order: cw.sort_order }); }} style={{ padding: '4px', border: '1px solid #e5e7eb', borderRadius: '3px', backgroundColor: 'white', cursor: 'pointer' }}><FiEdit2 size={12} /></button>
-                <button onClick={() => deleteCounterweight(cw.id)} style={{ padding: '4px', border: '1px solid #fecaca', borderRadius: '3px', backgroundColor: '#fef2f2', color: '#dc2626', cursor: 'pointer' }}><FiTrash2 size={12} /></button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Load Charts Manager Component - Compact
+// Load Charts Manager Component - 2D Table View (like manufacturer capacity charts)
 function LoadChartsManager({ craneId }: { craneId: string }) {
-  const { counterweights, createCounterweight, refetch: refetchCounterweights } = useCounterweights(craneId);
+  const { counterweights, createCounterweight, refetch: refetchCounterweights, deleteCounterweight } = useCounterweights(craneId);
   const { loadCharts, loading, createLoadChart, updateLoadChart, deleteLoadChart, refetch: refetchLoadCharts } = useLoadCharts(craneId);
   const [isAdding, setIsAdding] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewingCounterweightId, setViewingCounterweightId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [formData, setFormData] = useState({ counterweight_name: '', counterweight_kg: 0, boom_length_m: 40, chart_data: [] as LoadChartDataPoint[], notes: '' });
-  const [pasteText, setPasteText] = useState('');
 
-  // Download Excel template for load charts
+  // Form state for new counterweight capacity table
+  const [formData, setFormData] = useState({
+    counterweight_kg: 72, // Default 72t like in the example
+    pastedTable: ''
+  });
+
+  // Parsed 2D table data
+  const [parsedTable, setParsedTable] = useState<{
+    boomLengths: number[];
+    radii: number[];
+    capacities: Record<string, number>; // key: `${radius}_${boomLength}`, value: capacity in kg
+  } | null>(null);
+
+  // Parse pasted table (like from manufacturer PDF)
+  const parseTable = (text: string) => {
+    const lines = text.trim().split('\n').filter(line => line.trim());
+    if (lines.length < 2) {
+      setParsedTable(null);
+      return;
+    }
+
+    // First line should be boom lengths (columns)
+    const headerParts = lines[0].split(/[\t,;]+/).map(s => s.trim().replace(/[^\d.,]/g, '').replace(',', '.'));
+    const boomLengths: number[] = [];
+
+    // Skip first cell (it's the radius header), parse boom lengths
+    for (let i = 1; i < headerParts.length; i++) {
+      const boom = parseFloat(headerParts[i]);
+      if (!isNaN(boom) && boom > 0) {
+        boomLengths.push(boom);
+      }
+    }
+
+    if (boomLengths.length === 0) {
+      setParsedTable(null);
+      return;
+    }
+
+    const radii: number[] = [];
+    const capacities: Record<string, number> = {};
+
+    // Parse data rows
+    for (let i = 1; i < lines.length; i++) {
+      const parts = lines[i].split(/[\t,;]+/).map(s => s.trim().replace(',', '.'));
+      const radius = parseFloat(parts[0].replace(/[^\d.,]/g, '').replace(',', '.'));
+
+      if (isNaN(radius) || radius <= 0) continue;
+
+      radii.push(radius);
+
+      // Parse capacity values for each boom length
+      for (let j = 0; j < boomLengths.length; j++) {
+        const capacityStr = parts[j + 1];
+        if (capacityStr) {
+          const capacity = parseFloat(capacityStr.replace(/[^\d.,]/g, '').replace(',', '.'));
+          if (!isNaN(capacity) && capacity > 0) {
+            capacities[`${radius}_${boomLengths[j]}`] = capacity * 1000; // Convert to kg
+          }
+        }
+      }
+    }
+
+    if (radii.length === 0) {
+      setParsedTable(null);
+      return;
+    }
+
+    setParsedTable({ boomLengths, radii, capacities });
+  };
+
+  // Download Excel template for 2D table format
   const downloadTemplate = () => {
     const wb = XLSX.utils.book_new();
 
     // Instructions sheet
     const instructions = [
-      ['TÕSTEVÕIME GRAAFIKU MALL'],
+      ['TÕSTEVÕIME GRAAFIKU MALL - 2D TABEL'],
       [''],
       ['Juhised:'],
       ['1. Täida "Andmed" leht oma kraana tõstevõime andmetega'],
-      ['2. Iga rida on üks tõstevõime punkt'],
-      ['3. Vastukaalu nimi ja kaal peavad kattuma (sama kombinatsioon = sama konfiguratsioon)'],
-      ['4. Radius ja võimsus on kohustuslikud'],
+      ['2. Esimene rida = poomi pikkused (m)'],
+      ['3. Esimene veerg = raadiused (m)'],
+      ['4. Lahtrites = tõstevõime tonnides'],
+      ['5. Tühja lahtri korral ei ole see kombinatsioon võimalik'],
       [''],
-      ['Veerud:'],
-      ['- Vastukaalu nimi: nt "Standard 20t", "Max 40t"'],
-      ['- Vastukaalu kaal (t): vastukaalu mass tonnides'],
-      ['- Noole pikkus (m): boom pikkus meetrites'],
-      ['- Radius (m): tõsteraadiuse kaugus'],
-      ['- Tõstevõime (t): max koormus selle raadiuse juures'],
+      ['Näide (72t vastukaaluga):'],
+      ['- Rida 1: [tühi], 13.2, 17.7, 22.2, 26.7, ... (poomi pikkused)'],
+      ['- Rida 2: 3, 200, 142, 133, 125, ... (tõstevõimed 3m raadiusel)'],
+      ['- Rida 3: 3.5, 142, 133, 125, 117, ... (tõstevõimed 3.5m raadiusel)'],
+      [''],
+      ['NB! Võid kopeerida tabeli otse tootja PDF-ist!'],
     ];
     const wsInstr = XLSX.utils.aoa_to_sheet(instructions);
-    wsInstr['!cols'] = [{ wch: 60 }];
+    wsInstr['!cols'] = [{ wch: 70 }];
     XLSX.utils.book_append_sheet(wb, wsInstr, 'Juhised');
 
-    // Data template sheet
+    // Data template sheet - 2D format like the manufacturer chart
     const dataTemplate = [
-      ['Vastukaalu nimi', 'Vastukaalu kaal (t)', 'Noole pikkus (m)', 'Radius (m)', 'Tõstevõime (t)'],
-      ['Standard 20t', 20, 40, 3, 100],
-      ['Standard 20t', 20, 40, 5, 80],
-      ['Standard 20t', 20, 40, 10, 50],
-      ['Standard 20t', 20, 40, 15, 35],
-      ['Standard 20t', 20, 40, 20, 25],
-      ['Standard 20t', 20, 50, 3, 90],
-      ['Standard 20t', 20, 50, 5, 70],
-      ['Max 40t', 40, 40, 3, 120],
-      ['Max 40t', 40, 40, 5, 100],
+      ['m', 13.2, 17.7, 22.2, 26.7, 31.3, 35.8, 40.3],
+      [3, 200, 143, 133, 125, '', '', ''],
+      [3.5, 142, 133, 125, 117, '', '', ''],
+      [4, 133, 123, 122, 107, '', '', ''],
+      [5, 117, 107, 108, 107, 103, 84, 70],
+      [6, 105, 95, 95, 94, 94, 82, 69],
+      [7, 93, 84, 85, 84, 84, 80, 68],
+      [8, 82, 76, 76, 76, 76, 76, 66],
+      [10, 62, 62, 63, 62, 63, 62, 59],
+      [12, '', '', 53, 53, 53, 52, 53],
+      [14, '', '', 44.5, 44.5, 44.5, 44, 44.5],
+      [16, '', '', '', 38, 37.5, 38.5, 38],
+      [18, '', '', '', 33, 32.5, 33, 32.5],
+      [20, '', '', '', '', 29, 28.8, 29.2],
     ];
     const wsData = XLSX.utils.aoa_to_sheet(dataTemplate);
-    wsData['!cols'] = [{ wch: 20 }, { wch: 18 }, { wch: 16 }, { wch: 12 }, { wch: 14 }];
+    wsData['!cols'] = [{ wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }];
     XLSX.utils.book_append_sheet(wb, wsData, 'Andmed');
 
-    XLSX.writeFile(wb, 'tostevoimete_mall.xlsx');
+    XLSX.writeFile(wb, 'tostevoimete_2d_mall.xlsx');
   };
 
-  // Import Excel file with load charts
+  // Import Excel file with 2D table
   const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1035,89 +989,19 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
 
-      // Find data sheet
       const dataSheet = workbook.Sheets['Andmed'] || workbook.Sheets[workbook.SheetNames[workbook.SheetNames.length > 1 ? 1 : 0]];
       if (!dataSheet) {
         alert('Excel fail peab sisaldama "Andmed" lehte!');
         return;
       }
 
-      const rows = XLSX.utils.sheet_to_json<{
-        'Vastukaalu nimi': string;
-        'Vastukaalu kaal (t)': number;
-        'Noole pikkus (m)': number;
-        'Radius (m)': number;
-        'Tõstevõime (t)': number;
-      }>(dataSheet, { header: 1, range: 1 }) as any[];
+      // Convert to text and parse as 2D table
+      const rows = XLSX.utils.sheet_to_json<any[]>(dataSheet, { header: 1 }) as any[][];
+      const text = rows.map(row => row.join('\t')).join('\n');
 
-      // Group by counterweight + boom length
-      const grouped: Record<string, {
-        counterweight_name: string;
-        counterweight_kg: number;
-        boom_length_m: number;
-        chart_data: LoadChartDataPoint[];
-      }> = {};
-
-      for (const row of rows) {
-        if (!row[0] || !row[3] || !row[4]) continue; // Skip empty rows
-
-        const cwName = String(row[0]);
-        const cwKg = (parseFloat(row[1]) || 0) * 1000;
-        const boomLength = parseFloat(row[2]) || 40;
-        const radius = parseFloat(row[3]);
-        const capacity = (parseFloat(row[4]) || 0) * 1000;
-
-        const key = `${cwName}|${boomLength}`;
-        if (!grouped[key]) {
-          grouped[key] = {
-            counterweight_name: cwName,
-            counterweight_kg: cwKg,
-            boom_length_m: boomLength,
-            chart_data: []
-          };
-        }
-        grouped[key].chart_data.push({ radius_m: radius, capacity_kg: capacity });
-      }
-
-      // Import each group
-      let imported = 0;
-      for (const group of Object.values(grouped)) {
-        if (group.chart_data.length === 0) continue;
-
-        // Find or create counterweight
-        let counterweightId = counterweights.find(
-          cw => cw.name.toLowerCase() === group.counterweight_name.toLowerCase()
-        )?.id;
-
-        if (!counterweightId) {
-          const newCw = await createCounterweight({
-            name: group.counterweight_name,
-            weight_kg: group.counterweight_kg,
-            description: 'Imporditud Excelist',
-            sort_order: counterweights.length + 1
-          });
-          if (newCw) {
-            counterweightId = newCw.id;
-          }
-        }
-
-        if (counterweightId) {
-          // Sort chart data by radius
-          group.chart_data.sort((a, b) => a.radius_m - b.radius_m);
-
-          await createLoadChart({
-            counterweight_config_id: counterweightId,
-            boom_length_m: group.boom_length_m,
-            chart_data: group.chart_data,
-            notes: 'Imporditud Excelist'
-          });
-          imported++;
-        }
-      }
-
-      await refetchCounterweights();
-      await refetchLoadCharts();
-      alert(`Imporditud ${imported} tõstegraafikut!`);
+      setFormData(prev => ({ ...prev, pastedTable: text }));
+      parseTable(text);
+      setIsAdding(true);
     } catch (err) {
       console.error('Excel import error:', err);
       alert('Excel importimine ebaõnnestus! Kontrolli faili formaati.');
@@ -1127,34 +1011,30 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
     }
   };
 
-  const inputStyle: React.CSSProperties = { width: '100%', padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' };
-
-  const handlePasteChange = (text: string) => { setPasteText(text); setFormData(prev => ({ ...prev, chart_data: parseLoadChartFromPaste(text) })); };
-  const resetForm = () => { setFormData({ counterweight_name: '', counterweight_kg: 0, boom_length_m: 40, chart_data: [], notes: '' }); setPasteText(''); setIsAdding(false); setEditingId(null); };
-
+  // Save the 2D table as multiple load charts
   const handleSave = async () => {
-    if (!formData.counterweight_name || formData.counterweight_kg <= 0) {
-      alert('Palun sisesta vastukaalu nimi ja kaal!');
+    if (formData.counterweight_kg <= 0) {
+      alert('Palun sisesta vastukaalu kaal!');
       return;
     }
-    if (formData.chart_data.length === 0) {
-      alert('Palun sisesta tõstegraafiku andmed!');
+    if (!parsedTable || parsedTable.boomLengths.length === 0) {
+      alert('Palun sisesta tõstegraafiku tabel!');
       return;
     }
 
     setSaving(true);
     try {
-      // Check if counterweight with this name already exists
+      // Create counterweight config with weight as name
+      const cwName = `${formData.counterweight_kg}t`;
       let counterweightId = counterweights.find(
-        cw => cw.name.toLowerCase() === formData.counterweight_name.toLowerCase()
+        cw => cw.weight_kg === formData.counterweight_kg * 1000
       )?.id;
 
-      // If not, create new counterweight config
       if (!counterweightId) {
         const newCw = await createCounterweight({
-          name: formData.counterweight_name,
-          weight_kg: formData.counterweight_kg,
-          description: `Automaatselt loodud tõstegraafiku impordil`,
+          name: cwName,
+          weight_kg: formData.counterweight_kg * 1000,
+          description: `Vastukaal ${formData.counterweight_kg} tonni`,
           sort_order: counterweights.length + 1
         });
         if (newCw) {
@@ -1167,58 +1047,81 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
         }
       }
 
-      if (editingId) {
-        // Update existing load chart
-        await updateLoadChart(editingId, {
-          counterweight_config_id: counterweightId,
-          boom_length_m: formData.boom_length_m,
-          chart_data: formData.chart_data,
-          notes: formData.notes
-        });
-      } else {
-        // Create new load chart
-        await createLoadChart({
-          counterweight_config_id: counterweightId,
-          boom_length_m: formData.boom_length_m,
-          chart_data: formData.chart_data,
-          notes: formData.notes
-        });
+      // Create a load chart for each boom length
+      for (const boomLength of parsedTable.boomLengths) {
+        const chartData: LoadChartDataPoint[] = [];
+
+        for (const radius of parsedTable.radii) {
+          const capacity = parsedTable.capacities[`${radius}_${boomLength}`];
+          if (capacity && capacity > 0) {
+            chartData.push({ radius_m: radius, capacity_kg: capacity });
+          }
+        }
+
+        if (chartData.length > 0) {
+          // Check if chart for this counterweight + boom already exists
+          const existingChart = loadCharts.find(
+            lc => lc.counterweight_config_id === counterweightId && lc.boom_length_m === boomLength
+          );
+
+          if (existingChart) {
+            await updateLoadChart(existingChart.id, {
+              chart_data: chartData
+            });
+          } else {
+            await createLoadChart({
+              counterweight_config_id: counterweightId,
+              boom_length_m: boomLength,
+              chart_data: chartData
+            });
+          }
+        }
       }
 
-      resetForm();
+      await refetchLoadCharts();
+      setIsAdding(false);
+      setFormData({ counterweight_kg: 72, pastedTable: '' });
+      setParsedTable(null);
+      alert('Tõstegraafik salvestatud!');
     } catch (err) {
-      console.error('Error saving load chart:', err);
+      console.error('Error saving load charts:', err);
       alert('Salvestamine ebaõnnestus!');
     } finally {
       setSaving(false);
     }
   };
 
-  const startEditing = (chart: typeof loadCharts[0]) => {
-    const cw = counterweights.find(c => c.id === chart.counterweight_config_id);
-    setFormData({
-      counterweight_name: cw?.name || '',
-      counterweight_kg: cw?.weight_kg || 0,
-      boom_length_m: chart.boom_length_m,
-      chart_data: chart.chart_data,
-      notes: chart.notes || ''
-    });
-    setPasteText(chart.chart_data.map(d => `${d.radius_m}\t${d.capacity_kg / 1000}`).join('\n'));
-    setEditingId(chart.id);
-    setIsAdding(false);
+  // Delete all charts for a counterweight
+  const handleDeleteCounterweight = async (cwId: string) => {
+    if (!confirm('Kas kustutada see vastukaal ja kõik selle tõstegraafikud?')) return;
+
+    const chartsToDelete = loadCharts.filter(lc => lc.counterweight_config_id === cwId);
+    for (const chart of chartsToDelete) {
+      await deleteLoadChart(chart.id);
+    }
+    await deleteCounterweight(cwId);
+    setViewingCounterweightId(null);
   };
+
+  // Group load charts by counterweight
+  const chartsByCounterweight = counterweights.map(cw => ({
+    counterweight: cw,
+    charts: loadCharts.filter(lc => lc.counterweight_config_id === cw.id).sort((a, b) => a.boom_length_m - b.boom_length_m)
+  })).filter(g => g.charts.length > 0);
 
   if (loading) {
     return <div style={{ textAlign: 'center', padding: '12px' }}><FiLoader className="animate-spin" size={16} /></div>;
   }
 
+  const inputStyle: React.CSSProperties = { width: '100%', padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
         <h3 style={{ margin: 0, fontSize: '12px', fontWeight: 600 }}>Tõstevõime graafikud</h3>
-        {!isAdding && !editingId && (
+        {!isAdding && (
           <div style={{ display: 'flex', gap: '4px' }}>
-            <button onClick={downloadTemplate} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }} title="Lae alla Excel mall"><FiDownload size={12} /> Mall</button>
+            <button onClick={downloadTemplate} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }} title="Lae alla 2D tabeli mall"><FiDownload size={12} /> Mall</button>
             <label style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: importing ? 'not-allowed' : 'pointer', fontSize: '11px', opacity: importing ? 0.7 : 1 }} title="Impordi Excelist">
               {importing ? <FiLoader className="animate-spin" size={12} /> : <FiFileText size={12} />}
               {importing ? 'Laen...' : 'Impordi'}
@@ -1230,65 +1133,196 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
       </div>
 
       <div style={{ padding: '6px 10px', backgroundColor: '#e0f2fe', borderRadius: '4px', marginBottom: '8px', fontSize: '10px', color: '#0369a1' }}>
-        <strong>Vihje:</strong> Lae alla mall, täida ja impordi. Vastukaalud luuakse automaatselt.
+        <strong>Vihje:</strong> Kopeeri tabel otse tootja PDF-ist või Excelist. Formaat: esimene rida = poomi pikkused, esimene veerg = raadiused, lahtrites = tonnid.
       </div>
 
-      {(isAdding || editingId) && (
-        <div style={{ backgroundColor: '#f9fafb', padding: '10px', borderRadius: '4px', marginBottom: '8px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-            <div>
-              <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280' }}>Vastukaalu nimi *</label>
-              <input type="text" style={inputStyle} value={formData.counterweight_name} onChange={e => setFormData(prev => ({ ...prev, counterweight_name: e.target.value }))} placeholder="Standard 20t" list="counterweight-names" />
-              <datalist id="counterweight-names">{counterweights.map(cw => <option key={cw.id} value={cw.name} />)}</datalist>
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280' }}>Kaal (t) *</label>
-              <input type="number" style={inputStyle} value={formData.counterweight_kg / 1000 || ''} onChange={e => setFormData(prev => ({ ...prev, counterweight_kg: parseFloat(e.target.value) * 1000 || 0 }))} step="0.5" placeholder="20" />
-            </div>
-            <div>
-              <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280' }}>Nool (m) *</label>
-              <input type="number" style={inputStyle} value={formData.boom_length_m} onChange={e => setFormData(prev => ({ ...prev, boom_length_m: parseFloat(e.target.value) }))} step="1" />
-            </div>
-            <div style={{ gridColumn: 'span 3' }}>
-              <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280' }}>Graafik (radius [TAB] tonnid)</label>
-              <textarea style={{ ...inputStyle, minHeight: '80px', fontFamily: 'monospace' }} value={pasteText} onChange={e => handlePasteChange(e.target.value)} placeholder="3&#9;100&#10;5&#9;80&#10;10&#9;50" />
-            </div>
+      {/* Add new capacity table */}
+      {isAdding && (
+        <div style={{ backgroundColor: '#f9fafb', padding: '10px', borderRadius: '4px', marginBottom: '8px', border: '1px solid #e5e7eb' }}>
+          <div style={{ marginBottom: '8px' }}>
+            <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280', fontWeight: 500 }}>Vastukaal (t) *</label>
+            <input
+              type="number"
+              style={{ ...inputStyle, width: '120px' }}
+              value={formData.counterweight_kg}
+              onChange={e => setFormData(prev => ({ ...prev, counterweight_kg: parseFloat(e.target.value) || 0 }))}
+              step="0.5"
+              placeholder="72"
+            />
+            <span style={{ marginLeft: '8px', fontSize: '10px', color: '#6b7280' }}>nt: 72t nagu pildil</span>
           </div>
-          {formData.chart_data.length > 0 && (
-            <div style={{ marginTop: '6px', padding: '6px 8px', backgroundColor: '#dcfce7', borderRadius: '4px', fontSize: '10px', color: '#166534' }}>
-              <strong>Eelvaade ({formData.chart_data.length}):</strong> {formData.chart_data.slice(0, 8).map(d => `${d.radius_m}m=${d.capacity_kg / 1000}t`).join(', ')}{formData.chart_data.length > 8 && '...'}
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280', fontWeight: 500 }}>
+              Tõstevõime tabel (kopeeri PDF-ist või Excelist)
+            </label>
+            <textarea
+              style={{ ...inputStyle, minHeight: '150px', fontFamily: 'monospace', fontSize: '10px' }}
+              value={formData.pastedTable}
+              onChange={e => {
+                setFormData(prev => ({ ...prev, pastedTable: e.target.value }));
+                parseTable(e.target.value);
+              }}
+              placeholder={`m\t13.2\t17.7\t22.2\t26.7\t31.3
+3\t200\t143\t133\t125\t
+3.5\t142\t133\t125\t117\t
+4\t133\t123\t122\t107\t
+5\t117\t107\t108\t107\t103
+...`}
+            />
+          </div>
+
+          {/* Preview parsed table */}
+          {parsedTable && (
+            <div style={{ marginTop: '8px', padding: '8px', backgroundColor: '#dcfce7', borderRadius: '4px', fontSize: '10px' }}>
+              <div style={{ color: '#166534', fontWeight: 500, marginBottom: '4px' }}>
+                Eelvaade: {parsedTable.boomLengths.length} poomi pikkust, {parsedTable.radii.length} raadiust
+              </div>
+              <div style={{ overflowX: 'auto', maxHeight: '200px' }}>
+                <table style={{ borderCollapse: 'collapse', fontSize: '9px', width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ border: '1px solid #86efac', padding: '2px 4px', backgroundColor: '#bbf7d0', fontWeight: 600 }}>m</th>
+                      {parsedTable.boomLengths.map(boom => (
+                        <th key={boom} style={{ border: '1px solid #86efac', padding: '2px 4px', backgroundColor: '#bbf7d0', fontWeight: 600 }}>{boom}m</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parsedTable.radii.slice(0, 10).map(radius => (
+                      <tr key={radius}>
+                        <td style={{ border: '1px solid #86efac', padding: '2px 4px', backgroundColor: '#bbf7d0', fontWeight: 600 }}>{radius}</td>
+                        {parsedTable.boomLengths.map(boom => {
+                          const cap = parsedTable.capacities[`${radius}_${boom}`];
+                          return (
+                            <td key={boom} style={{ border: '1px solid #86efac', padding: '2px 4px', textAlign: 'right', backgroundColor: cap ? 'white' : '#f3f4f6' }}>
+                              {cap ? (cap / 1000).toFixed(1) : ''}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                    {parsedTable.radii.length > 10 && (
+                      <tr>
+                        <td colSpan={parsedTable.boomLengths.length + 1} style={{ textAlign: 'center', padding: '4px', color: '#6b7280' }}>
+                          ... ja veel {parsedTable.radii.length - 10} rida
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px', marginTop: '8px' }}>
-            <button onClick={resetForm} disabled={saving} style={{ padding: '4px 10px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }}>Tühista</button>
-            <button onClick={handleSave} disabled={saving} style={{ padding: '4px 10px', border: 'none', borderRadius: '4px', backgroundColor: 'var(--modus-primary)', color: 'white', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1, fontSize: '11px' }}>{saving ? 'Salvestamine...' : (editingId ? 'Uuenda' : 'Salvesta')}</button>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px', marginTop: '10px' }}>
+            <button
+              onClick={() => { setIsAdding(false); setFormData({ counterweight_kg: 72, pastedTable: '' }); setParsedTable(null); }}
+              disabled={saving}
+              style={{ padding: '4px 10px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }}
+            >
+              Tühista
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !parsedTable}
+              style={{ padding: '4px 10px', border: 'none', borderRadius: '4px', backgroundColor: 'var(--modus-primary)', color: 'white', cursor: saving ? 'not-allowed' : 'pointer', opacity: (saving || !parsedTable) ? 0.7 : 1, fontSize: '11px' }}
+            >
+              {saving ? 'Salvestamine...' : 'Salvesta'}
+            </button>
           </div>
         </div>
       )}
 
-      {loadCharts.length === 0 ? (
+      {/* Existing capacity tables grouped by counterweight */}
+      {chartsByCounterweight.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>
           <FiDatabase size={24} style={{ opacity: 0.3, marginBottom: '6px' }} />
-          <p style={{ fontSize: '11px', margin: 0 }}>Graafikuid pole</p>
+          <p style={{ fontSize: '11px', margin: 0 }}>Tõstegraafikuid pole lisatud</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          {loadCharts.map(lc => {
-            const cw = counterweights.find(c => c.id === lc.counterweight_config_id);
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {chartsByCounterweight.map(({ counterweight: cw, charts }) => {
+            const isExpanded = viewingCounterweightId === cw.id;
+
+            // Build 2D view data
+            const boomLengths = [...new Set(charts.map(c => c.boom_length_m))].sort((a, b) => a - b);
+            const allRadii = new Set<number>();
+            const capacityMap: Record<string, number> = {};
+
+            for (const chart of charts) {
+              for (const point of chart.chart_data) {
+                allRadii.add(point.radius_m);
+                capacityMap[`${point.radius_m}_${chart.boom_length_m}`] = point.capacity_kg;
+              }
+            }
+            const radii = [...allRadii].sort((a, b) => a - b);
+
             return (
-              <div key={lc.id} style={{ padding: '6px 8px', backgroundColor: '#f9fafb', borderRadius: '4px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 500, fontSize: '12px' }}>{cw?.name || '?'} ({cw ? (cw.weight_kg / 1000).toFixed(0) + 't' : '?'}) • Nool {lc.boom_length_m}m</div>
-                    <div style={{ fontSize: '10px', color: '#6b7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {lc.chart_data.length} p: {lc.chart_data.slice(0, 4).map(d => `${d.radius_m}m=${d.capacity_kg / 1000}t`).join(', ')}{lc.chart_data.length > 4 && '...'}
-                    </div>
+              <div key={cw.id} style={{ backgroundColor: '#f9fafb', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
+                {/* Header */}
+                <div
+                  style={{
+                    padding: '8px 10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    backgroundColor: isExpanded ? '#e5e7eb' : 'transparent',
+                    borderRadius: isExpanded ? '4px 4px 0 0' : '4px'
+                  }}
+                  onClick={() => setViewingCounterweightId(isExpanded ? null : cw.id)}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: '#6b7280' }}>
+                      {isExpanded ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+                    </span>
+                    <span style={{ fontWeight: 600, fontSize: '13px', color: '#374151' }}>
+                      {(cw.weight_kg / 1000).toFixed(1)}t vastukaal
+                    </span>
+                    <span style={{ fontSize: '11px', color: '#6b7280' }}>
+                      ({boomLengths.length} poomi pikkust, {radii.length} raadiust)
+                    </span>
                   </div>
-                  <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                    <button onClick={() => startEditing(lc)} style={{ padding: '4px', border: '1px solid #e5e7eb', borderRadius: '3px', backgroundColor: 'white', cursor: 'pointer' }} title="Muuda"><FiEdit2 size={12} /></button>
-                    <button onClick={() => deleteLoadChart(lc.id)} style={{ padding: '4px', border: '1px solid #fecaca', borderRadius: '3px', backgroundColor: '#fef2f2', color: '#dc2626', cursor: 'pointer' }} title="Kustuta"><FiTrash2 size={12} /></button>
-                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteCounterweight(cw.id); }}
+                    style={{ padding: '4px', border: '1px solid #fecaca', borderRadius: '3px', backgroundColor: '#fef2f2', color: '#dc2626', cursor: 'pointer' }}
+                    title="Kustuta vastukaal ja graafikud"
+                  >
+                    <FiTrash2 size={12} />
+                  </button>
                 </div>
+
+                {/* Expanded 2D table view */}
+                {isExpanded && (
+                  <div style={{ padding: '10px', overflowX: 'auto' }}>
+                    <table style={{ borderCollapse: 'collapse', fontSize: '10px', width: '100%' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ border: '1px solid #d1d5db', padding: '4px 6px', backgroundColor: '#f3f4f6', fontWeight: 600, position: 'sticky', left: 0 }}>m</th>
+                          {boomLengths.map(boom => (
+                            <th key={boom} style={{ border: '1px solid #d1d5db', padding: '4px 6px', backgroundColor: '#fef9c3', fontWeight: 600, whiteSpace: 'nowrap' }}>{boom}m</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {radii.map(radius => (
+                          <tr key={radius}>
+                            <td style={{ border: '1px solid #d1d5db', padding: '4px 6px', backgroundColor: '#fef9c3', fontWeight: 600, position: 'sticky', left: 0 }}>{radius}</td>
+                            {boomLengths.map(boom => {
+                              const cap = capacityMap[`${radius}_${boom}`];
+                              return (
+                                <td key={boom} style={{ border: '1px solid #d1d5db', padding: '4px 6px', textAlign: 'right', backgroundColor: cap ? 'white' : '#f3f4f6' }}>
+                                  {cap ? (cap / 1000).toFixed(1) : ''}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             );
           })}
