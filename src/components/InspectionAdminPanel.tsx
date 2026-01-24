@@ -115,7 +115,7 @@ void setFilterCategory;
 
       // Load users
       const { data: usersData } = await supabase
-        .from('trimble_ex_users')
+        .from('trimble_inspection_users')
         .select('email, name')
         .eq('trimble_project_id', projectId)
         .in('role', ['admin', 'moderator', 'inspector']);

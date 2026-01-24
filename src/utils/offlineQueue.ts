@@ -220,7 +220,7 @@ const processSignatureUpload = async (item: PendingUpload): Promise<boolean> => 
         .getPublicUrl(item.fileName);
 
       await supabase
-        .from('trimble_ex_users')
+        .from('trimble_inspection_users')
         .update({
           signature_url: urlData.publicUrl,
           signature_storage_path: item.fileName,
