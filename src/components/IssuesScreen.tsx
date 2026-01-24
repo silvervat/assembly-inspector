@@ -25,7 +25,7 @@ import {
   FiPlus, FiSearch, FiChevronDown, FiChevronRight,
   FiEdit2, FiTrash2, FiX, FiCamera, FiDownload,
   FiRefreshCw, FiFilter, FiUser, FiAlertTriangle, FiAlertCircle,
-  FiCheckCircle, FiLoader, FiCheckSquare,
+  FiCheckCircle, FiLoader, FiCheckSquare, FiMoreVertical,
   FiTarget, FiMessageSquare, FiActivity, FiLayers, FiSend,
   FiArrowUp, FiArrowDown, FiMinus, FiAlertOctagon, FiEye, FiLink
 } from 'react-icons/fi';
@@ -243,7 +243,7 @@ export default function IssuesScreen({
   const [highlightedSubDetailId, setHighlightedSubDetailId] = useState<number | null>(null);
 
   // Status group menu state
-  const [_statusMenuOpen, _setStatusMenuOpen] = useState<string | null>(null);
+  const [statusMenuOpen, setStatusMenuOpen] = useState<IssueStatus | null>(null);
 
   // Real-time selection state (for continuous monitoring)
   const [currentSelectedObjects, setCurrentSelectedObjects] = useState<SelectedObject[]>([]);
@@ -620,7 +620,8 @@ export default function IssuesScreen({
         setCurrentSelectedObjects(objects);
 
         // If form is open and not editing, update the form's objects too
-        if (showForm && !editingIssue) {
+        // BUT NOT when sub-details modal is open (parent details should be locked)
+        if (showForm && !editingIssue && !showSubDetailsModal) {
           setNewIssueObjects(objects);
         }
       } catch (e) {
@@ -637,7 +638,7 @@ export default function IssuesScreen({
     return () => {
       clearInterval(interval);
     };
-  }, [api, getSelectedObjectsFromModel, showForm, editingIssue]);
+  }, [api, getSelectedObjectsFromModel, showForm, editingIssue, showSubDetailsModal]);
 
   // ============================================
   // DATA LOADING
@@ -935,6 +936,114 @@ export default function IssuesScreen({
       }, 2000);
     }
   }, [api]);
+
+  // Select all issues of a specific status in model
+  const selectStatusInModel = useCallback(async (status: IssueStatus) => {
+    const statusIssues = issues.filter(i => mapDeprecatedStatus(i.status) === status);
+    if (statusIssues.length === 0) {
+      setMessage('⚠️ Selles staatuses pole mittevastavusi');
+      return;
+    }
+
+    syncingToModelRef.current = true;
+    setStatusMenuOpen(null);
+
+    try {
+      // Collect all GUIDs from all issues of this status
+      const objectsByModel: Record<string, string[]> = {};
+
+      for (const issue of statusIssues) {
+        for (const obj of (issue.objects || [])) {
+          if (!objectsByModel[obj.model_id]) objectsByModel[obj.model_id] = [];
+          if (obj.guid_ifc && !objectsByModel[obj.model_id].includes(obj.guid_ifc)) {
+            objectsByModel[obj.model_id].push(obj.guid_ifc);
+          }
+        }
+      }
+
+      // Convert to runtime IDs and select
+      const modelObjectIds: { modelId: string; objectRuntimeIds: number[] }[] = [];
+
+      for (const [modelId, guids] of Object.entries(objectsByModel)) {
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, guids);
+        const validIds = runtimeIds.filter((id): id is number => id !== undefined && id !== null);
+        if (validIds.length > 0) {
+          modelObjectIds.push({ modelId, objectRuntimeIds: validIds });
+        }
+      }
+
+      if (modelObjectIds.length > 0) {
+        await api.viewer.setSelection({ modelObjectIds }, 'set');
+        await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
+        setMessage(`✓ Valitud ${statusIssues.length} mittevastavust (${ISSUE_STATUS_CONFIG[status].label})`);
+      } else {
+        setMessage('⚠️ Objekte ei leitud mudelist');
+      }
+
+    } catch (e: unknown) {
+      console.error('Error selecting status in model:', e);
+      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+    } finally {
+      setTimeout(() => {
+        syncingToModelRef.current = false;
+      }, 2000);
+    }
+  }, [api, issues]);
+
+  // Color only issues of a specific status
+  const colorStatusInModel = useCallback(async (status: IssueStatus) => {
+    setStatusMenuOpen(null);
+    setColoringStatus(`Värvin ${ISSUE_STATUS_CONFIG[status].label}...`);
+
+    try {
+      // Get issues of this status
+      const statusIssues = issues.filter(i => mapDeprecatedStatus(i.status) === status);
+
+      if (statusIssues.length === 0) {
+        setMessage('⚠️ Selles staatuses pole mittevastavusi');
+        setColoringStatus('');
+        return;
+      }
+
+      // Get the color for this status
+      const statusColor = ISSUE_STATUS_CONFIG[status].modelColor;
+
+      // Collect all GUIDs and find in model
+      const guids: string[] = [];
+      for (const issue of statusIssues) {
+        for (const obj of (issue.objects || [])) {
+          if (obj.guid_ifc) guids.push(obj.guid_ifc);
+        }
+      }
+
+      const foundObjects = await findObjectsInLoadedModels(api, guids);
+
+      // Color by model
+      const byModel: Record<string, number[]> = {};
+      for (const [, found] of foundObjects) {
+        if (!byModel[found.modelId]) byModel[found.modelId] = [];
+        byModel[found.modelId].push(found.runtimeId);
+      }
+
+      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+        for (let i = 0; i < runtimeIds.length; i += COLOR_BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + COLOR_BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: statusColor }
+          );
+        }
+      }
+
+      setMessage(`✓ Värvitud ${statusIssues.length} mittevastavust`);
+      setColoringStatus('');
+
+    } catch (e: unknown) {
+      console.error('Error coloring status:', e);
+      setColoringStatus('');
+      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+    }
+  }, [api, issues]);
 
   // ============================================
   // ISSUE CRUD OPERATIONS
@@ -1832,33 +1941,124 @@ export default function IssuesScreen({
 
             return (
               <div key={status} className="issues-status-group">
-                <button
-                  className="status-group-header"
-                  onClick={() => {
-                    setExpandedStatuses(prev => {
-                      const next = new Set(prev);
-                      if (next.has(status)) {
-                        next.delete(status);
-                      } else {
-                        next.add(status);
-                      }
-                      return next;
-                    });
-                  }}
-                  style={{ borderLeftColor: config.color }}
-                >
-                  <div className="status-group-title">
-                    {isExpanded ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
-                    <span
-                      className="status-badge"
-                      style={{ backgroundColor: config.bgColor, color: config.color }}
+                <div className="status-group-header-wrapper" style={{ display: 'flex', alignItems: 'center' }}>
+                  <button
+                    className="status-group-header"
+                    onClick={() => {
+                      setExpandedStatuses(prev => {
+                        const next = new Set(prev);
+                        if (next.has(status)) {
+                          next.delete(status);
+                        } else {
+                          next.add(status);
+                        }
+                        return next;
+                      });
+                    }}
+                    style={{ borderLeftColor: config.color, flex: 1 }}
+                  >
+                    <div className="status-group-title">
+                      {isExpanded ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
+                      <span
+                        className="status-badge"
+                        style={{ backgroundColor: config.bgColor, color: config.color }}
+                      >
+                        {STATUS_ICONS[status]}
+                        {config.label}
+                      </span>
+                      <span className="status-count">{statusIssues.length}</span>
+                    </div>
+                  </button>
+
+                  {/* Three-dot menu */}
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      className="status-menu-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setStatusMenuOpen(statusMenuOpen === status ? null : status);
+                      }}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        padding: '4px 6px',
+                        cursor: 'pointer',
+                        color: '#64748b',
+                        borderRadius: '4px'
+                      }}
                     >
-                      {STATUS_ICONS[status]}
-                      {config.label}
-                    </span>
-                    <span className="status-count">{statusIssues.length}</span>
+                      <FiMoreVertical size={14} />
+                    </button>
+
+                    {statusMenuOpen === status && (
+                      <div
+                        className="status-menu-dropdown"
+                        style={{
+                          position: 'absolute',
+                          right: 0,
+                          top: '100%',
+                          background: 'white',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '6px',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                          zIndex: 100,
+                          minWidth: '160px',
+                          overflow: 'hidden'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={() => selectStatusInModel(status)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            width: '100%',
+                            padding: '8px 12px',
+                            background: 'transparent',
+                            border: 'none',
+                            fontSize: '12px',
+                            color: '#374151',
+                            cursor: 'pointer',
+                            textAlign: 'left'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.background = '#f3f4f6')}
+                          onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <FiTarget size={14} />
+                          Vali kõik mudelis
+                        </button>
+                        <button
+                          onClick={() => colorStatusInModel(status)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            width: '100%',
+                            padding: '8px 12px',
+                            background: 'transparent',
+                            border: 'none',
+                            fontSize: '12px',
+                            color: '#374151',
+                            cursor: 'pointer',
+                            textAlign: 'left'
+                          }}
+                          onMouseOver={(e) => (e.currentTarget.style.background = '#f3f4f6')}
+                          onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <span style={{
+                            width: '14px',
+                            height: '14px',
+                            borderRadius: '3px',
+                            background: config.color,
+                            display: 'inline-block'
+                          }} />
+                          Värvi mudelis
+                        </button>
+                      </div>
+                    )}
                   </div>
-                </button>
+                </div>
 
                 {isExpanded && (
                   <div className="status-group-items">
