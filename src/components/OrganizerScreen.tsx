@@ -1316,9 +1316,10 @@ export default function OrganizerScreen({
       let userName: string | null = null;
       try {
         const { data } = await supabase
-          .from('trimble_ex_users')
+          .from('trimble_inspection_users')
           .select('name')
           .eq('email', tcUserEmail)
+          .eq('trimble_project_id', projectId)
           .single();
         userName = data?.name || null;
       } catch { /* ignore */ }
@@ -2261,15 +2262,16 @@ export default function OrganizerScreen({
     if (!email) return null;
     try {
       const { data } = await supabase
-        .from('trimble_ex_users')
+        .from('trimble_inspection_users')
         .select('name')
         .eq('email', email)
+        .eq('trimble_project_id', projectId)
         .single();
       return data?.name || null;
     } catch {
       return null;
     }
-  }, []);
+  }, [projectId]);
 
   // Fetch image metadata (dimensions and file size)
   const fetchImageMeta = useCallback(async (url: string): Promise<{
@@ -6635,8 +6637,9 @@ export default function OrganizerScreen({
     if (userEmails.length > 0) {
       try {
         const { data: users } = await supabase
-          .from('trimble_ex_users')
+          .from('trimble_inspection_users')
           .select('email, name')
+          .eq('trimble_project_id', projectId)
           .in('email', userEmails);
 
         if (users) {

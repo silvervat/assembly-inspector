@@ -32,7 +32,7 @@ export function useUserProfile(userEmail: string | null, projectId?: string): Us
 
     try {
       let query = supabase
-        .from('trimble_ex_users')
+        .from('trimble_inspection_users')
         .select('*')
         .eq('email', userEmail);
 
@@ -66,7 +66,7 @@ export function useUserProfile(userEmail: string | null, projectId?: string): Us
 
     try {
       const { error: updateError } = await supabase
-        .from('trimble_ex_users')
+        .from('trimble_inspection_users')
         .update({
           ...updates,
           profile_updated_at: new Date().toISOString()
@@ -125,7 +125,7 @@ export function useUserProfile(userEmail: string | null, projectId?: string): Us
 
       // Update profile with signature URL
       const { error: updateError } = await supabase
-        .from('trimble_ex_users')
+        .from('trimble_inspection_users')
         .update({
           signature_url: urlData.publicUrl,
           signature_storage_path: path,
@@ -163,7 +163,7 @@ export function useUserProfile(userEmail: string | null, projectId?: string): Us
 
       // Update profile
       const { error: updateError } = await supabase
-        .from('trimble_ex_users')
+        .from('trimble_inspection_users')
         .update({
           signature_url: null,
           signature_storage_path: null,
