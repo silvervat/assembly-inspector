@@ -463,8 +463,23 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [dragOverVehicleIndex, setDragOverVehicleIndex] = useState<number | null>(null);
 
-  // Search
-  const [searchQuery, setSearchQuery] = useState('');
+  // Search (persisted in localStorage)
+  const [searchQuery, setSearchQuery] = useState(() => {
+    try {
+      return localStorage.getItem(`delivery-search-${projectId}`) || '';
+    } catch { return ''; }
+  });
+
+  // Persist search query to localStorage
+  useEffect(() => {
+    try {
+      if (searchQuery) {
+        localStorage.setItem(`delivery-search-${projectId}`, searchQuery);
+      } else {
+        localStorage.removeItem(`delivery-search-${projectId}`);
+      }
+    } catch { /* ignore */ }
+  }, [searchQuery, projectId]);
 
   // Hide past dates/vehicles toggle
   const [hidePastDates, setHidePastDates] = useState(false);  // Default: show past
