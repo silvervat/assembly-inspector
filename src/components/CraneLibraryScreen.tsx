@@ -7,6 +7,7 @@ import { useCounterweights } from '../features/crane-planning/crane-library/hook
 import { useLoadCharts } from '../features/crane-planning/crane-library/hooks/useLoadCharts';
 import * as XLSX from 'xlsx';
 import {
+  supabase,
   CraneModel,
   CraneType,
   CabPosition,
@@ -1511,12 +1512,15 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
 
 // Crane Import Tab Component
 function CraneImportTab({ userEmail }: { userEmail: string }) {
-  const { createCrane } = useCranes();
+  const { createCrane, refetch: refetchCranes } = useCranes();
   const [importing, setImporting] = useState(false);
+  const [importingFull, setImportingFull] = useState(false);
   const [importResults, setImportResults] = useState<{success: number; failed: number; errors: string[]} | null>(null);
+  const [fullImportResult, setFullImportResult] = useState<{cranes: {name: string; counterweights: number; charts: number}[]; error?: string} | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fullFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Download Excel template
+  // Download Excel template for basic crane list
   const downloadTemplate = () => {
     const wb = XLSX.utils.book_new();
 
@@ -1560,6 +1564,107 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
     XLSX.writeFile(wb, 'kraanide_import_mall.xlsx');
   };
 
+  // Download FULL crane template (MULTIPLE cranes + load charts)
+  const downloadFullTemplate = () => {
+    const wb = XLSX.utils.book_new();
+
+    // Instructions sheet
+    const instructions = [
+      ['KRAANIDE TÄIELIK IMPORDI MALL'],
+      [''],
+      ['See mall võimaldab importida MITU KRAANA koos kõigi tõstegraafikutega!'],
+      [''],
+      ['STRUKTUUR:'],
+      ['1. "Kraanid" leht - kõik kraanid tabelina (iga rida = üks kraana)'],
+      ['2. "1-72t", "1-48t" jne - kraana nr 1 tõstegraafikud'],
+      ['3. "2-60t", "2-40t" jne - kraana nr 2 tõstegraafikud'],
+      [''],
+      ['OLULINE:'],
+      ['- Kraana ID veerus on number (1, 2, 3...) mis seob kraana tema tõstegraafikutega'],
+      ['- Tõstegraafiku lehe nimi: [ID]-[vastukaal]t (nt "1-72t", "2-48t")'],
+      ['- Tõstegraafiku tabelis: esimene rida = noole pikkused, esimene veerg = raadiused'],
+      [''],
+      ['NÄIDE:'],
+      ['Kraanid lehel: ID=1, Tootja=Liebherr, Mudel=LTM 1100'],
+      ['Tõstegraafikud: lehed "1-72t" ja "1-48t" kuuluvad sellele kraanale'],
+    ];
+    const wsInstr = XLSX.utils.aoa_to_sheet(instructions);
+    wsInstr['!cols'] = [{ wch: 80 }];
+    XLSX.utils.book_append_sheet(wb, wsInstr, 'Juhised');
+
+    // Cranes list sheet
+    const cranesData = [
+      ['ID', 'Tootja', 'Mudel', 'Grupp', 'Max võime (t)', 'Max raadius (m)', 'Max kõrgus (m)', 'Vaikimisi nool (m)'],
+      [1, 'Liebherr', 'LTM 1100-5.2', 'Mobiilkraana', 100, 60, 72, 40],
+      [2, 'Terex', 'AC 55-1', 'Mobiilkraana', 55, 40, 48, 35],
+      [3, 'Liebherr', 'LR 1600/2', 'Roomikkraana', 600, 84, 100, 84],
+    ];
+    const wsCranes = XLSX.utils.aoa_to_sheet(cranesData);
+    wsCranes['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 18 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
+    XLSX.utils.book_append_sheet(wb, wsCranes, 'Kraanid');
+
+    // Crane 1 - 72t counterweight
+    const data1_72t = [
+      ['m', 13.2, 17.7, 22.2, 26.7, 31.3, 35.8, 40.3],
+      [3, 200, 143, 133, 125, '', '', ''],
+      [4, 133, 123, 122, 107, '', '', ''],
+      [5, 117, 107, 108, 107, 103, 84, 70],
+      [6, 105, 95, 95, 94, 94, 82, 69],
+      [8, 82, 76, 76, 76, 76, 76, 66],
+      [10, 62, 62, 63, 62, 63, 62, 59],
+      [12, '', '', 53, 53, 53, 52, 53],
+      [14, '', '', 44.5, 44.5, 44.5, 44, 44.5],
+    ];
+    const ws1_72t = XLSX.utils.aoa_to_sheet(data1_72t);
+    ws1_72t['!cols'] = Array(8).fill({ wch: 8 });
+    XLSX.utils.book_append_sheet(wb, ws1_72t, '1-72t');
+
+    // Crane 1 - 48t counterweight
+    const data1_48t = [
+      ['m', 13.2, 17.7, 22.2, 26.7],
+      [3, 150, 120, 110, 100],
+      [4, 110, 100, 95, 88],
+      [5, 95, 88, 85, 82],
+      [6, 82, 76, 75, 74],
+      [8, 64, 60, 60, 60],
+      [10, 50, 50, 50, 50],
+    ];
+    const ws1_48t = XLSX.utils.aoa_to_sheet(data1_48t);
+    ws1_48t['!cols'] = Array(5).fill({ wch: 8 });
+    XLSX.utils.book_append_sheet(wb, ws1_48t, '1-48t');
+
+    // Crane 2 - 40t counterweight
+    const data2_40t = [
+      ['m', 10, 15, 20, 25, 30, 35],
+      [3, 55, 48, 42, '', '', ''],
+      [4, 45, 40, 36, 32, '', ''],
+      [5, 38, 34, 31, 28, 24, ''],
+      [6, 32, 29, 27, 24, 21, 18],
+      [8, 24, 22, 20, 19, 17, 15],
+      [10, 18, 17, 16, 15, 14, 12],
+    ];
+    const ws2_40t = XLSX.utils.aoa_to_sheet(data2_40t);
+    ws2_40t['!cols'] = Array(7).fill({ wch: 8 });
+    XLSX.utils.book_append_sheet(wb, ws2_40t, '2-40t');
+
+    // Crane 3 - 200t counterweight
+    const data3_200t = [
+      ['m', 24, 36, 48, 60, 72, 84],
+      [8, 600, 450, 350, 280, 220, 180],
+      [10, 500, 400, 320, 260, 210, 170],
+      [12, 420, 350, 290, 240, 195, 160],
+      [14, 360, 310, 260, 220, 180, 150],
+      [16, 310, 270, 235, 200, 165, 140],
+      [20, 240, 215, 190, 165, 140, 120],
+      [24, 190, 170, 155, 140, 120, 105],
+    ];
+    const ws3_200t = XLSX.utils.aoa_to_sheet(data3_200t);
+    ws3_200t['!cols'] = Array(7).fill({ wch: 8 });
+    XLSX.utils.book_append_sheet(wb, ws3_200t, '3-200t');
+
+    XLSX.writeFile(wb, 'kraanid_koos_tostegraafikutega_mall.xlsx');
+  };
+
   // Parse crane type from Estonian label
   const parseCraneType = (label: string): CraneType | null => {
     const normalized = label.trim().toLowerCase();
@@ -1571,7 +1676,357 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
     return null;
   };
 
-  // Import Excel file
+  // Parse cab position from Estonian
+  const parseCabPosition = (label: string): CabPosition => {
+    const normalized = label.trim().toLowerCase();
+    if (normalized.includes('ees') || normalized.includes('front')) return 'front';
+    if (normalized.includes('vasak') || normalized.includes('left')) return 'left';
+    if (normalized.includes('parem') || normalized.includes('right')) return 'right';
+    return 'rear'; // default
+  };
+
+  // Parse counterweight value from sheet name (supports "72t" or "1-72t" format)
+  const parseCounterweightFromSheetName = (name: string): { craneId: number | null; weight: number } | null => {
+    // Try format "ID-XXt" (e.g., "1-72t", "2-48t")
+    const matchWithId = name.match(/^(\d+)-(\d+(?:[.,]\d+)?)\s*t?$/i);
+    if (matchWithId) {
+      return {
+        craneId: parseInt(matchWithId[1], 10),
+        weight: parseFloat(matchWithId[2].replace(',', '.'))
+      };
+    }
+
+    // Try format "XXt" (e.g., "72t") - for single crane import
+    const matchSimple = name.match(/^(\d+(?:[.,]\d+)?)\s*t?$/i);
+    if (matchSimple) {
+      return {
+        craneId: null, // Will use the single crane
+        weight: parseFloat(matchSimple[1].replace(',', '.'))
+      };
+    }
+
+    return null;
+  };
+
+  // Parse a sheet into capacity table data
+  const parseSheetToTable = (rows: any[][]): {
+    boomLengths: number[];
+    radii: number[];
+    capacities: Record<string, number>;
+  } | null => {
+    if (rows.length < 2) return null;
+
+    const headerRow = rows[0];
+    const boomLengths: number[] = [];
+    for (let i = 1; i < headerRow.length; i++) {
+      const val = headerRow[i];
+      if (val !== undefined && val !== null && val !== '') {
+        const boom = parseFloat(String(val).replace(',', '.'));
+        if (!isNaN(boom) && boom > 0) {
+          boomLengths.push(boom);
+        }
+      }
+    }
+
+    if (boomLengths.length === 0) return null;
+
+    const radii: number[] = [];
+    const capacities: Record<string, number> = {};
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || row.length === 0) continue;
+
+      const radiusVal = row[0];
+      if (radiusVal === undefined || radiusVal === null || radiusVal === '') continue;
+
+      const radius = parseFloat(String(radiusVal).replace(',', '.'));
+      if (isNaN(radius) || radius <= 0) continue;
+
+      radii.push(radius);
+
+      for (let j = 0; j < boomLengths.length; j++) {
+        const capVal = row[j + 1];
+        if (capVal !== undefined && capVal !== null && capVal !== '') {
+          const capacity = parseFloat(String(capVal).replace(',', '.'));
+          if (!isNaN(capacity) && capacity > 0) {
+            capacities[`${radius}_${boomLengths[j]}`] = capacity * 1000;
+          }
+        }
+      }
+    }
+
+    if (radii.length === 0) return null;
+    return { boomLengths, radii, capacities };
+  };
+
+  // Import MULTIPLE cranes with load charts
+  const handleFullCraneImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportingFull(true);
+    setFullImportResult(null);
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+
+      // Check for "Kraanid" sheet (multiple cranes) or "Kraana" sheet (single crane)
+      const cranesSheet = workbook.Sheets['Kraanid'];
+      const singleCraneSheet = workbook.Sheets['Kraana'];
+
+      if (!cranesSheet && !singleCraneSheet) {
+        setFullImportResult({ cranes: [], error: 'Excel fail peab sisaldama "Kraanid" või "Kraana" lehte!' });
+        return;
+      }
+
+            const importedCranes: {name: string; counterweights: number; charts: number}[] = [];
+
+      if (cranesSheet) {
+        // MULTI-CRANE IMPORT from "Kraanid" sheet
+        const craneRows = XLSX.utils.sheet_to_json<any[]>(cranesSheet, { header: 1 }) as any[][];
+
+        // Parse header row to find column indices
+        const headerRow = craneRows[0] || [];
+        const colIndex: Record<string, number> = {};
+        for (let i = 0; i < headerRow.length; i++) {
+          const col = String(headerRow[i] || '').toLowerCase().trim();
+          if (col.includes('id')) colIndex['id'] = i;
+          else if (col.includes('tootja')) colIndex['manufacturer'] = i;
+          else if (col.includes('mudel')) colIndex['model'] = i;
+          else if (col.includes('grupp')) colIndex['type'] = i;
+          else if (col.includes('max') && col.includes('võime')) colIndex['maxCapacity'] = i;
+          else if (col.includes('max') && col.includes('raadius')) colIndex['maxRadius'] = i;
+          else if (col.includes('max') && col.includes('kõrgus')) colIndex['maxHeight'] = i;
+          else if (col.includes('nool')) colIndex['boomLength'] = i;
+        }
+
+        // Create map of excel ID -> crane database ID
+        const craneIdMap: Record<number, string> = {};
+
+        // Import each crane
+        for (let i = 1; i < craneRows.length; i++) {
+          const row = craneRows[i];
+          if (!row || row.length === 0) continue;
+
+          const excelId = parseInt(row[colIndex['id'] ?? 0], 10);
+          const manufacturer = String(row[colIndex['manufacturer'] ?? 1] || '').trim();
+          const model = String(row[colIndex['model'] ?? 2] || '').trim();
+
+          if (!manufacturer || !model) continue;
+
+          const craneType = parseCraneType(String(row[colIndex['type'] ?? 3] || 'Mobiilkraana'));
+          const maxCapacityKg = (parseFloat(row[colIndex['maxCapacity'] ?? 4]) || 100) * 1000;
+          const maxRadius = parseFloat(row[colIndex['maxRadius'] ?? 5]) || 50;
+          const maxHeight = parseFloat(row[colIndex['maxHeight'] ?? 6]) || 50;
+          const boomLength = parseFloat(row[colIndex['boomLength'] ?? 7]) || 40;
+
+          const newCrane = await createCrane({
+            manufacturer,
+            model,
+            crane_type: craneType || 'mobile',
+            max_capacity_kg: maxCapacityKg,
+            max_height_m: maxHeight,
+            max_radius_m: maxRadius,
+            min_radius_m: 3,
+            base_width_m: 3,
+            base_length_m: 4,
+            default_boom_length_m: boomLength,
+            cab_position: 'rear',
+            default_crane_color: DEFAULT_CRANE_COLOR,
+            default_radius_color: DEFAULT_RADIUS_COLOR,
+            notes: 'Imporditud Excelist koos tõstegraafikutega',
+            is_active: true,
+            created_by_email: userEmail
+          });
+
+          if (newCrane && !isNaN(excelId)) {
+            craneIdMap[excelId] = newCrane.id;
+            importedCranes.push({ name: `${manufacturer} ${model}`, counterweights: 0, charts: 0 });
+          }
+        }
+
+        // Now import counterweight sheets (format: "ID-XXt")
+        for (const sheetName of workbook.SheetNames) {
+          const parsed = parseCounterweightFromSheetName(sheetName);
+          if (!parsed || parsed.craneId === null) continue;
+
+          const craneDbId = craneIdMap[parsed.craneId];
+          if (!craneDbId) continue;
+
+          const sheet = workbook.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1 }) as any[][];
+          const tableData = parseSheetToTable(rows);
+
+          if (!tableData || tableData.boomLengths.length === 0) continue;
+
+          // Find the crane in our results
+          const craneResult = importedCranes.find((_, idx) => craneIdMap[idx + 1] === craneDbId) ||
+                              importedCranes[parsed.craneId - 1];
+
+          // Create counterweight config
+          const cwName = `${parsed.weight}t`;
+          const { data: newCw, error: cwError } = await supabase
+            .from('counterweight_configs')
+            .insert({
+              crane_model_id: craneDbId,
+              name: cwName,
+              weight_kg: parsed.weight * 1000,
+              description: 'Imporditud Excelist',
+              sort_order: (craneResult?.counterweights || 0) + 1
+            })
+            .select()
+            .single();
+
+          if (cwError || !newCw) continue;
+
+          if (craneResult) craneResult.counterweights++;
+
+          // Create load charts for each boom length
+          for (const boomLength of tableData.boomLengths) {
+            const chartData: LoadChartDataPoint[] = [];
+
+            for (const radius of tableData.radii) {
+              const capacity = tableData.capacities[`${radius}_${boomLength}`];
+              if (capacity && capacity > 0) {
+                chartData.push({ radius_m: radius, capacity_kg: capacity });
+              }
+            }
+
+            if (chartData.length > 0) {
+              const { error: chartError } = await supabase
+                .from('load_charts')
+                .insert({
+                  crane_model_id: craneDbId,
+                  counterweight_config_id: newCw.id,
+                  boom_length_m: boomLength,
+                  chart_data: chartData
+                });
+
+              if (!chartError && craneResult) {
+                craneResult.charts++;
+              }
+            }
+          }
+        }
+
+      } else if (singleCraneSheet) {
+        // SINGLE CRANE IMPORT (legacy format with "Kraana" sheet)
+        const craneRows = XLSX.utils.sheet_to_json<any[]>(singleCraneSheet, { header: 1 }) as any[][];
+
+        const craneData: Record<string, any> = {};
+        for (const row of craneRows) {
+          if (row[0] && row[1] !== undefined) {
+            const key = String(row[0]).toLowerCase().trim();
+            craneData[key] = row[1];
+          }
+        }
+
+        const manufacturer = String(craneData['tootja'] || '').trim();
+        const model = String(craneData['mudel'] || '').trim();
+
+        if (!manufacturer || !model) {
+          setFullImportResult({ cranes: [], error: 'Kraana lehel peavad olema täidetud "Tootja" ja "Mudel" väljad!' });
+          return;
+        }
+
+        const craneType = parseCraneType(String(craneData['grupp'] || 'Mobiilkraana'));
+        const cabPosition = parseCabPosition(String(craneData['kabiini asend'] || 'taga'));
+
+        const newCrane = await createCrane({
+          manufacturer,
+          model,
+          crane_type: craneType || 'mobile',
+          max_capacity_kg: (parseFloat(craneData['max tõstevõime (t)']) || 100) * 1000,
+          max_height_m: parseFloat(craneData['max kõrgus (m)']) || 50,
+          max_radius_m: parseFloat(craneData['max raadius (m)']) || 50,
+          min_radius_m: parseFloat(craneData['min raadius (m)']) || 3,
+          base_width_m: parseFloat(craneData['baasi laius (m)']) || 3,
+          base_length_m: parseFloat(craneData['baasi pikkus (m)']) || 4,
+          default_boom_length_m: parseFloat(craneData['vaikimisi noole pikkus (m)']) || 40,
+          cab_position: cabPosition,
+          default_crane_color: DEFAULT_CRANE_COLOR,
+          default_radius_color: DEFAULT_RADIUS_COLOR,
+          notes: String(craneData['märkused'] || 'Imporditud Excelist koos tõstegraafikutega'),
+          is_active: true,
+          created_by_email: userEmail
+        });
+
+        if (!newCrane) {
+          setFullImportResult({ cranes: [], error: 'Kraana loomine ebaõnnestus!' });
+          return;
+        }
+
+        const craneResult = { name: `${manufacturer} ${model}`, counterweights: 0, charts: 0 };
+        importedCranes.push(craneResult);
+
+        // Import counterweight sheets (format: "XXt")
+        for (const sheetName of workbook.SheetNames) {
+          const parsed = parseCounterweightFromSheetName(sheetName);
+          if (!parsed) continue;
+
+          const sheet = workbook.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1 }) as any[][];
+          const tableData = parseSheetToTable(rows);
+
+          if (!tableData || tableData.boomLengths.length === 0) continue;
+
+          const cwName = `${parsed.weight}t`;
+          const { data: newCw, error: cwError } = await supabase
+            .from('counterweight_configs')
+            .insert({
+              crane_model_id: newCrane.id,
+              name: cwName,
+              weight_kg: parsed.weight * 1000,
+              description: 'Imporditud Excelist',
+              sort_order: craneResult.counterweights + 1
+            })
+            .select()
+            .single();
+
+          if (cwError || !newCw) continue;
+          craneResult.counterweights++;
+
+          for (const boomLength of tableData.boomLengths) {
+            const chartData: LoadChartDataPoint[] = [];
+
+            for (const radius of tableData.radii) {
+              const capacity = tableData.capacities[`${radius}_${boomLength}`];
+              if (capacity && capacity > 0) {
+                chartData.push({ radius_m: radius, capacity_kg: capacity });
+              }
+            }
+
+            if (chartData.length > 0) {
+              const { error: chartError } = await supabase
+                .from('load_charts')
+                .insert({
+                  crane_model_id: newCrane.id,
+                  counterweight_config_id: newCw.id,
+                  boom_length_m: boomLength,
+                  chart_data: chartData
+                });
+
+              if (!chartError) craneResult.charts++;
+            }
+          }
+        }
+      }
+
+      await refetchCranes();
+      setFullImportResult({ cranes: importedCranes });
+
+    } catch (err: any) {
+      console.error('Full crane import error:', err);
+      setFullImportResult({ cranes: [], error: 'Import ebaõnnestus: ' + (err.message || 'Tundmatu viga') });
+    } finally {
+      setImportingFull(false);
+      if (fullFileInputRef.current) fullFileInputRef.current.value = '';
+    }
+  };
+
+  // Import basic Excel file (multiple cranes, no load charts)
   const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1661,10 +2116,120 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
 
   return (
     <div style={{ backgroundColor: 'white', borderRadius: '6px', boxShadow: '0 1px 2px rgba(0,0,0,0.08)', padding: '20px' }}>
+      {/* FULL CRANE IMPORT - with load charts */}
+      <div style={{ marginBottom: '24px', paddingBottom: '24px', borderBottom: '2px solid #e5e7eb' }}>
+        <div style={{ marginBottom: '16px' }}>
+          <h3 style={{ fontSize: '15px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ backgroundColor: '#059669', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '11px' }}>SOOVITATAV</span>
+            Täielik Kraana Import
+          </h3>
+          <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+            Impordi üks kraana koos kõigi tõstegraafikutega. Üks Excel fail = üks kraana.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
+          <button
+            onClick={downloadFullTemplate}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '10px 16px',
+              border: '1px solid #059669',
+              borderRadius: '6px',
+              backgroundColor: 'white',
+              color: '#059669',
+              cursor: 'pointer',
+              fontSize: '12px',
+              fontWeight: 500
+            }}
+          >
+            <FiDownload size={14} />
+            Lae alla täielik mall
+          </button>
+
+          <label style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '10px 16px',
+            backgroundColor: '#059669',
+            color: 'white',
+            borderRadius: '6px',
+            fontSize: '12px',
+            fontWeight: 500,
+            cursor: importingFull ? 'not-allowed' : 'pointer',
+            opacity: importingFull ? 0.7 : 1
+          }}>
+            {importingFull ? (
+              <>
+                <FiLoader className="animate-spin" size={14} />
+                Importin kraana...
+              </>
+            ) : (
+              <>
+                <FiUpload size={14} />
+                Impordi kraana + tõstegraafikud
+              </>
+            )}
+            <input
+              ref={fullFileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              style={{ display: 'none' }}
+              onChange={handleFullCraneImport}
+              disabled={importingFull}
+            />
+          </label>
+        </div>
+
+        {fullImportResult && (
+          <div style={{
+            padding: '12px',
+            borderRadius: '6px',
+            backgroundColor: fullImportResult.error ? '#fef2f2' : '#dcfce7',
+            border: '1px solid ' + (fullImportResult.error ? '#fecaca' : '#86efac')
+          }}>
+            {fullImportResult.error ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#dc2626', fontSize: '12px' }}>
+                <FiAlertCircle size={16} />
+                <span>{fullImportResult.error}</span>
+              </div>
+            ) : (
+              <div style={{ fontSize: '12px', color: '#166534' }}>
+                <div style={{ fontWeight: 600, marginBottom: '8px' }}>
+                  ✓ {fullImportResult.cranes.length} kraana{fullImportResult.cranes.length !== 1 ? 't' : ''} imporditud edukalt!
+                </div>
+                {fullImportResult.cranes.map((crane, idx) => (
+                  <div key={idx} style={{ padding: '6px 8px', backgroundColor: 'white', borderRadius: '4px', marginBottom: '4px' }}>
+                    <div style={{ fontWeight: 500 }}>{crane.name}</div>
+                    <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                      {crane.counterweights} vastukaalu, {crane.charts} tõstegraafikut
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ marginTop: '12px', padding: '10px', backgroundColor: '#ecfdf5', borderRadius: '6px', fontSize: '11px', color: '#047857' }}>
+          <strong>Excel faili struktuur:</strong>
+          <ul style={{ margin: '4px 0 0 0', paddingLeft: '16px' }}>
+            <li><strong>"Kraanid"</strong> leht - kõik kraanid tabelina (ID, Tootja, Mudel, jne)</li>
+            <li><strong>"1-72t", "1-48t"</strong> jne - kraana nr 1 tõstegraafikud</li>
+            <li><strong>"2-60t", "2-40t"</strong> jne - kraana nr 2 tõstegraafikud</li>
+            <li>Lehe nimi = [kraana ID]-[vastukaal]t</li>
+          </ul>
+        </div>
+      </div>
+
+      {/* BASIC IMPORT - just crane list, no load charts */}
       <div style={{ marginBottom: '20px' }}>
-        <h3 style={{ fontSize: '15px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>Kraanide Import Excelist</h3>
+        <h3 style={{ fontSize: '15px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>Kraanide Nimekiri (ilma tõstegraafikuteta)</h3>
         <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
-          Impordi mitut kraana korraga Excel failist. Lae alla mall, täida andmed ja lae üles.
+          Impordi mitu kraana korraga. Tõstegraafikuid saad lisada hiljem käsitsi.
         </p>
       </div>
 
