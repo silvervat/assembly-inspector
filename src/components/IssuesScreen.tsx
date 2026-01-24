@@ -251,6 +251,7 @@ export default function IssuesScreen({
 
   // Refs
   const syncingToModelRef = useRef(false);
+  const blockSelectionUpdateRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -465,13 +466,21 @@ export default function IssuesScreen({
 
   // Close sub-details modal and restore assembly selection
   const closeSubDetailsModal = useCallback(async () => {
+    // FIRST: Block polling from overwriting newIssueObjects
+    blockSelectionUpdateRef.current = true;
+
+    // SECOND: Restore locked parent objects to newIssueObjects
+    if (lockedParentObjects.length > 0) {
+      setNewIssueObjects([...lockedParentObjects]);
+    }
+
+    // THIRD: Close the modal
     setShowSubDetailsModal(false);
     setSubDetails([]);
     setHighlightedSubDetailId(null);
     setCurrentSubDetailsParentGuid('');
     setLoadingSubDetails(false);
-    // Restore locked parent objects (don't lose them!)
-    // lockedParentObjects stays until form is closed
+
     // Clear model selection to avoid confusion
     try {
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
@@ -479,7 +488,12 @@ export default function IssuesScreen({
       console.warn('Could not clear selection:', e);
     }
     await enableAssemblySelection();
-  }, [api, enableAssemblySelection]);
+
+    // Allow polling to update again after a delay
+    setTimeout(() => {
+      blockSelectionUpdateRef.current = false;
+    }, 1000);
+  }, [api, enableAssemblySelection, lockedParentObjects]);
 
   // Listen for selection changes when sub-details modal is open
   useEffect(() => {
@@ -629,7 +643,8 @@ export default function IssuesScreen({
 
         // If form is open and not editing, update the form's objects too
         // BUT NOT when sub-details modal is open (parent details should be locked)
-        if (showForm && !editingIssue && !showSubDetailsModal) {
+        // Also skip if blockSelectionUpdateRef is set (after modal close)
+        if (showForm && !editingIssue && !showSubDetailsModal && !blockSelectionUpdateRef.current) {
           setNewIssueObjects(objects);
         }
       } catch (e) {
@@ -2893,6 +2908,46 @@ export default function IssuesScreen({
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Full-screen loading indicator for sub-details */}
+      {loadingSubDetails && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 10000
+        }}>
+          <div style={{
+            width: '50px',
+            height: '50px',
+            border: '4px solid #e2e8f0',
+            borderTop: '4px solid #3b82f6',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite'
+          }} />
+          <div style={{
+            marginTop: '16px',
+            color: 'white',
+            fontSize: '18px',
+            fontWeight: 600
+          }}>
+            Laadin alamdetaile...
+          </div>
+          <style>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
         </div>
       )}
 
