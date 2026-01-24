@@ -2139,7 +2139,11 @@ export default function IssuesScreen({
                       const files = Array.from(e.dataTransfer.files);
                       setPendingFiles(prev => [...prev, ...files]);
                     }}
-                    onClick={() => formFileInputRef.current?.click()}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      console.log('File drop zone clicked, triggering file input');
+                      formFileInputRef.current?.click();
+                    }}
                     style={{
                       border: `2px dashed ${isDraggingFiles ? '#2563eb' : '#d1d5db'}`,
                       borderRadius: '6px',
@@ -2156,9 +2160,13 @@ export default function IssuesScreen({
                       multiple
                       accept="image/*,.pdf,.doc,.docx"
                       style={{ display: 'none' }}
+                      onClick={(e) => e.stopPropagation()}
                       onChange={(e) => {
-                        if (e.target.files) {
-                          setPendingFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+                        console.log('Form file input onChange triggered', e.target.files?.length);
+                        if (e.target.files && e.target.files.length > 0) {
+                          const filesArray = Array.from(e.target.files);
+                          console.log('Adding files:', filesArray.map(f => f.name));
+                          setPendingFiles(prev => [...prev, ...filesArray]);
                         }
                         e.target.value = '';
                       }}
