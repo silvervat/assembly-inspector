@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import {
   FiPlus, FiEdit2, FiTrash2, FiEye, FiEyeOff, FiMapPin, FiRotateCw,
@@ -121,6 +121,30 @@ export default function CranePlannerScreen({
   const selectedCraneModel = craneModels.find(c => c.id === selectedCraneModelId);
   const { counterweights } = useCounterweights(selectedCraneModelId);
   const { loadCharts } = useLoadCharts(selectedCraneModelId, selectedCounterweightId);
+
+  // Available boom lengths from load charts for selected counterweight
+  const availableBoomLengths = useMemo(() => {
+    if (!loadCharts || loadCharts.length === 0) return [];
+    return [...new Set(loadCharts.map(lc => lc.boom_length_m))].sort((a, b) => a - b);
+  }, [loadCharts]);
+
+  // Track if we should skip boom length auto-selection (when loading existing crane)
+  const skipBoomLengthAutoSelectRef = useRef(false);
+
+  // Auto-select boom length when counterweight changes
+  useEffect(() => {
+    // Skip when loading existing crane
+    if (skipBoomLengthAutoSelectRef.current) {
+      skipBoomLengthAutoSelectRef.current = false;
+      return;
+    }
+    // If no available boom lengths, nothing to do
+    if (availableBoomLengths.length === 0) return;
+    // If current boom length is not in available list, select first available
+    if (!availableBoomLengths.includes(config.boom_length_m)) {
+      setConfig(prev => ({ ...prev, boom_length_m: availableBoomLengths[0] }));
+    }
+  }, [availableBoomLengths, config.boom_length_m]);
 
   // Event listener ref for position picking
   const pickingListenerRef = useRef<((e: any) => void) | null>(null);
@@ -380,6 +404,9 @@ export default function CranePlannerScreen({
   // Track original crane markup IDs when editing (to restore if cancelled)
   const originalCraneMarkupsRef = useRef<{ craneId: string; markupIds: number[] } | null>(null);
 
+  // Track when we're loading existing crane data to skip default resets
+  const skipModelDefaultsRef = useRef(false);
+
   // Start editing existing crane
   const startEditing = useCallback(async (crane: ProjectCrane) => {
     // Remove existing crane markups from model so they don't overlap with preview
@@ -390,6 +417,9 @@ export default function CranePlannerScreen({
       originalCraneMarkupsRef.current = { craneId: crane.id, markupIds: [...crane.markup_ids] };
     }
 
+    // Skip default resets when loading existing crane data
+    skipModelDefaultsRef.current = true;
+    skipBoomLengthAutoSelectRef.current = true;
     setSelectedCraneModelId(crane.crane_model_id);
     setSelectedCounterweightId(crane.counterweight_config_id || '');
     setPickedPosition({ x: crane.position_x, y: crane.position_y, z: crane.position_z });
@@ -594,6 +624,11 @@ export default function CranePlannerScreen({
 
   // Update crane model selection
   useEffect(() => {
+    // Skip defaults when loading existing crane (editing mode)
+    if (skipModelDefaultsRef.current) {
+      skipModelDefaultsRef.current = false;
+      return;
+    }
     if (selectedCraneModel?.default_boom_length_m) {
       setConfig(prev => ({ ...prev, boom_length_m: selectedCraneModel.default_boom_length_m }));
     }
@@ -1594,13 +1629,29 @@ export default function CranePlannerScreen({
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '20px' }}>
                   <div>
                     <label style={labelStyle}>Noole pikkus (m)</label>
-                    <input
-                      type="number"
-                      style={inputStyle}
-                      value={config.boom_length_m}
-                      onChange={e => setConfig(prev => ({ ...prev, boom_length_m: parseFloat(e.target.value) || 0 }))}
-                      step="1"
-                    />
+                    {availableBoomLengths.length > 0 ? (
+                      <select
+                        style={inputStyle}
+                        value={config.boom_length_m}
+                        onChange={e => setConfig(prev => ({ ...prev, boom_length_m: parseFloat(e.target.value) }))}
+                      >
+                        {availableBoomLengths.map(length => (
+                          <option key={length} value={length}>
+                            {length}m
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div style={{
+                        ...inputStyle,
+                        backgroundColor: '#f3f4f6',
+                        color: '#6b7280',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}>
+                        {selectedCounterweightId ? 'Laen...' : 'Vali esmalt vastukaal'}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label style={labelStyle}>Raadiuse samm (m)</label>
