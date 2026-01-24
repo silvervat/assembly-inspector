@@ -228,6 +228,7 @@ export default function IssuesScreen({
 
   // Sub-details modal state
   const [showSubDetailsModal, setShowSubDetailsModal] = useState(false);
+  const [loadingSubDetails, setLoadingSubDetails] = useState(false);
   const [subDetails, setSubDetails] = useState<{
     id: number;
     guidIfc: string;
@@ -238,7 +239,7 @@ export default function IssuesScreen({
   }[]>([]);
   const [selectedSubDetails, setSelectedSubDetails] = useState<Set<number>>(new Set());
   const [subDetailModelId, setSubDetailModelId] = useState<string>('');
-  const [_parentObjectGuid, setParentObjectGuid] = useState<string>('');
+  const [_parentObjectForSubDetails, setParentObjectForSubDetails] = useState<SelectedObject | null>(null);
   const [highlightedSubDetailId, setHighlightedSubDetailId] = useState<number | null>(null);
 
   // Status group menu state
@@ -321,9 +322,12 @@ export default function IssuesScreen({
   }, []);
 
   // Load sub-details for selected assembly
-  const loadSubDetails = useCallback(async (modelId: string, runtimeId: number, parentGuid: string) => {
+  const loadSubDetails = useCallback(async (modelId: string, runtimeId: number, _parentGuid: string, parentObj?: SelectedObject) => {
     try {
-      setMessage('Laadin alamdetaile...');
+      setLoadingSubDetails(true);
+      if (parentObj) {
+        setParentObjectForSubDetails(parentObj);
+      }
 
       // Get children of the selected assembly
       const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
@@ -413,15 +417,15 @@ export default function IssuesScreen({
 
       setSubDetails(subDetailsList);
       setSubDetailModelId(modelId);
-      setParentObjectGuid(parentGuid);
       setSelectedSubDetails(new Set());
       setHighlightedSubDetailId(null);
       setShowSubDetailsModal(true);
-      setMessage('');
+      setLoadingSubDetails(false);
 
     } catch (e) {
       console.error('Error loading sub-details:', e);
       setMessage('⚠️ Alamdetailide laadimine ebaõnnestus');
+      setLoadingSubDetails(false);
     }
   }, [api, disableAssemblySelection, generateSubDetailColors]);
 
@@ -457,11 +461,17 @@ export default function IssuesScreen({
     setSubDetails([]);
     setSelectedSubDetails(new Set());
     setHighlightedSubDetailId(null);
-    setParentObjectGuid('');
+    setParentObjectForSubDetails(null);
+    setLoadingSubDetails(false);
+    // Clear model selection to avoid confusion with "Lisa uus mittevastavus"
+    try {
+      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+    } catch (e) {
+      console.warn('Could not clear selection:', e);
+    }
     await enableAssemblySelection();
-    // Restore issue coloring
-    await colorModelByIssueStatus();
-  }, [enableAssemblySelection]);
+    // Note: issue coloring will be restored by the regular polling/refresh
+  }, [api, enableAssemblySelection]);
 
   // Listen for selection changes when sub-details modal is open
   useEffect(() => {
@@ -1590,7 +1600,20 @@ export default function IssuesScreen({
     }
   }, [filteredIssues]);
 
-  // Group issues by status (4 statuses only)
+  // Map deprecated statuses to new ones
+  const mapDeprecatedStatus = (status: string): IssueStatus => {
+    switch (status) {
+      case 'problem':
+      case 'pending':
+        return 'nonconformance'; // Old statuses map to first status
+      case 'cancelled':
+        return 'closed'; // Cancelled maps to closed
+      default:
+        return status as IssueStatus;
+    }
+  };
+
+  // Group issues by status (4 statuses only, with deprecated status mapping)
   const issuesByStatus = useMemo(() => {
     const grouped: Record<IssueStatus, Issue[]> = {
       nonconformance: [],
@@ -1600,8 +1623,9 @@ export default function IssuesScreen({
     };
 
     for (const issue of filteredIssues) {
-      if (grouped[issue.status]) {
-        grouped[issue.status].push(issue);
+      const mappedStatus = mapDeprecatedStatus(issue.status);
+      if (grouped[mappedStatus]) {
+        grouped[mappedStatus].push(issue);
       }
     }
 
@@ -1926,9 +1950,10 @@ export default function IssuesScreen({
                 <button
                   type="button"
                   className="sub-details-btn"
+                  disabled={loadingSubDetails}
                   onClick={async () => {
                     const obj = newIssueObjects[0];
-                    await loadSubDetails(obj.modelId, obj.runtimeId, obj.guidIfc || '');
+                    await loadSubDetails(obj.modelId, obj.runtimeId, obj.guidIfc || '', obj);
                   }}
                   style={{
                     display: 'flex',
@@ -1936,17 +1961,27 @@ export default function IssuesScreen({
                     gap: '6px',
                     padding: '4px 8px',
                     marginBottom: '6px',
-                    background: '#f0f9ff',
+                    background: loadingSubDetails ? '#e0f2fe' : '#f0f9ff',
                     border: '1px solid #bae6fd',
                     borderRadius: '4px',
                     color: '#0369a1',
                     fontSize: '11px',
                     fontWeight: 500,
-                    cursor: 'pointer'
+                    cursor: loadingSubDetails ? 'wait' : 'pointer',
+                    opacity: loadingSubDetails ? 0.7 : 1
                   }}
                 >
-                  <FiLink size={12} />
-                  Lisa seotud alamdetailid
+                  {loadingSubDetails ? (
+                    <>
+                      <FiLoader size={12} className="spinning" />
+                      Laadin alamdetaile...
+                    </>
+                  ) : (
+                    <>
+                      <FiLink size={12} />
+                      Lisa seotud alamdetailid
+                    </>
+                  )}
                 </button>
               )}
 

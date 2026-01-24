@@ -5264,10 +5264,11 @@ export default function ArrivedDeliveriesScreen({
                   const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
                   await supabase.from('trimble_arrival_confirmations').insert(
                     vehicleItems.map(vi => ({
+                      trimble_project_id: projectId,
                       arrived_vehicle_id: data.id,
                       item_id: vi.id,
                       status: 'pending',
-                      created_by: tcUserEmail
+                      confirmed_by: tcUserEmail
                     }))
                   );
                   await loadArrivedVehicles();
@@ -5496,10 +5497,11 @@ export default function ArrivedDeliveriesScreen({
                                 const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
                                 await supabase.from('trimble_arrival_confirmations').insert(
                                   vehicleItems.map(vi => ({
+                                    trimble_project_id: projectId,
                                     arrived_vehicle_id: data.id,
                                     item_id: vi.id,
                                     status: 'pending',
-                                    created_by: tcUserEmail
+                                    confirmed_by: tcUserEmail
                                   }))
                                 );
                               }
