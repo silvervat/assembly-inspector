@@ -9305,10 +9305,12 @@ export default function OrganizerScreen({
               const hasMoreLocal = sortedItems.length > visibleCount;
 
               // Calculate dynamic column widths based on content
-              const CHAR_WIDTH = 6; // approx pixels per character
-              const MIN_MARK_WIDTH = 40;
-              const MIN_PRODUCT_WIDTH = 35;
-              const MIN_WEIGHT_WIDTH = 38;
+              // Using 8px per character for 500 weight font at ~12px size
+              const CHAR_WIDTH = 8;
+              const COLUMN_PADDING = 12;
+              const MIN_MARK_WIDTH = 50;
+              const MIN_PRODUCT_WIDTH = 40;
+              const MIN_WEIGHT_WIDTH = 45;
 
               let maxMarkLen = 4; // "Mark" header length
               let maxProductLen = 5; // "Toode" header length
@@ -9323,10 +9325,10 @@ export default function OrganizerScreen({
                 if (weightLen > maxWeightLen) maxWeightLen = weightLen;
               }
 
-              // Calculate widths with minimal padding
-              const markWidth = Math.max(MIN_MARK_WIDTH, maxMarkLen * CHAR_WIDTH + 4);
-              const productWidth = Math.max(MIN_PRODUCT_WIDTH, maxProductLen * CHAR_WIDTH + 4);
-              const weightWidth = Math.max(MIN_WEIGHT_WIDTH, maxWeightLen * CHAR_WIDTH + 4);
+              // Calculate widths with proper padding
+              const markWidth = Math.max(MIN_MARK_WIDTH, maxMarkLen * CHAR_WIDTH + COLUMN_PADDING);
+              const productWidth = Math.max(MIN_PRODUCT_WIDTH, maxProductLen * CHAR_WIDTH + COLUMN_PADDING);
+              const weightWidth = Math.max(MIN_WEIGHT_WIDTH, maxWeightLen * CHAR_WIDTH + COLUMN_PADDING);
 
               const columnStyles = {
                 '--col-mark-width': `${markWidth}px`,
