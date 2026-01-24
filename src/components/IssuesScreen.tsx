@@ -203,6 +203,8 @@ export default function IssuesScreen({
   const [issueAttachments, setIssueAttachments] = useState<IssueAttachment[]>([]);
   const [issueActivities, setIssueActivities] = useState<IssueActivityLog[]>([]);
   const [newComment, setNewComment] = useState('');
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentText, setEditingCommentText] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // Filter state
@@ -1364,6 +1366,68 @@ export default function IssuesScreen({
       setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
     }
   }, [newComment, detailIssue, tcUserEmail, tcUserName, projectId]);
+
+  // Edit comment handler
+  const handleEditComment = useCallback(async () => {
+    if (!editingCommentId || !editingCommentText.trim() || !detailIssue) return;
+
+    try {
+      const { error } = await supabase
+        .from('issue_comments')
+        .update({
+          comment_text: editingCommentText.trim(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', editingCommentId);
+
+      if (error) throw error;
+
+      setEditingCommentId(null);
+      setEditingCommentText('');
+      setMessage('✅ Kommentaar uuendatud');
+
+      // Reload comments
+      const { data: comments } = await supabase
+        .from('issue_comments')
+        .select('*')
+        .eq('issue_id', detailIssue.id)
+        .order('created_at', { ascending: true });
+      setIssueComments(comments || []);
+
+    } catch (e: unknown) {
+      console.error('Error editing comment:', e);
+      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+    }
+  }, [editingCommentId, editingCommentText, detailIssue]);
+
+  // Delete comment handler
+  const handleDeleteComment = useCallback(async (commentId: string) => {
+    if (!confirm('Kas oled kindel, et soovid kommentaari kustutada?')) return;
+    if (!detailIssue) return;
+
+    try {
+      const { error } = await supabase
+        .from('issue_comments')
+        .delete()
+        .eq('id', commentId);
+
+      if (error) throw error;
+
+      setMessage('✅ Kommentaar kustutatud');
+
+      // Reload comments
+      const { data: comments } = await supabase
+        .from('issue_comments')
+        .select('*')
+        .eq('issue_id', detailIssue.id)
+        .order('created_at', { ascending: true });
+      setIssueComments(comments || []);
+
+    } catch (e: unknown) {
+      console.error('Error deleting comment:', e);
+      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+    }
+  }, [detailIssue]);
 
   // ============================================
   // PHOTO HANDLING
@@ -2820,25 +2884,117 @@ export default function IssuesScreen({
                   Kommentaarid ({issueComments.length})
                 </h4>
                 <div className="comments-list">
-                  {issueComments.map(comment => (
-                    <div key={comment.id} className="comment-item">
-                      <div className="comment-header">
-                        <span className="comment-author">
-                          {comment.author_name || comment.author_email}
-                        </span>
-                        <span className="comment-date" title={formatDateTime(comment.created_at)}>
-                          {formatDateTime(comment.created_at)} ({formatRelativeTime(comment.created_at)})
-                        </span>
-                      </div>
-                      <p className="comment-text">{comment.comment_text}</p>
-                      {comment.old_status && comment.new_status && (
-                        <div className="comment-status-change">
-                          Staatus: {ISSUE_STATUS_CONFIG[comment.old_status].label} →{' '}
-                          {ISSUE_STATUS_CONFIG[comment.new_status].label}
+                  {issueComments.map(comment => {
+                    const isOwnComment = comment.author_email === tcUserEmail;
+                    const isEditing = editingCommentId === comment.id;
+
+                    return (
+                      <div key={comment.id} className="comment-item">
+                        <div className="comment-header">
+                          <span className="comment-author">
+                            {comment.author_name || comment.author_email}
+                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className="comment-date" title={formatDateTime(comment.created_at)}>
+                              {formatDateTime(comment.created_at)} ({formatRelativeTime(comment.created_at)})
+                            </span>
+                            {isOwnComment && !isEditing && (
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                <button
+                                  onClick={() => {
+                                    setEditingCommentId(comment.id);
+                                    setEditingCommentText(comment.comment_text);
+                                  }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: '2px',
+                                    cursor: 'pointer',
+                                    color: '#64748b'
+                                  }}
+                                  title="Muuda"
+                                >
+                                  <FiEdit2 size={12} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteComment(comment.id)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: '2px',
+                                    cursor: 'pointer',
+                                    color: '#ef4444'
+                                  }}
+                                  title="Kustuta"
+                                >
+                                  <FiTrash2 size={12} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        {isEditing ? (
+                          <div style={{ marginTop: '6px' }}>
+                            <textarea
+                              value={editingCommentText}
+                              onChange={e => setEditingCommentText(e.target.value)}
+                              rows={2}
+                              style={{
+                                width: '100%',
+                                padding: '6px 8px',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                resize: 'vertical'
+                              }}
+                            />
+                            <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+                              <button
+                                onClick={handleEditComment}
+                                disabled={!editingCommentText.trim()}
+                                style={{
+                                  padding: '4px 10px',
+                                  fontSize: '11px',
+                                  background: '#3b82f6',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                Salvesta
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingCommentId(null);
+                                  setEditingCommentText('');
+                                }}
+                                style={{
+                                  padding: '4px 10px',
+                                  fontSize: '11px',
+                                  background: '#f1f5f9',
+                                  color: '#64748b',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                Tühista
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="comment-text">{comment.comment_text}</p>
+                        )}
+                        {comment.old_status && comment.new_status && (
+                          <div className="comment-status-change">
+                            Staatus: {ISSUE_STATUS_CONFIG[comment.old_status].label} →{' '}
+                            {ISSUE_STATUS_CONFIG[comment.new_status].label}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
                 <div className="comment-input">
                   <textarea
