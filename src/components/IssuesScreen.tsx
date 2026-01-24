@@ -23,10 +23,10 @@ import * as XLSX from 'xlsx-js-style';
 import {
   FiPlus, FiSearch, FiChevronDown, FiChevronRight,
   FiEdit2, FiTrash2, FiX, FiCamera, FiDownload,
-  FiRefreshCw, FiFilter, FiUser, FiCalendar, FiClock, FiAlertTriangle,
+  FiRefreshCw, FiFilter, FiUser, FiClock, FiAlertTriangle,
   FiAlertCircle, FiCheckCircle, FiXCircle, FiLoader, FiCheckSquare,
   FiTarget, FiMessageSquare, FiActivity, FiLayers, FiSend,
-  FiArrowUp, FiArrowDown, FiMinus, FiAlertOctagon, FiEye
+  FiArrowUp, FiArrowDown, FiMinus, FiAlertOctagon, FiEye, FiLink
 } from 'react-icons/fi';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
@@ -223,6 +223,25 @@ export default function IssuesScreen({
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [assigningIssueId, setAssigningIssueId] = useState<string | null>(null);
 
+  // Assembly selection enforcement state
+  const [_assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(true);
+  const [showAssemblyModal, setShowAssemblyModal] = useState(false);
+
+  // Sub-details modal state
+  const [showSubDetailsModal, setShowSubDetailsModal] = useState(false);
+  const [subDetails, setSubDetails] = useState<{
+    id: number;
+    name: string;
+    type: string;
+    profile: string;
+    color: { r: number; g: number; b: number; a: number };
+  }[]>([]);
+  const [selectedSubDetails, setSelectedSubDetails] = useState<Set<number>>(new Set());
+  const [subDetailModelId, setSubDetailModelId] = useState<string>('');
+
+  // Real-time selection state (for continuous monitoring)
+  const [currentSelectedObjects, setCurrentSelectedObjects] = useState<SelectedObject[]>([]);
+
   // Refs
   const syncingToModelRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -230,6 +249,209 @@ export default function IssuesScreen({
 
   // Property mappings
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
+
+  // Check assembly selection state
+  const checkAssemblySelection = useCallback(async (): Promise<boolean> => {
+    try {
+      const settings = await api.viewer.getSettings();
+      const enabled = !!settings.assemblySelection;
+      setAssemblySelectionEnabled(enabled);
+      return enabled;
+    } catch (e) {
+      console.warn('Could not get assembly selection settings:', e);
+      return true;
+    }
+  }, [api]);
+
+  // Enable assembly selection
+  const enableAssemblySelection = useCallback(async () => {
+    try {
+      await (api.viewer as any).setSettings?.({ assemblySelection: true });
+      setAssemblySelectionEnabled(true);
+      setShowAssemblyModal(false);
+      setMessage('✅ Assembly Selection sisse lülitatud');
+    } catch (e) {
+      console.error('Failed to enable assembly selection:', e);
+      setMessage('⚠️ Assembly Selection sisselülitamine ebaõnnestus');
+    }
+  }, [api]);
+
+  // Disable assembly selection (for sub-details viewing)
+  const disableAssemblySelection = useCallback(async () => {
+    try {
+      await (api.viewer as any).setSettings?.({ assemblySelection: false });
+      setAssemblySelectionEnabled(false);
+    } catch (e) {
+      console.error('Failed to disable assembly selection:', e);
+    }
+  }, [api]);
+
+  // Generate distinct colors for sub-details
+  const generateSubDetailColors = useCallback((count: number): { r: number; g: number; b: number; a: number }[] => {
+    const colors: { r: number; g: number; b: number; a: number }[] = [];
+    const hueStep = 360 / count;
+    for (let i = 0; i < count; i++) {
+      const hue = (i * hueStep) % 360;
+      // Convert HSL to RGB (saturation 70%, lightness 50%)
+      const s = 0.7;
+      const l = 0.5;
+      const c = (1 - Math.abs(2 * l - 1)) * s;
+      const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+      const m = l - c / 2;
+      let r = 0, g = 0, b = 0;
+      if (hue < 60) { r = c; g = x; b = 0; }
+      else if (hue < 120) { r = x; g = c; b = 0; }
+      else if (hue < 180) { r = 0; g = c; b = x; }
+      else if (hue < 240) { r = 0; g = x; b = c; }
+      else if (hue < 300) { r = x; g = 0; b = c; }
+      else { r = c; g = 0; b = x; }
+      colors.push({
+        r: Math.round((r + m) * 255),
+        g: Math.round((g + m) * 255),
+        b: Math.round((b + m) * 255),
+        a: 255
+      });
+    }
+    return colors;
+  }, []);
+
+  // Load sub-details for selected assembly
+  const loadSubDetails = useCallback(async (modelId: string, runtimeId: number) => {
+    try {
+      // Get children of the selected assembly
+      const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
+
+      if (!children || children.length === 0) {
+        setMessage('⚠️ Valitud detailil pole alamdetaile');
+        return;
+      }
+
+      const childIds = children.map((c: any) => c.id);
+      const childProps: any[] = await api.viewer.getObjectProperties(modelId, childIds);
+      const colors = generateSubDetailColors(children.length);
+
+      // Map children with their properties and colors
+      const subDetailsList = children.map((child: any, index: number) => {
+        const props = childProps[index] || {};
+        // Try to get type and profile from properties
+        let type = props.name || 'Element';
+        let profile = '';
+
+        if (props.properties && Array.isArray(props.properties)) {
+          for (const pset of props.properties) {
+            const propArray = (pset as any).properties || [];
+            for (const prop of propArray) {
+              const propName = ((prop as any).name || '').toLowerCase();
+              if (propName.includes('profile') || propName.includes('section')) {
+                profile = String((prop as any).displayValue ?? (prop as any).value ?? '');
+              }
+              if (propName === 'type' || propName === 'objecttype') {
+                type = String((prop as any).displayValue ?? (prop as any).value ?? type);
+              }
+            }
+          }
+        }
+
+        return {
+          id: child.id,
+          name: props.name || `Element ${index + 1}`,
+          type: type,
+          profile: profile,
+          color: colors[index]
+        };
+      });
+
+      // Disable assembly selection to allow sub-detail selection
+      await disableAssemblySelection();
+
+      // Color model white first
+      const { data: modelObjects } = await supabase
+        .from('trimble_model_objects')
+        .select('guid_ifc')
+        .eq('trimble_project_id', projectId);
+
+      if (modelObjects && modelObjects.length > 0) {
+        const guids = modelObjects.map(obj => obj.guid_ifc).filter((g): g is string => !!g);
+        const foundObjects = await findObjectsInLoadedModels(api, guids);
+
+        const allByModel: Record<string, number[]> = {};
+        for (const [, found] of foundObjects) {
+          if (!allByModel[found.modelId]) allByModel[found.modelId] = [];
+          allByModel[found.modelId].push(found.runtimeId);
+        }
+
+        for (const [mId, runtimeIds] of Object.entries(allByModel)) {
+          for (let i = 0; i < runtimeIds.length; i += COLOR_BATCH_SIZE) {
+            const batch = runtimeIds.slice(i, i + COLOR_BATCH_SIZE);
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId: mId, objectRuntimeIds: batch }] },
+              { color: WHITE_COLOR }
+            );
+          }
+        }
+      }
+
+      // Color each sub-detail with its unique color
+      for (const subDetail of subDetailsList) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: [subDetail.id] }] },
+          { color: subDetail.color }
+        );
+      }
+
+      // Zoom to the parent assembly
+      await api.viewer.setSelection(
+        { modelObjectIds: [{ modelId, objectRuntimeIds: [runtimeId] }] },
+        'set'
+      );
+      await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
+
+      setSubDetails(subDetailsList);
+      setSubDetailModelId(modelId);
+      setSelectedSubDetails(new Set());
+      setShowSubDetailsModal(true);
+
+    } catch (e) {
+      console.error('Error loading sub-details:', e);
+      setMessage('⚠️ Alamdetailide laadimine ebaõnnestus');
+    }
+  }, [api, projectId, disableAssemblySelection, generateSubDetailColors]);
+
+  // Handle sub-detail click - zoom to it
+  const handleSubDetailClick = useCallback(async (subDetailId: number) => {
+    try {
+      await api.viewer.setSelection(
+        { modelObjectIds: [{ modelId: subDetailModelId, objectRuntimeIds: [subDetailId] }] },
+        'set'
+      );
+      await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+    } catch (e) {
+      console.error('Error selecting sub-detail:', e);
+    }
+  }, [api, subDetailModelId]);
+
+  // Toggle sub-detail for linking to issue
+  const toggleSubDetailForIssue = useCallback((subDetailId: number) => {
+    setSelectedSubDetails(prev => {
+      const next = new Set(prev);
+      if (next.has(subDetailId)) {
+        next.delete(subDetailId);
+      } else {
+        next.add(subDetailId);
+      }
+      return next;
+    });
+  }, []);
+
+  // Close sub-details modal and restore assembly selection
+  const closeSubDetailsModal = useCallback(async () => {
+    setShowSubDetailsModal(false);
+    setSubDetails([]);
+    setSelectedSubDetails(new Set());
+    await enableAssemblySelection();
+    // Restore issue coloring
+    await colorModelByIssueStatus();
+  }, [enableAssemblySelection]);
 
   // Helper function to extract selected objects from current model selection
   const getSelectedObjectsFromModel = useCallback(async (): Promise<SelectedObject[]> => {
@@ -328,28 +550,34 @@ export default function IssuesScreen({
     return selectedObjects;
   }, [api, propertyMappings, projectId]);
 
-  // Listen for selection changes when form is open (for new issues)
+  // Continuous selection monitoring - always active to track current selection
   useEffect(() => {
-    if (!showForm || editingIssue) return;
+    if (!api) return;
 
-    const handleSelectionChange = async () => {
-      const objects = await getSelectedObjectsFromModel();
-      setNewIssueObjects(objects);
+    const updateCurrentSelection = async () => {
+      try {
+        const objects = await getSelectedObjectsFromModel();
+        setCurrentSelectedObjects(objects);
+
+        // If form is open and not editing, update the form's objects too
+        if (showForm && !editingIssue) {
+          setNewIssueObjects(objects);
+        }
+      } catch (e) {
+        // Ignore errors during polling
+      }
     };
 
-    // Get initial selection
-    handleSelectionChange();
+    // Initial update
+    updateCurrentSelection();
 
-    // Listen for selection changes
-    const listener = () => handleSelectionChange();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (api.viewer as any).addEventListener?.('onSelectionChanged', listener);
+    // Poll for selection changes every 500ms
+    const interval = setInterval(updateCurrentSelection, 500);
 
     return () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (api.viewer as any).removeEventListener?.('onSelectionChanged', listener);
+      clearInterval(interval);
     };
-  }, [showForm, editingIssue, api, getSelectedObjectsFromModel]);
+  }, [api, getSelectedObjectsFromModel, showForm, editingIssue]);
 
   // ============================================
   // DATA LOADING
@@ -646,8 +874,19 @@ export default function IssuesScreen({
   // ISSUE CRUD OPERATIONS
   // ============================================
 
-  const handleCreateIssue = useCallback(() => {
-    // Reset form and show it - the selection will be loaded by the useEffect listener
+  const handleCreateIssue = useCallback(async () => {
+    // Check assembly selection first
+    const isEnabled = await checkAssemblySelection();
+    if (!isEnabled) {
+      setShowAssemblyModal(true);
+      return;
+    }
+
+    // Use currently selected objects
+    setNewIssueObjects(currentSelectedObjects);
+
+    // Reset form with today's date as discovery date
+    const today = new Date().toISOString().split('T')[0];
     setFormData({
       title: '',
       description: '',
@@ -656,13 +895,13 @@ export default function IssuesScreen({
       priority: 'medium',
       source: 'inspection',
       category_id: '',
-      due_date: '',
+      due_date: today, // Default to today as discovery date
       estimated_hours: '',
       estimated_cost: ''
     });
     setEditingIssue(null);
     setShowForm(true);
-  }, []);
+  }, [checkAssemblySelection, currentSelectedObjects]);
 
   const handleSubmitIssue = useCallback(async () => {
     if (!formData.title.trim()) {
@@ -1349,13 +1588,6 @@ export default function IssuesScreen({
       >
         <button
           className="icon-button"
-          onClick={() => setShowFilters(!showFilters)}
-          title="Filtrid"
-        >
-          <FiFilter size={18} />
-        </button>
-        <button
-          className="icon-button"
           onClick={colorModelByIssueStatus}
           title="Värvi mudel"
         >
@@ -1371,9 +1603,10 @@ export default function IssuesScreen({
         <button
           className="primary-button"
           onClick={handleCreateIssue}
+          title={currentSelectedObjects.length > 0 ? `Lisa mittevastavus (${currentSelectedObjects.length} detaili valitud)` : 'Lisa mittevastavus'}
         >
           <FiPlus size={18} />
-          Lisa
+          Lisa {currentSelectedObjects.length > 0 && `(${currentSelectedObjects.length})`}
         </button>
       </PageHeader>
 
@@ -1392,7 +1625,7 @@ export default function IssuesScreen({
         </div>
       )}
 
-      {/* Search bar */}
+      {/* Search bar with filter toggle */}
       <div className="issues-search">
         <FiSearch size={16} />
         <input
@@ -1402,10 +1635,20 @@ export default function IssuesScreen({
           onChange={e => setSearchQuery(e.target.value)}
         />
         {searchQuery && (
-          <button onClick={() => setSearchQuery('')}>
+          <button onClick={() => setSearchQuery('')} title="Tühjenda otsing">
             <FiX size={14} />
           </button>
         )}
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          title="Filtrid"
+          style={{
+            background: showFilters ? '#2563eb' : '#f1f5f9',
+            color: showFilters ? 'white' : '#64748b'
+          }}
+        >
+          <FiFilter size={14} />
+        </button>
       </div>
 
       {/* Filters */}
@@ -1537,13 +1780,16 @@ export default function IssuesScreen({
                       <div
                         key={issue.id}
                         id={`issue-card-${issue.id}`}
-                        className={`issue-card ${highlightedIssueId === issue.id ? 'highlighted' : ''} ${isOverdue(issue) ? 'overdue' : ''}`}
+                        className={`issue-card issue-card-compact ${highlightedIssueId === issue.id ? 'highlighted' : ''} ${isOverdue(issue) ? 'overdue' : ''}`}
                         onClick={() => openIssueDetail(issue)}
                       >
-                        <div className="issue-card-header">
+                        <div className="issue-card-row">
                           <span className="issue-number">{issue.issue_number}</span>
+                          <span className="issue-card-title-truncated" title={issue.title}>
+                            {issue.title.length > 20 ? issue.title.substring(0, 20) + '...' : issue.title}
+                          </span>
                           <span
-                            className="priority-badge"
+                            className="priority-badge small"
                             style={{
                               backgroundColor: ISSUE_PRIORITY_CONFIG[issue.priority].bgColor,
                               color: ISSUE_PRIORITY_CONFIG[issue.priority].color
@@ -1552,64 +1798,21 @@ export default function IssuesScreen({
                           >
                             {PRIORITY_ICONS[issue.priority]}
                           </span>
-                        </div>
-                        <div className="issue-card-title">{issue.title}</div>
-                        <div className="issue-card-objects">
-                          {issue.objects && issue.objects.length > 0 ? (
-                            issue.objects.length > 1 ? (
-                              <span className="objects-badge">
-                                <FiLayers size={12} />
-                                {issue.objects.length} detaili
-                              </span>
-                            ) : (
-                              <span className="assembly-mark">
-                                {issue.objects[0].assembly_mark || 'Määramata'}
-                              </span>
-                            )
-                          ) : (
-                            <span className="no-objects">Pole seotud</span>
-                          )}
-                        </div>
-                        <div className="issue-card-footer">
-                          <span className="issue-date">
-                            <FiCalendar size={12} />
+                          <span className="issue-date-compact">
                             {formatDate(issue.detected_at)}
                           </span>
-                          {issue.due_date && (
-                            <span className={`issue-due ${isOverdue(issue) ? 'overdue' : ''}`}>
-                              <FiClock size={12} />
-                              {formatDate(issue.due_date)}
-                            </span>
-                          )}
-                          {issue.assignments && issue.assignments.length > 0 && (
-                            <span className="issue-assignee">
-                              <FiUser size={12} />
-                              {issue.assignments[0].user_name || issue.assignments[0].user_email.split('@')[0]}
-                            </span>
-                          )}
-                        </div>
-                        <div className="issue-card-actions">
-                          <button
-                            className="icon-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              selectIssueInModel(issue);
-                            }}
-                            title="Näita mudelis"
-                          >
-                            <FiTarget size={14} />
-                          </button>
-                          <button
-                            className="icon-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setAssigningIssueId(issue.id);
-                              setShowAssignDialog(true);
-                            }}
-                            title="Määra vastutaja"
-                          >
-                            <FiUser size={14} />
-                          </button>
+                          <div className="issue-card-actions-inline">
+                            <button
+                              className="icon-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                selectIssueInModel(issue);
+                              }}
+                              title="Näita mudelis"
+                            >
+                              <FiTarget size={12} />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1624,42 +1827,86 @@ export default function IssuesScreen({
       {/* Issue Form Modal */}
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal-content issue-form-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
+          <div className="modal-content issue-form-modal issue-form-modal-compact" onClick={e => e.stopPropagation()}>
+            <div className="modal-header compact">
               <h2>{editingIssue ? 'Muuda mittevastavust' : 'Lisa uus mittevastavus'}</h2>
               <button onClick={() => setShowForm(false)}>
-                <FiX size={20} />
+                <FiX size={18} />
               </button>
             </div>
 
             <div className="issue-form issue-form-compact">
+              {/* Sub-details button - only show when exactly one detail is selected */}
+              {!editingIssue && newIssueObjects.length === 1 && (
+                <button
+                  type="button"
+                  className="sub-details-btn"
+                  onClick={async () => {
+                    const obj = newIssueObjects[0];
+                    await loadSubDetails(obj.modelId, obj.runtimeId);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 10px',
+                    marginBottom: '8px',
+                    background: '#f0f9ff',
+                    border: '1px solid #bae6fd',
+                    borderRadius: '4px',
+                    color: '#0369a1',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <FiLink size={14} />
+                  Lisa seotud alamdetailid
+                </button>
+              )}
+
+              {/* Selected sub-details display */}
+              {!editingIssue && selectedSubDetails.size > 0 && (
+                <div style={{
+                  padding: '6px 8px',
+                  marginBottom: '8px',
+                  background: '#ecfdf5',
+                  border: '1px solid #a7f3d0',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  color: '#065f46'
+                }}>
+                  <strong>{selectedSubDetails.size} alamdetaili seotud</strong>
+                </div>
+              )}
+
               {/* Selected objects - compact inline tags */}
               {!editingIssue && (
-                <div className="form-section" style={{ marginBottom: '12px' }}>
-                  <label style={{ marginBottom: '4px' }}>Detailid ({newIssueObjects.length})</label>
+                <div className="form-section" style={{ marginBottom: '8px' }}>
+                  <label style={{ marginBottom: '2px', fontSize: '11px' }}>Detailid ({newIssueObjects.length})</label>
                   {newIssueObjects.length === 0 ? (
                     <div style={{
-                      padding: '8px 12px',
+                      padding: '6px 10px',
                       background: '#fef3c7',
                       borderRadius: '4px',
                       color: '#92400e',
-                      fontSize: '12px',
+                      fontSize: '11px',
                       textAlign: 'center'
                     }}>
-                      Vali mudelist detailid
+                      Vali mudelist detailid (Assembly Selection peab olema sisse lülitatud)
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
                       {newIssueObjects.map((obj, index) => (
                         <span
                           key={index}
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            padding: '2px 8px',
+                            padding: '2px 6px',
                             background: '#e0e7ff',
-                            borderRadius: '4px',
-                            fontSize: '12px',
+                            borderRadius: '3px',
+                            fontSize: '11px',
                             fontWeight: 500,
                             color: '#3730a3'
                           }}
@@ -1723,7 +1970,7 @@ export default function IssuesScreen({
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Tähtaeg</label>
+                  <label>Avastamise kuupäev</label>
                   <input
                     type="date"
                     value={formData.due_date}
@@ -2244,6 +2491,151 @@ export default function IssuesScreen({
                   </div>
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assembly Selection Modal */}
+      {showAssemblyModal && (
+        <div className="modal-overlay" onClick={() => setShowAssemblyModal(false)}>
+          <div className="modal-content assembly-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Assembly Selection nõutav</h3>
+              <button onClick={() => setShowAssemblyModal(false)}>
+                <FiX size={20} />
+              </button>
+            </div>
+            <div style={{ padding: '16px' }}>
+              <p style={{ marginBottom: '12px', fontSize: '13px', color: '#64748b' }}>
+                Mittevastavuse lisamiseks peab Assembly Selection olema sisse lülitatud.
+                See tagab, et valitakse terviklik detail (assembly), mitte selle alamosad.
+              </p>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button
+                  className="secondary-button"
+                  onClick={() => setShowAssemblyModal(false)}
+                >
+                  Tühista
+                </button>
+                <button
+                  className="primary-button"
+                  onClick={async () => {
+                    await enableAssemblySelection();
+                    setShowAssemblyModal(false);
+                    // Retry creating issue
+                    handleCreateIssue();
+                  }}
+                >
+                  Lülita sisse
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sub-details Modal */}
+      {showSubDetailsModal && (
+        <div className="modal-overlay" onClick={closeSubDetailsModal}>
+          <div className="modal-content sub-details-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Alam-detailid ({subDetails.length} tk)</h3>
+              <button onClick={closeSubDetailsModal}>
+                <FiX size={20} />
+              </button>
+            </div>
+            <div style={{ padding: '12px', maxHeight: '400px', overflowY: 'auto' }}>
+              <p style={{ marginBottom: '12px', fontSize: '11px', color: '#64748b' }}>
+                Klõpsa alamdetailil, et seda mudelis näha. Kasuta "Seo" nuppu, et siduda alamdetail mittevastavusega.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {subDetails.map((detail) => (
+                  <div
+                    key={detail.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 10px',
+                      background: selectedSubDetails.has(detail.id) ? '#ecfdf5' : '#f8fafc',
+                      border: `1px solid ${selectedSubDetails.has(detail.id) ? '#a7f3d0' : '#e2e8f0'}`,
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s'
+                    }}
+                    onClick={() => handleSubDetailClick(detail.id)}
+                  >
+                    {/* Color indicator */}
+                    <div
+                      style={{
+                        width: '16px',
+                        height: '16px',
+                        borderRadius: '3px',
+                        background: `rgb(${detail.color.r}, ${detail.color.g}, ${detail.color.b})`,
+                        border: '1px solid rgba(0,0,0,0.1)',
+                        flexShrink: 0
+                      }}
+                    />
+
+                    {/* Detail info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: '12px', color: '#1e293b' }}>
+                        {detail.type}
+                      </div>
+                      {detail.profile && (
+                        <div style={{ fontSize: '10px', color: '#64748b' }}>
+                          {detail.profile}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Link button */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSubDetailForIssue(detail.id);
+                      }}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '10px',
+                        fontWeight: 500,
+                        background: selectedSubDetails.has(detail.id) ? '#059669' : '#f1f5f9',
+                        color: selectedSubDetails.has(detail.id) ? 'white' : '#64748b',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <FiLink size={10} />
+                      {selectedSubDetails.has(detail.id) ? 'Seotud' : 'Seo'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ marginTop: '16px', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button
+                  className="secondary-button"
+                  onClick={closeSubDetailsModal}
+                >
+                  Tühista
+                </button>
+                <button
+                  className="primary-button"
+                  onClick={closeSubDetailsModal}
+                  disabled={selectedSubDetails.size === 0}
+                  style={{
+                    opacity: selectedSubDetails.size === 0 ? 0.5 : 1
+                  }}
+                >
+                  Kinnita ({selectedSubDetails.size} valitud)
+                </button>
+              </div>
             </div>
           </div>
         </div>
