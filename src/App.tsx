@@ -33,7 +33,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.913';
+export const APP_VERSION = '3.0.914';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -1802,7 +1802,8 @@ export default function App() {
       }
 
       // ALT+SHIFT+1 - Copy selected items' marks with GUID (Excel format: tab-separated)
-      if (key === '1') {
+      // Use e.code for number keys because e.key changes with ALT modifier (e.g., '!' on US keyboard)
+      if (e.code === 'Digit1') {
         e.preventDefault();
         e.stopPropagation();
         try {
@@ -1888,7 +1889,8 @@ export default function App() {
       }
 
       // ALT+SHIFT+2 - Copy selected items' marks as simple list (for email/messenger)
-      if (key === '2') {
+      // Use e.code for number keys because e.key changes with ALT modifier
+      if (e.code === 'Digit2') {
         e.preventDefault();
         e.stopPropagation();
         try {
@@ -1970,7 +1972,8 @@ export default function App() {
       }
 
       // ALT+SHIFT+3 - Color installed elements dark blue (same as Installations page)
-      if (key === '3') {
+      // Use e.code for number keys because e.key changes with ALT modifier
+      if (e.code === 'Digit3') {
         e.preventDefault();
         e.stopPropagation();
         if (shortcutLoading) return;
