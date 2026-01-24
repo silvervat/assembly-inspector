@@ -33,7 +33,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.886';
+export const APP_VERSION = '3.0.887';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -1800,6 +1800,174 @@ export default function App() {
           showGlobalToast('Viga tarnete laadimisel', 'error');
         } finally {
           setShortcutLoading(null);
+        }
+        return;
+      }
+
+      // ALT+SHIFT+1 - Copy selected items' marks with GUID (Excel format: tab-separated)
+      if (key === '1') {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          const selection = await api.viewer.getSelection();
+          if (!selection || selection.length === 0) {
+            showGlobalToast('Vali mudelist detailid', 'info');
+            return;
+          }
+
+          const results: { mark: string; guid: string }[] = [];
+
+          for (const sel of selection) {
+            if (!sel.objectRuntimeIds || sel.objectRuntimeIds.length === 0) continue;
+
+            // Get GUIDs
+            const guids = await api.viewer.convertToObjectIds(sel.modelId, sel.objectRuntimeIds);
+
+            // Get properties for assembly marks
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const propsArray = await (api.viewer as any).getObjectProperties(sel.modelId, sel.objectRuntimeIds, { includeHidden: true });
+
+            for (let i = 0; i < sel.objectRuntimeIds.length; i++) {
+              const guid = guids?.[i] || '';
+              const props = propsArray?.[i];
+              let mark = '';
+
+              // Try to find Cast_unit_Mark or Assembly_Mark from Tekla Assembly property set
+              if (props?.properties && Array.isArray(props.properties)) {
+                for (const pset of props.properties) {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const setName = ((pset as any).set || (pset as any).name || '').toLowerCase().replace(/\s+/g, '');
+                  if (setName.includes('tekla') || setName.includes('assembly')) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const propArray = (pset as any).properties || [];
+                    for (const prop of propArray) {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      const propName = ((prop as any).name || '').toLowerCase().replace(/\s+/g, '');
+                      if (propName.includes('cast') && propName.includes('mark') || propName.includes('assembly') && propName.includes('mark')) {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        mark = String((prop as any).displayValue ?? (prop as any).value ?? '');
+                        break;
+                      }
+                    }
+                  }
+                  if (mark) break;
+                }
+              }
+
+              // Fallback: try to get from database
+              if (!mark && guid) {
+                const { data: dbObj } = await supabase
+                  .from('trimble_model_objects')
+                  .select('assembly_mark')
+                  .eq('trimble_project_id', projectId)
+                  .eq('guid_ifc', guid.toLowerCase())
+                  .maybeSingle();
+                if (dbObj?.assembly_mark) mark = dbObj.assembly_mark;
+              }
+
+              if (mark || guid) {
+                results.push({ mark: mark || 'N/A', guid });
+              }
+            }
+          }
+
+          if (results.length === 0) {
+            showGlobalToast('Andmeid ei leitud', 'info');
+            return;
+          }
+
+          // Format for Excel: header + tab-separated rows
+          const header = 'Mark\tGUID';
+          const rows = results.map(r => `${r.mark}\t${r.guid}`);
+          const text = [header, ...rows].join('\n');
+
+          await navigator.clipboard.writeText(text);
+          showGlobalToast(`${results.length} detaili kopeeritud (Excel)`, 'success');
+        } catch (err) {
+          console.error('ALT+SHIFT+1 error:', err);
+          showGlobalToast('Viga kopeerimisel', 'error');
+        }
+        return;
+      }
+
+      // ALT+SHIFT+2 - Copy selected items' marks as simple list (for email/messenger)
+      if (key === '2') {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          const selection = await api.viewer.getSelection();
+          if (!selection || selection.length === 0) {
+            showGlobalToast('Vali mudelist detailid', 'info');
+            return;
+          }
+
+          const marks: string[] = [];
+
+          for (const sel of selection) {
+            if (!sel.objectRuntimeIds || sel.objectRuntimeIds.length === 0) continue;
+
+            // Get GUIDs for database lookup
+            const guids = await api.viewer.convertToObjectIds(sel.modelId, sel.objectRuntimeIds);
+
+            // Get properties for assembly marks
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const propsArray = await (api.viewer as any).getObjectProperties(sel.modelId, sel.objectRuntimeIds, { includeHidden: true });
+
+            for (let i = 0; i < sel.objectRuntimeIds.length; i++) {
+              const guid = guids?.[i] || '';
+              const props = propsArray?.[i];
+              let mark = '';
+
+              // Try to find Cast_unit_Mark or Assembly_Mark from Tekla Assembly property set
+              if (props?.properties && Array.isArray(props.properties)) {
+                for (const pset of props.properties) {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const setName = ((pset as any).set || (pset as any).name || '').toLowerCase().replace(/\s+/g, '');
+                  if (setName.includes('tekla') || setName.includes('assembly')) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const propArray = (pset as any).properties || [];
+                    for (const prop of propArray) {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      const propName = ((prop as any).name || '').toLowerCase().replace(/\s+/g, '');
+                      if (propName.includes('cast') && propName.includes('mark') || propName.includes('assembly') && propName.includes('mark')) {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        mark = String((prop as any).displayValue ?? (prop as any).value ?? '');
+                        break;
+                      }
+                    }
+                  }
+                  if (mark) break;
+                }
+              }
+
+              // Fallback: try to get from database
+              if (!mark && guid) {
+                const { data: dbObj } = await supabase
+                  .from('trimble_model_objects')
+                  .select('assembly_mark')
+                  .eq('trimble_project_id', projectId)
+                  .eq('guid_ifc', guid.toLowerCase())
+                  .maybeSingle();
+                if (dbObj?.assembly_mark) mark = dbObj.assembly_mark;
+              }
+
+              if (mark) marks.push(mark);
+            }
+          }
+
+          if (marks.length === 0) {
+            showGlobalToast('Marke ei leitud', 'info');
+            return;
+          }
+
+          // Simple list format
+          const text = marks.join('\n');
+
+          await navigator.clipboard.writeText(text);
+          showGlobalToast(`${marks.length} marki kopeeritud`, 'success');
+        } catch (err) {
+          console.error('ALT+SHIFT+2 error:', err);
+          showGlobalToast('Viga kopeerimisel', 'error');
         }
         return;
       }
