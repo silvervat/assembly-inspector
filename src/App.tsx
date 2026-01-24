@@ -33,7 +33,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.887';
+export const APP_VERSION = '3.0.888';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -1272,7 +1272,9 @@ export default function App() {
             return;
           }
 
-          const markupsToCreate: any[] = [];
+          // Dark blue color in RGBA format for Trimble API
+          const darkBlueColor = { r: 30, g: 58, b: 95, a: 255 }; // #1e3a5f
+          const markupsToCreate: { text: string; start: { positionX: number; positionY: number; positionZ: number }; end: { positionX: number; positionY: number; positionZ: number }; color: { r: number; g: number; b: number; a: number } }[] = [];
 
           // Process each selected object to find bolts
           for (const runtimeId of allRuntimeIds) {
@@ -1321,7 +1323,7 @@ export default function App() {
                           positionY: ((box.min.y + box.max.y) / 2) * 1000,
                           positionZ: ((box.min.z + box.max.z) / 2) * 1000,
                         };
-                        markupsToCreate.push({ text: boltName, start: { ...pos }, end: { ...pos } });
+                        markupsToCreate.push({ text: boltName, start: { ...pos }, end: { ...pos }, color: darkBlueColor });
                       }
                     }
                   }
@@ -1373,28 +1375,8 @@ export default function App() {
             markupsToCreate[i].end.positionZ = markupsToCreate[i].start.positionZ + heights[i];
           }
 
-          // Create markups
-          const result = await (api.markup as any)?.addTextMarkup?.(markupsToCreate);
-
-          // Color them dark blue
-          const darkBlue = '#1e3a5f';
-          const createdIds: number[] = [];
-          if (Array.isArray(result)) {
-            result.forEach((r: any) => {
-              if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
-              else if (typeof r === 'number') createdIds.push(r);
-            });
-          } else if (typeof result === 'object' && result?.id) {
-            createdIds.push(Number(result.id));
-          }
-
-          for (const id of createdIds) {
-            try {
-              await (api.markup as any)?.editMarkup?.(id, { color: darkBlue });
-            } catch (err) {
-              console.warn('Could not set color for markup', id, err);
-            }
-          }
+          // Create markups (color is already included in markup data)
+          await (api.markup as any)?.addTextMarkup?.(markupsToCreate);
 
           showGlobalToast(`${markupsToCreate.length} poltide markupit loodud`, 'success');
         } catch (err) {
