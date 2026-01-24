@@ -33,7 +33,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.914';
+export const APP_VERSION = '3.0.915';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -448,6 +448,14 @@ export default function App() {
   const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
   const [shortcutLoading, setShortcutLoading] = useState<string | null>(null); // which shortcut is loading
 
+  // Calibration state for measurement system - building orientation
+  const [calibrationMode, setCalibrationMode] = useState<'off' | 'pickingPoint1' | 'pickingPoint2'>('off');
+  const [calibrationPoint1, setCalibrationPoint1] = useState<{ x: number; y: number; z: number } | null>(null);
+  const [calibrationPoint2, setCalibrationPoint2] = useState<{ x: number; y: number; z: number } | null>(null);
+  // Refs for accessing current calibration state in event handlers (closure problem)
+  const calibrationModeRef = useRef(calibrationMode);
+  calibrationModeRef.current = calibrationMode;
+
   // Kasutaja initsiaalid (S.V) - eesnime ja perekonnanime esitähed
   const getUserInitials = (tcUserData: TrimbleConnectUser | null): string => {
     if (!tcUserData) return '?';
@@ -481,6 +489,26 @@ export default function App() {
           window.parent,
           (event: string, data: unknown) => {
             console.log('Workspace event:', event, data);
+
+            // Handle calibration point picking
+            if (event === 'viewer.onPicked' && calibrationModeRef.current !== 'off') {
+              const pickedData = data as { data: { position: { x: number; y: number; z: number } } };
+              const pos = pickedData?.data?.position;
+              if (pos) {
+                console.log('🎯 Calibration point picked:', pos);
+                if (calibrationModeRef.current === 'pickingPoint1') {
+                  setCalibrationPoint1({ x: pos.x, y: pos.y, z: pos.z });
+                  setCalibrationMode('pickingPoint2');
+                  setGlobalToast({ message: 'Punkt 1 salvestatud! Vali nüüd punkt 2.', type: 'success' });
+                } else if (calibrationModeRef.current === 'pickingPoint2') {
+                  setCalibrationPoint2({ x: pos.x, y: pos.y, z: pos.z });
+                  setCalibrationMode('off');
+                  setGlobalToast({ message: 'Punkt 2 salvestatud! Kalibreerimine lõpetatud.', type: 'success' });
+                  // Deactivate measurement tool
+                  connected.viewer.activateTool('reset').catch(console.error);
+                }
+              }
+            }
           },
           30000
         );
@@ -2501,6 +2529,23 @@ export default function App() {
           onNavigate={setCurrentMode}
           onColorModelWhite={handleColorModelWhite}
           onOpenPartDatabase={handleOpenPartDatabase}
+          // Calibration props for measurement system
+          calibrationMode={calibrationMode}
+          calibrationPoint1={calibrationPoint1}
+          calibrationPoint2={calibrationPoint2}
+          onStartCalibration={() => {
+            setCalibrationPoint1(null);
+            setCalibrationPoint2(null);
+            setCalibrationMode('pickingPoint1');
+            // Activate single point measurement tool
+            api?.viewer.activateTool('measure-point').catch(console.error);
+          }}
+          onCancelCalibration={() => {
+            setCalibrationMode('off');
+            setCalibrationPoint1(null);
+            setCalibrationPoint2(null);
+            api?.viewer.activateTool('reset').catch(console.error);
+          }}
         />
         <VersionFooter />
       </>
