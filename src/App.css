@@ -15049,18 +15049,18 @@ button.stat-toggle.off:hover {
 
 /* Status group */
 .issues-status-group {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .status-group-header {
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 10px 12px;
+  padding: 6px 10px;
   background: white;
   border: none;
   border-left: 3px solid;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -15099,8 +15099,11 @@ button.stat-toggle.off:hover {
 .status-group-items {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 8px 0 8px 12px;
+  gap: 0;
+  padding: 4px 0 4px 8px;
+  background: #fafafa;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
 }
 
 /* Issue card */
@@ -15238,25 +15241,46 @@ button.stat-toggle.off:hover {
   color: #1e293b;
 }
 
-/* Compact issue card layout */
+/* Compact issue card layout - Organizer style */
 .issue-card.issue-card-compact {
-  padding: 8px 10px;
+  padding: 4px 8px;
+  border-radius: 0;
+  border: none;
+  border-bottom: 1px solid #e5e7eb;
+  background: transparent;
+}
+
+.issue-card.issue-card-compact:last-child {
+  border-bottom: none;
+}
+
+.issue-card.issue-card-compact:hover {
+  background: #f0f4f8;
+  box-shadow: none;
+}
+
+.issue-card.issue-card-compact.highlighted {
+  background: #dbeafe;
+}
+
+.issue-card.issue-card-compact.overdue {
+  border-left: 2px solid #ef4444;
 }
 
 .issue-card-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .issue-card-row .issue-number {
   flex-shrink: 0;
-  min-width: 60px;
+  min-width: 50px;
 }
 
 .issue-card-title-truncated {
   flex: 1;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   color: #1e293b;
   white-space: nowrap;
