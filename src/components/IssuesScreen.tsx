@@ -254,6 +254,7 @@ export default function IssuesScreen({
   // Refs
   const syncingToModelRef = useRef(false);
   const blockSelectionUpdateRef = useRef(false);
+  const hasConfirmedSubDetailsRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -468,15 +469,23 @@ export default function IssuesScreen({
 
   // Close sub-details modal and restore assembly selection
   const closeSubDetailsModal = useCallback(async () => {
-    // FIRST: Block polling from overwriting newIssueObjects
+    // Check if any sub-details were selected for any parent
+    const hasAnySubDetails = Array.from(selectedSubDetailsByParent.values()).some(set => set.size > 0);
+
+    // If sub-details were confirmed, block polling permanently until form closes
+    if (hasAnySubDetails) {
+      hasConfirmedSubDetailsRef.current = true;
+    }
+
+    // Block polling temporarily
     blockSelectionUpdateRef.current = true;
 
-    // SECOND: Restore locked parent objects to newIssueObjects
+    // Restore locked parent objects to newIssueObjects
     if (lockedParentObjects.length > 0) {
       setNewIssueObjects([...lockedParentObjects]);
     }
 
-    // THIRD: Close the modal
+    // Close the modal
     setShowSubDetailsModal(false);
     setSubDetails([]);
     setHighlightedSubDetailId(null);
@@ -491,11 +500,11 @@ export default function IssuesScreen({
     }
     await enableAssemblySelection();
 
-    // Allow polling to update again after a delay
+    // Allow polling to update again after a delay (only if no sub-details confirmed)
     setTimeout(() => {
       blockSelectionUpdateRef.current = false;
     }, 1000);
-  }, [api, enableAssemblySelection, lockedParentObjects]);
+  }, [api, enableAssemblySelection, lockedParentObjects, selectedSubDetailsByParent]);
 
   // Listen for selection changes when sub-details modal is open
   useEffect(() => {
@@ -646,7 +655,8 @@ export default function IssuesScreen({
         // If form is open and not editing, update the form's objects too
         // BUT NOT when sub-details modal is open (parent details should be locked)
         // Also skip if blockSelectionUpdateRef is set (after modal close)
-        if (showForm && !editingIssue && !showSubDetailsModal && !blockSelectionUpdateRef.current) {
+        // Also skip if sub-details have been confirmed (don't overwrite parent objects)
+        if (showForm && !editingIssue && !showSubDetailsModal && !blockSelectionUpdateRef.current && !hasConfirmedSubDetailsRef.current) {
           setNewIssueObjects(objects);
         }
       } catch (e) {
@@ -1231,6 +1241,7 @@ export default function IssuesScreen({
       setPendingFiles([]);
       setSelectedSubDetailsByParent(new Map());
       setLockedParentObjects([]);
+      hasConfirmedSubDetailsRef.current = false;
       await loadIssues();
       await colorModelByIssueStatus();
 
@@ -2224,11 +2235,23 @@ export default function IssuesScreen({
 
       {/* Issue Form Modal */}
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
+        <div className="modal-overlay" onClick={() => {
+          setShowForm(false);
+          setNewIssueObjects([]);
+          setSelectedSubDetailsByParent(new Map());
+          setLockedParentObjects([]);
+          hasConfirmedSubDetailsRef.current = false;
+        }}>
           <div className="modal-content issue-form-modal issue-form-modal-compact" onClick={e => e.stopPropagation()}>
             <div className="modal-header compact">
               <h2>{editingIssue ? 'Muuda mittevastavust' : 'Lisa uus mittevastavus'}</h2>
-              <button onClick={() => setShowForm(false)}>
+              <button onClick={() => {
+                setShowForm(false);
+                setNewIssueObjects([]);
+                setSelectedSubDetailsByParent(new Map());
+                setLockedParentObjects([]);
+                hasConfirmedSubDetailsRef.current = false;
+              }}>
                 <FiX size={18} />
               </button>
             </div>
@@ -2551,7 +2574,13 @@ export default function IssuesScreen({
               <div className="form-actions">
                 <button
                   className="secondary-button"
-                  onClick={() => setShowForm(false)}
+                  onClick={() => {
+                    setShowForm(false);
+                    setNewIssueObjects([]);
+                    setSelectedSubDetailsByParent(new Map());
+                    setLockedParentObjects([]);
+                    hasConfirmedSubDetailsRef.current = false;
+                  }}
                 >
                   Tühista
                 </button>
@@ -3140,7 +3169,7 @@ export default function IssuesScreen({
             fontSize: '18px',
             fontWeight: 600
           }}>
-            Laadin alamdetaile...
+            Laen alamdetaile...
           </div>
           <style>{`
             @keyframes spin {
@@ -3154,14 +3183,16 @@ export default function IssuesScreen({
       {/* Sub-details Modal */}
       {showSubDetailsModal && (
         <div className="modal-overlay" onClick={closeSubDetailsModal}>
-          <div className="modal-content sub-details-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '360px' }}>
-            <div className="modal-header" style={{ padding: '8px 12px' }}>
+          <div className="modal-content sub-details-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '360px', display: 'flex', flexDirection: 'column', maxHeight: '80vh' }}>
+            <div className="modal-header" style={{ padding: '8px 12px', flexShrink: 0 }}>
               <h3 style={{ fontSize: '13px' }}>Alam-detailid ({subDetails.length})</h3>
               <button onClick={closeSubDetailsModal}>
                 <FiX size={16} />
               </button>
             </div>
-            <div style={{ padding: '8px', maxHeight: '350px', overflowY: 'auto' }}>
+
+            {/* Scrollable content area */}
+            <div style={{ padding: '8px', flex: 1, overflowY: 'auto', minHeight: 0 }}>
               <p style={{ margin: '0 0 6px', fontSize: '10px', color: '#64748b' }}>
                 Vali mudelist või klõpsa listis. "Seo" seob alamdetaili mittevastavusega.
               </p>
@@ -3229,27 +3260,27 @@ export default function IssuesScreen({
                   );
                 })}
               </div>
+            </div>
 
-              {/* Action buttons */}
-              <div style={{ marginTop: '10px', display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                <button
-                  className="secondary-button"
-                  onClick={closeSubDetailsModal}
-                  style={{ padding: '4px 10px', fontSize: '11px' }}
-                >
-                  Tühista
-                </button>
-                <button
-                  className="primary-button"
-                  onClick={closeSubDetailsModal}
-                  style={{
-                    padding: '4px 10px',
-                    fontSize: '11px'
-                  }}
-                >
-                  Kinnita ({selectedSubDetailsByParent.get(currentSubDetailsParentGuid)?.size || 0})
-                </button>
-              </div>
+            {/* Fixed action buttons at bottom */}
+            <div style={{ padding: '8px 12px', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '6px', justifyContent: 'flex-end', flexShrink: 0, background: 'white' }}>
+              <button
+                className="secondary-button"
+                onClick={closeSubDetailsModal}
+                style={{ padding: '4px 10px', fontSize: '11px' }}
+              >
+                Tühista
+              </button>
+              <button
+                className="primary-button"
+                onClick={closeSubDetailsModal}
+                style={{
+                  padding: '4px 10px',
+                  fontSize: '11px'
+                }}
+              >
+                Kinnita ({selectedSubDetailsByParent.get(currentSubDetailsParentGuid)?.size || 0})
+              </button>
             </div>
           </div>
         </div>
