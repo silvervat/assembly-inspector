@@ -4,6 +4,7 @@ import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser } from '../supabase';
 import { clearMappingsCache } from '../contexts/PropertyMappingsContext';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
+import { calculateAssemblyDimensions, drawDimensionLines, removeDimensionLines, formatDimensions, DimensionMarkupIds } from '../utils/assemblyDimensions';
 import * as XLSX from 'xlsx-js-style';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
@@ -244,6 +245,7 @@ export default function AdminScreen({
   const [selectedObjects, setSelectedObjects] = useState<ObjectData[]>([]);
   const [message, setMessage] = useState('');
   const [expandedSets, setExpandedSets] = useState<Set<string>>(new Set());
+  const [dimensionMarkups, setDimensionMarkups] = useState<Map<number, DimensionMarkupIds>>(new Map());
 
   // Property Mappings state (configurable Tekla property locations)
   // Defaults match DEFAULT_PROPERTY_MAPPINGS in supabase.ts
@@ -14125,13 +14127,68 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                 {/* Child Objects Section (Alam-detailid) */}
                 {obj.rawData && (obj.rawData as any).childFullProperties && Array.isArray((obj.rawData as any).childFullProperties) && (obj.rawData as any).childFullProperties.length > 0 && (
                   <div className="property-set children-section">
-                    <button
-                      className="pset-header children-header"
-                      onClick={() => togglePropertySet(`children-${objIdx}`)}
-                    >
-                      <span className="pset-toggle">{expandedSets.has(`children-${objIdx}`) ? '▼' : '▶'}</span>
-                      <span className="pset-name">🧩 Alam-detailid ({(obj.rawData as any).childFullProperties.length} tk)</span>
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button
+                        className="pset-header children-header"
+                        style={{ flex: 1 }}
+                        onClick={() => togglePropertySet(`children-${objIdx}`)}
+                      >
+                        <span className="pset-toggle">{expandedSets.has(`children-${objIdx}`) ? '▼' : '▶'}</span>
+                        <span className="pset-name">🧩 Alam-detailid ({(obj.rawData as any).childFullProperties.length} tk)</span>
+                      </button>
+                      <button
+                        className="child-zoom-btn"
+                        style={{
+                          padding: '4px 8px',
+                          background: dimensionMarkups.has(objIdx) ? '#dcfce7' : '#fef3c7',
+                          border: `1px solid ${dimensionMarkups.has(objIdx) ? '#22c55e' : '#fbbf24'}`,
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          whiteSpace: 'nowrap'
+                        }}
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const childProps = (obj.rawData as any).childFullProperties;
+
+                          // If already showing, remove them
+                          if (dimensionMarkups.has(objIdx)) {
+                            const existingMarkups = dimensionMarkups.get(objIdx);
+                            if (existingMarkups) {
+                              await removeDimensionLines(api, existingMarkups.all);
+                            }
+                            setDimensionMarkups(prev => {
+                              const newMap = new Map(prev);
+                              newMap.delete(objIdx);
+                              return newMap;
+                            });
+                            setMessage('Mõõtjooned eemaldatud');
+                            return;
+                          }
+
+                          // Calculate dimensions
+                          const dims = calculateAssemblyDimensions(childProps);
+                          if (!dims) {
+                            setMessage('⚠️ Ei leidnud alamdetailide Extrusion andmeid');
+                            return;
+                          }
+
+                          // Show dimensions info
+                          setMessage(formatDimensions(dims));
+
+                          // Draw dimension lines
+                          const markups = await drawDimensionLines(api, dims);
+                          setDimensionMarkups(prev => {
+                            const newMap = new Map(prev);
+                            newMap.set(objIdx, markups);
+                            return newMap;
+                          });
+                        }}
+                        title={dimensionMarkups.has(objIdx) ? 'Eemalda mõõtjooned' : 'Arvuta ja näita assembly mõõtmeid'}
+                      >
+                        {dimensionMarkups.has(objIdx) ? '📏 ✓' : '📏'}
+                      </button>
+                    </div>
                     {expandedSets.has(`children-${objIdx}`) && (
                       <div className="children-list">
                         {((obj.rawData as any).childFullProperties as any[]).map((child: any, childIdx: number) => {
