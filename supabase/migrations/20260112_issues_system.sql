@@ -592,6 +592,23 @@ ON CONFLICT (id) DO UPDATE SET
   public = true,
   file_size_limit = 52428800;
 
+-- Storage policies for issue-attachments bucket
+-- Allow upload (INSERT)
+CREATE POLICY "Allow upload to issue-attachments" ON storage.objects
+FOR INSERT WITH CHECK (bucket_id = 'issue-attachments');
+
+-- Allow read (SELECT)
+CREATE POLICY "Allow read from issue-attachments" ON storage.objects
+FOR SELECT USING (bucket_id = 'issue-attachments');
+
+-- Allow update (UPDATE)
+CREATE POLICY "Allow update in issue-attachments" ON storage.objects
+FOR UPDATE USING (bucket_id = 'issue-attachments');
+
+-- Allow delete (DELETE)
+CREATE POLICY "Allow delete from issue-attachments" ON storage.objects
+FOR DELETE USING (bucket_id = 'issue-attachments');
+
 -- ============================================
 -- DEFAULT CATEGORIES
 -- ============================================
