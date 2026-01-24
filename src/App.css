@@ -15351,10 +15351,12 @@ button.stat-toggle.off:hover {
 
 .issue-form-modal {
   max-width: 540px;
+  --modus-spacing-lg: 1px;
 }
 
 .issue-form-modal-compact {
   max-width: 480px;
+  --modus-spacing-lg: 1px;
 }
 
 .issue-form-modal-compact .modal-header.compact {
@@ -15367,6 +15369,7 @@ button.stat-toggle.off:hover {
 
 .issue-detail-modal {
   max-width: 640px;
+  --modus-spacing-lg: 1px;
 }
 
 .assign-dialog {
