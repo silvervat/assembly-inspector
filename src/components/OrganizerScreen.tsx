@@ -4632,8 +4632,26 @@ export default function OrganizerScreen({
         return newMap;
       });
 
-      // Update database in background
-      supabase.from('organizer_group_items').update({ custom_properties: updatedProps }).eq('id', itemId);
+      // Update database and check for errors
+      const { error: updateError } = await supabase
+        .from('organizer_group_items')
+        .update({ custom_properties: updatedProps })
+        .eq('id', itemId);
+
+      if (updateError) {
+        console.error('Error saving custom field:', updateError);
+        showToast('Viga välja salvestamisel');
+        // Revert optimistic update on error
+        setGroupItems(prev => {
+          const newMap = new Map(prev);
+          const existing = newMap.get(groupId) || [];
+          newMap.set(groupId, existing.map(i =>
+            i.id === itemId ? { ...i, custom_properties: { ...i.custom_properties, [fieldId]: previousValue } } : i
+          ));
+          return newMap;
+        });
+        return;
+      }
 
       // Log activity (get field name from group's custom_fields)
       const group = groups.find(g => g.id === item.group_id);
@@ -4653,6 +4671,7 @@ export default function OrganizerScreen({
       });
     } catch (e) {
       console.error('Error updating field:', e);
+      showToast('Viga välja uuendamisel');
     }
   };
 
