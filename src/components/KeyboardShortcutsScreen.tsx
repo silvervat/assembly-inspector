@@ -84,6 +84,21 @@ const guideCategories: GuideCategory[] = [
         id: 'alt_shift_t',
         title: 'ALT + SHIFT + T',
         description: 'Avab tarnegraafiku ja värvib tänased tarned. Iga veok saab erineva värvi (sama mis tarnegraafiku listis). Kui tänaseks pole tarneid, annab teada.'
+      },
+      {
+        id: 'alt_shift_1',
+        title: 'ALT + SHIFT + 1',
+        description: 'Kopeerib valitud detailide assembly margid Exceli-formaadis (tabulaatoriga eraldatud MARK ja GUID). Sobib otse Excelisse kleepimiseks.'
+      },
+      {
+        id: 'alt_shift_2',
+        title: 'ALT + SHIFT + 2',
+        description: 'Kopeerib valitud detailide assembly margid lihtsalt nimekirjana (iga mark eraldi real). Sobib emaili või messengeri saatmiseks.'
+      },
+      {
+        id: 'alt_shift_3',
+        title: 'ALT + SHIFT + 3',
+        description: 'Värvib kõik paigaldatud detailid tumesiniseks, ülejäänud mudel värvitakse valgeks. Sama loogika mis Paigaldamiste lehel.'
       }
     ]
   }

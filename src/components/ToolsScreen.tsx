@@ -86,6 +86,38 @@ const DEFAULT_MARKEERIJA_SETTINGS: MarkeerijaSett = {
   leaderHeight: 10
 };
 
+// Preset colors for Markeerija color picker (24 colors in 4 rows, same as Organiseerija)
+const MARKEERIJA_PRESET_COLORS: { r: number; g: number; b: number }[] = [
+  // Row 1: Reds, Oranges, Yellows
+  { r: 239, g: 68, b: 68 },   // Red
+  { r: 220, g: 38, b: 38 },   // Red-600
+  { r: 249, g: 115, b: 22 },  // Orange
+  { r: 234, g: 88, b: 12 },   // Orange-600
+  { r: 234, g: 179, b: 8 },   // Yellow
+  { r: 245, g: 158, b: 11 },  // Amber
+  // Row 2: Greens, Teals, Cyans
+  { r: 34, g: 197, b: 94 },   // Green
+  { r: 22, g: 163, b: 74 },   // Green-600
+  { r: 16, g: 185, b: 129 },  // Emerald
+  { r: 20, g: 184, b: 166 },  // Teal
+  { r: 6, g: 182, b: 212 },   // Cyan
+  { r: 14, g: 165, b: 233 },  // Sky
+  // Row 3: Blues, Purples
+  { r: 59, g: 130, b: 246 },  // Blue
+  { r: 37, g: 99, b: 235 },   // Blue-600
+  { r: 30, g: 64, b: 175 },   // Indigo
+  { r: 99, g: 102, b: 241 },  // Indigo-500
+  { r: 139, g: 92, b: 246 },  // Purple
+  { r: 168, g: 85, b: 247 },  // Violet
+  // Row 4: Pinks, Roses, Grays
+  { r: 236, g: 72, b: 153 },  // Pink
+  { r: 244, g: 63, b: 94 },   // Rose
+  { r: 217, g: 70, b: 239 },  // Fuchsia
+  { r: 107, g: 114, b: 128 }, // Gray-500
+  { r: 71, g: 85, b: 105 },   // Slate-600
+  { r: 64, g: 64, b: 64 },    // Neutral-700
+];
+
 export default function ToolsScreen({
   api,
   user,
@@ -3376,48 +3408,53 @@ export default function ToolsScreen({
                 borderRadius: '6px',
                 border: '1px solid #e5e7eb'
               }}>
-                {/* Row 1: Color picker */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '11px', color: '#4b5563', minWidth: '130px' }}>Teksti & joonte värv:</span>
-                  <input
-                    type="color"
-                    value={rgbToHex(markeerijaSett.color)}
-                    onChange={(e) => {
-                      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(e.target.value);
-                      if (result) {
-                        setMarkeerijaSett(prev => ({
-                          ...prev,
-                          color: {
-                            r: parseInt(result[1], 16),
-                            g: parseInt(result[2], 16),
-                            b: parseInt(result[3], 16)
-                          }
-                        }));
-                      }
-                    }}
-                    style={{
-                      width: '28px',
-                      height: '28px',
-                      padding: 0,
-                      border: '1px solid #d1d5db',
-                      borderRadius: '4px',
-                      cursor: 'pointer'
-                    }}
-                  />
-                  <button
-                    onClick={() => alert('Määrab markupi teksti ja joonistuse värvi.')}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      padding: '2px',
-                      cursor: 'pointer',
-                      color: '#9ca3af',
-                      marginLeft: 'auto'
-                    }}
-                    title="Info"
-                  >
-                    <FiInfo size={14} />
-                  </button>
+                {/* Row 1: Color picker - preset swatches */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '11px', color: '#4b5563' }}>Teksti & joonte värv:</span>
+                    <div
+                      style={{
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '3px',
+                        backgroundColor: `rgb(${markeerijaSett.color.r}, ${markeerijaSett.color.g}, ${markeerijaSett.color.b})`,
+                        border: '1px solid rgba(0,0,0,0.2)',
+                        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.3)'
+                      }}
+                      title={`RGB(${markeerijaSett.color.r}, ${markeerijaSett.color.g}, ${markeerijaSett.color.b})`}
+                    />
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(6, 1fr)',
+                    gap: '4px',
+                    padding: '4px',
+                    background: '#fff',
+                    borderRadius: '4px',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    {MARKEERIJA_PRESET_COLORS.map((c, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setMarkeerijaSett(prev => ({ ...prev, color: c }))}
+                        style={{
+                          width: '22px',
+                          height: '22px',
+                          borderRadius: '3px',
+                          border: markeerijaSett.color.r === c.r && markeerijaSett.color.g === c.g && markeerijaSett.color.b === c.b
+                            ? '2px solid #1f2937'
+                            : '1px solid rgba(0,0,0,0.15)',
+                          backgroundColor: `rgb(${c.r}, ${c.g}, ${c.b})`,
+                          cursor: 'pointer',
+                          padding: 0,
+                          boxShadow: markeerijaSett.color.r === c.r && markeerijaSett.color.g === c.g && markeerijaSett.color.b === c.b
+                            ? '0 0 0 2px rgba(59, 130, 246, 0.5)'
+                            : 'none'
+                        }}
+                        title={`RGB(${c.r}, ${c.g}, ${c.b})`}
+                      />
+                    ))}
+                  </div>
                 </div>
 
                 {/* Row 2: Height input */}
@@ -3792,12 +3829,12 @@ export default function ToolsScreen({
             onClick={() => toggleSection('steps')}
           >
             {expandedSection === 'steps' ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
-            <FiList size={18} style={{ color: '#8b5cf6' }} />
+            <FiList size={18} style={{ color: '#0891b2' }} />
             <h3>Sammude markeerija</h3>
             {stepsMarkups.size > 0 && (
               <span style={{
                 marginLeft: 'auto',
-                background: '#8b5cf6',
+                background: '#0891b2',
                 color: 'white',
                 padding: '2px 8px',
                 borderRadius: '10px',
@@ -3827,7 +3864,7 @@ export default function ToolsScreen({
                         padding: '6px 12px',
                         border: '1px solid #d1d5db',
                         borderRadius: '6px 0 0 6px',
-                        background: stepsMode === 'numbers' ? '#8b5cf6' : '#fff',
+                        background: stepsMode === 'numbers' ? '#0891b2' : '#fff',
                         color: stepsMode === 'numbers' ? '#fff' : '#374151',
                         fontSize: '12px',
                         fontWeight: 500,
@@ -3843,7 +3880,7 @@ export default function ToolsScreen({
                         border: '1px solid #d1d5db',
                         borderLeft: 'none',
                         borderRadius: '0 6px 6px 0',
-                        background: stepsMode === 'letters' ? '#8b5cf6' : '#fff',
+                        background: stepsMode === 'letters' ? '#0891b2' : '#fff',
                         color: stepsMode === 'letters' ? '#fff' : '#374151',
                         fontSize: '12px',
                         fontWeight: 500,
@@ -3855,41 +3892,54 @@ export default function ToolsScreen({
                   </div>
                 </div>
 
-                {/* Color picker */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '12px', color: '#4b5563', minWidth: '80px' }}>Värv:</span>
-                  <input
-                    type="color"
-                    value={`#${((1 << 24) + (stepsColor.r << 16) + (stepsColor.g << 8) + stepsColor.b).toString(16).slice(1)}`}
-                    onChange={(e) => {
-                      const hex = e.target.value;
-                      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-                      if (result) {
-                        setStepsColor({
-                          r: parseInt(result[1], 16),
-                          g: parseInt(result[2], 16),
-                          b: parseInt(result[3], 16)
-                        });
-                      }
-                    }}
-                    style={{
-                      width: '36px',
-                      height: '28px',
-                      padding: '2px',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '4px',
-                      cursor: 'pointer'
-                    }}
-                  />
-                  <div
-                    style={{
-                      width: '24px',
-                      height: '24px',
-                      borderRadius: '4px',
-                      background: `rgb(${stepsColor.r}, ${stepsColor.g}, ${stepsColor.b})`,
-                      border: '1px solid #d1d5db'
-                    }}
-                  />
+                {/* Color picker - preset swatches */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '12px', color: '#4b5563', minWidth: '80px' }}>Värv:</span>
+                    <div
+                      style={{
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '3px',
+                        backgroundColor: `rgb(${stepsColor.r}, ${stepsColor.g}, ${stepsColor.b})`,
+                        border: '1px solid rgba(0,0,0,0.2)',
+                        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.3)'
+                      }}
+                      title={`RGB(${stepsColor.r}, ${stepsColor.g}, ${stepsColor.b})`}
+                    />
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(6, 1fr)',
+                    gap: '4px',
+                    padding: '4px',
+                    background: '#fff',
+                    borderRadius: '4px',
+                    border: '1px solid #e5e7eb',
+                    marginLeft: '88px'
+                  }}>
+                    {MARKEERIJA_PRESET_COLORS.map((c, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setStepsColor(c)}
+                        style={{
+                          width: '22px',
+                          height: '22px',
+                          borderRadius: '3px',
+                          border: stepsColor.r === c.r && stepsColor.g === c.g && stepsColor.b === c.b
+                            ? '2px solid #1f2937'
+                            : '1px solid rgba(0,0,0,0.15)',
+                          backgroundColor: `rgb(${c.r}, ${c.g}, ${c.b})`,
+                          cursor: 'pointer',
+                          padding: 0,
+                          boxShadow: stepsColor.r === c.r && stepsColor.g === c.g && stepsColor.b === c.b
+                            ? '0 0 0 2px rgba(59, 130, 246, 0.5)'
+                            : 'none'
+                        }}
+                        title={`RGB(${c.r}, ${c.g}, ${c.b})`}
+                      />
+                    ))}
+                  </div>
                 </div>
 
                 {/* Height input */}
@@ -3927,7 +3977,7 @@ export default function ToolsScreen({
                     />
                     <span style={{
                       fontSize: '12px',
-                      color: stepsAutoHeight ? '#8b5cf6' : '#6b7280',
+                      color: stepsAutoHeight ? '#0891b2' : '#6b7280',
                       fontWeight: stepsAutoHeight ? 500 : 400
                     }}>
                       {stepsAutoHeight ? 'Sees' : 'Väljas'}
@@ -3966,7 +4016,7 @@ export default function ToolsScreen({
                     padding: '12px 16px',
                     background: stepsActive
                       ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
-                      : 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                      : 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)',
                     border: 'none',
                     borderRadius: '8px',
                     fontSize: '13px',

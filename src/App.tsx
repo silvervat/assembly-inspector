@@ -33,7 +33,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.883';
+export const APP_VERSION = '3.0.890';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -979,17 +979,32 @@ export default function App() {
         setShortcutLoading('a');
 
         try {
-          // First get all confirmed arrival confirmations
+          // Get arrived vehicles for this project
+          const { data: arrivedVehicles, error: vehicleError } = await supabase
+            .from('trimble_arrived_vehicles')
+            .select('id')
+            .eq('trimble_project_id', projectId);
+
+          if (vehicleError) throw vehicleError;
+
+          if (!arrivedVehicles || arrivedVehicles.length === 0) {
+            showGlobalToast('Saabunud veokeid ei leitud', 'info');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Get confirmed confirmations for these vehicles
+          const vehicleIds = arrivedVehicles.map(v => v.id);
           const { data: confirmations, error: confError } = await supabase
             .from('trimble_arrival_confirmations')
             .select('item_id')
-            .eq('trimble_project_id', projectId)
+            .in('arrived_vehicle_id', vehicleIds)
             .eq('status', 'confirmed');
 
           if (confError) throw confError;
 
           if (!confirmations || confirmations.length === 0) {
-            showGlobalToast('Saabunud detaile ei leitud', 'info');
+            showGlobalToast('Kinnitatud saabumisi ei leitud', 'info');
             setShortcutLoading(null);
             return;
           }
@@ -1272,7 +1287,9 @@ export default function App() {
             return;
           }
 
-          const markupsToCreate: any[] = [];
+          // Dark blue color in RGBA format for Trimble API
+          const darkBlueColor = { r: 30, g: 58, b: 95, a: 255 }; // #1e3a5f
+          const markupsToCreate: { text: string; start: { positionX: number; positionY: number; positionZ: number }; end: { positionX: number; positionY: number; positionZ: number }; color: { r: number; g: number; b: number; a: number } }[] = [];
 
           // Process each selected object to find bolts
           for (const runtimeId of allRuntimeIds) {
@@ -1321,7 +1338,7 @@ export default function App() {
                           positionY: ((box.min.y + box.max.y) / 2) * 1000,
                           positionZ: ((box.min.z + box.max.z) / 2) * 1000,
                         };
-                        markupsToCreate.push({ text: boltName, start: { ...pos }, end: { ...pos } });
+                        markupsToCreate.push({ text: boltName, start: { ...pos }, end: { ...pos }, color: darkBlueColor });
                       }
                     }
                   }
@@ -1373,28 +1390,8 @@ export default function App() {
             markupsToCreate[i].end.positionZ = markupsToCreate[i].start.positionZ + heights[i];
           }
 
-          // Create markups
-          const result = await (api.markup as any)?.addTextMarkup?.(markupsToCreate);
-
-          // Color them dark blue
-          const darkBlue = '#1e3a5f';
-          const createdIds: number[] = [];
-          if (Array.isArray(result)) {
-            result.forEach((r: any) => {
-              if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
-              else if (typeof r === 'number') createdIds.push(r);
-            });
-          } else if (typeof result === 'object' && result?.id) {
-            createdIds.push(Number(result.id));
-          }
-
-          for (const id of createdIds) {
-            try {
-              await (api.markup as any)?.editMarkup?.(id, { color: darkBlue });
-            } catch (err) {
-              console.warn('Could not set color for markup', id, err);
-            }
-          }
+          // Create markups (color is already included in markup data)
+          await (api.markup as any)?.addTextMarkup?.(markupsToCreate);
 
           showGlobalToast(`${markupsToCreate.length} poltide markupit loodud`, 'success');
         } catch (err) {
@@ -1798,6 +1795,278 @@ export default function App() {
         } catch (err) {
           console.error('ALT+SHIFT+T error:', err);
           showGlobalToast('Viga tarnete laadimisel', 'error');
+        } finally {
+          setShortcutLoading(null);
+        }
+        return;
+      }
+
+      // ALT+SHIFT+1 - Copy selected items' marks with GUID (Excel format: tab-separated)
+      if (key === '1') {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          const selection = await api.viewer.getSelection();
+          if (!selection || selection.length === 0) {
+            showGlobalToast('Vali mudelist detailid', 'info');
+            return;
+          }
+
+          const results: { mark: string; guid: string }[] = [];
+
+          for (const sel of selection) {
+            if (!sel.objectRuntimeIds || sel.objectRuntimeIds.length === 0) continue;
+
+            // Get GUIDs
+            const guids = await api.viewer.convertToObjectIds(sel.modelId, sel.objectRuntimeIds);
+
+            // Get properties for assembly marks
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const propsArray = await (api.viewer as any).getObjectProperties(sel.modelId, sel.objectRuntimeIds, { includeHidden: true });
+
+            for (let i = 0; i < sel.objectRuntimeIds.length; i++) {
+              const guid = guids?.[i] || '';
+              const props = propsArray?.[i];
+              let mark = '';
+
+              // Try to find Cast_unit_Mark or Assembly_Mark from Tekla Assembly property set
+              if (props?.properties && Array.isArray(props.properties)) {
+                for (const pset of props.properties) {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const setName = ((pset as any).set || (pset as any).name || '').toLowerCase().replace(/\s+/g, '');
+                  if (setName.includes('tekla') || setName.includes('assembly')) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const propArray = (pset as any).properties || [];
+                    for (const prop of propArray) {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      const propName = ((prop as any).name || '').toLowerCase().replace(/\s+/g, '');
+                      if (propName.includes('cast') && propName.includes('mark') || propName.includes('assembly') && propName.includes('mark')) {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        mark = String((prop as any).displayValue ?? (prop as any).value ?? '');
+                        break;
+                      }
+                    }
+                  }
+                  if (mark) break;
+                }
+              }
+
+              // Fallback: try to get from database
+              if (!mark && guid) {
+                const { data: dbObj } = await supabase
+                  .from('trimble_model_objects')
+                  .select('assembly_mark')
+                  .eq('trimble_project_id', projectId)
+                  .eq('guid_ifc', guid.toLowerCase())
+                  .maybeSingle();
+                if (dbObj?.assembly_mark) mark = dbObj.assembly_mark;
+              }
+
+              if (mark || guid) {
+                results.push({ mark: mark || 'N/A', guid });
+              }
+            }
+          }
+
+          if (results.length === 0) {
+            showGlobalToast('Andmeid ei leitud', 'info');
+            return;
+          }
+
+          // Format for Excel: header + tab-separated rows
+          const header = 'Mark\tGUID';
+          const rows = results.map(r => `${r.mark}\t${r.guid}`);
+          const text = [header, ...rows].join('\n');
+
+          await navigator.clipboard.writeText(text);
+          showGlobalToast(`${results.length} detaili kopeeritud (Excel)`, 'success');
+        } catch (err) {
+          console.error('ALT+SHIFT+1 error:', err);
+          showGlobalToast('Viga kopeerimisel', 'error');
+        }
+        return;
+      }
+
+      // ALT+SHIFT+2 - Copy selected items' marks as simple list (for email/messenger)
+      if (key === '2') {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+          const selection = await api.viewer.getSelection();
+          if (!selection || selection.length === 0) {
+            showGlobalToast('Vali mudelist detailid', 'info');
+            return;
+          }
+
+          const marks: string[] = [];
+
+          for (const sel of selection) {
+            if (!sel.objectRuntimeIds || sel.objectRuntimeIds.length === 0) continue;
+
+            // Get GUIDs for database lookup
+            const guids = await api.viewer.convertToObjectIds(sel.modelId, sel.objectRuntimeIds);
+
+            // Get properties for assembly marks
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const propsArray = await (api.viewer as any).getObjectProperties(sel.modelId, sel.objectRuntimeIds, { includeHidden: true });
+
+            for (let i = 0; i < sel.objectRuntimeIds.length; i++) {
+              const guid = guids?.[i] || '';
+              const props = propsArray?.[i];
+              let mark = '';
+
+              // Try to find Cast_unit_Mark or Assembly_Mark from Tekla Assembly property set
+              if (props?.properties && Array.isArray(props.properties)) {
+                for (const pset of props.properties) {
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const setName = ((pset as any).set || (pset as any).name || '').toLowerCase().replace(/\s+/g, '');
+                  if (setName.includes('tekla') || setName.includes('assembly')) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const propArray = (pset as any).properties || [];
+                    for (const prop of propArray) {
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      const propName = ((prop as any).name || '').toLowerCase().replace(/\s+/g, '');
+                      if (propName.includes('cast') && propName.includes('mark') || propName.includes('assembly') && propName.includes('mark')) {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        mark = String((prop as any).displayValue ?? (prop as any).value ?? '');
+                        break;
+                      }
+                    }
+                  }
+                  if (mark) break;
+                }
+              }
+
+              // Fallback: try to get from database
+              if (!mark && guid) {
+                const { data: dbObj } = await supabase
+                  .from('trimble_model_objects')
+                  .select('assembly_mark')
+                  .eq('trimble_project_id', projectId)
+                  .eq('guid_ifc', guid.toLowerCase())
+                  .maybeSingle();
+                if (dbObj?.assembly_mark) mark = dbObj.assembly_mark;
+              }
+
+              if (mark) marks.push(mark);
+            }
+          }
+
+          if (marks.length === 0) {
+            showGlobalToast('Marke ei leitud', 'info');
+            return;
+          }
+
+          // Simple list format
+          const text = marks.join('\n');
+
+          await navigator.clipboard.writeText(text);
+          showGlobalToast(`${marks.length} marki kopeeritud`, 'success');
+        } catch (err) {
+          console.error('ALT+SHIFT+2 error:', err);
+          showGlobalToast('Viga kopeerimisel', 'error');
+        }
+        return;
+      }
+
+      // ALT+SHIFT+3 - Color installed elements dark blue (same as Installations page)
+      if (key === '3') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (shortcutLoading) return;
+        setShortcutLoading('3');
+
+        try {
+          // Get all installed items from database
+          const { data: installations, error: instError } = await supabase
+            .from('installations')
+            .select('guid_ifc')
+            .eq('project_id', projectId);
+
+          if (instError) throw instError;
+
+          if (!installations || installations.length === 0) {
+            showGlobalToast('Paigaldatud detaile ei leitud', 'info');
+            setShortcutLoading(null);
+            return;
+          }
+
+          const installedGuids = installations.map(i => i.guid_ifc).filter(Boolean) as string[];
+          const installedGuidsSet = new Set(installedGuids.map(g => g.toLowerCase()));
+
+          // Get all objects from database
+          const { data: allObjects } = await supabase
+            .from('trimble_model_objects')
+            .select('guid_ifc')
+            .eq('trimble_project_id', projectId)
+            .not('guid_ifc', 'is', null);
+
+          const allGuids = (allObjects || []).map(o => o.guid_ifc).filter(Boolean) as string[];
+
+          // Find objects in model
+          const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+
+          if (foundObjects.size === 0) {
+            showGlobalToast('Mudel pole laaditud', 'error');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Separate installed and non-installed
+          const installedObjects: { modelId: string; runtimeId: number }[] = [];
+          const whiteObjects: { modelId: string; runtimeId: number }[] = [];
+
+          for (const [guid, found] of foundObjects) {
+            if (installedGuidsSet.has(guid.toLowerCase())) {
+              installedObjects.push(found);
+            } else {
+              whiteObjects.push(found);
+            }
+          }
+
+          // Group by model for coloring
+          const installedByModel: Record<string, number[]> = {};
+          const whiteByModel: Record<string, number[]> = {};
+
+          for (const obj of installedObjects) {
+            if (!installedByModel[obj.modelId]) installedByModel[obj.modelId] = [];
+            installedByModel[obj.modelId].push(obj.runtimeId);
+          }
+          for (const obj of whiteObjects) {
+            if (!whiteByModel[obj.modelId]) whiteByModel[obj.modelId] = [];
+            whiteByModel[obj.modelId].push(obj.runtimeId);
+          }
+
+          // Color white first
+          const white = { r: 255, g: 255, b: 255, a: 255 };
+          for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+            const BATCH_SIZE = 500;
+            for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+              const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+                { color: white }
+              );
+            }
+          }
+
+          // Color installed dark blue (same as InstallationsScreen: #0a3a67)
+          const darkBlue = { r: 10, g: 58, b: 103, a: 255 };
+          for (const [modelId, runtimeIds] of Object.entries(installedByModel)) {
+            const BATCH_SIZE = 500;
+            for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+              const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+                { color: darkBlue }
+              );
+            }
+          }
+
+          showGlobalToast(`${installedObjects.length} paigaldatud detaili tumesiniseks`, 'success');
+        } catch (err) {
+          console.error('ALT+SHIFT+3 error:', err);
+          showGlobalToast('Viga värvimisel', 'error');
         } finally {
           setShortcutLoading(null);
         }

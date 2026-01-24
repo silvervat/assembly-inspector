@@ -29,6 +29,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
   const [loading, setLoading] = useState(false);
   const [selectedGuid, setSelectedGuid] = useState<string | null>(null);
   const [selectedMark, setSelectedMark] = useState<string | null>(null);
+  const [selectedWeight, setSelectedWeight] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<{guid_ifc: string; assembly_mark: string; product_name?: string}[]>([]);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['delivery', 'arrivals', 'installation', 'organizer', 'inspections', 'issues']));
   const [data, setData] = useState<PartDbData | null>(null);
@@ -114,6 +115,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
         setData(null);
         setSelectedGuid(null);
         setSelectedMark(null);
+        setSelectedWeight(null);
         return;
       }
 
@@ -125,6 +127,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
 
       if (guids && guids[0]) {
         let assemblyMark = '';
+        let weight = '';
         try {
           const props = await api.viewer.getObjectProperties(firstSel.modelId, [runtimeId]);
           if (props && props[0]) {
@@ -133,21 +136,30 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
             const normalizeName = (name: string) => name.replace(/\s+/g, '').toLowerCase();
             const targetSetName = normalizeName(propertyMappings.assembly_mark_set);
             const targetPropName = normalizeName(propertyMappings.assembly_mark_prop);
+            const weightSetName = normalizeName(propertyMappings.weight_set);
+            const weightPropName = normalizeName(propertyMappings.weight_prop);
 
             for (const set of sets) {
               const setName = set.name || set.setName || '';
-              if (normalizeName(setName) === targetSetName) {
-                const properties = set.properties || [];
-                // Properties is an array of {name, value, displayValue} objects
-                for (const prop of properties) {
-                  const propName = (prop as any).name || '';
-                  if (normalizeName(propName) === targetPropName) {
-                    assemblyMark = String((prop as any).displayValue ?? (prop as any).value ?? '');
-                    break;
-                  }
+              const setNameNorm = normalizeName(setName);
+              const properties = set.properties || [];
+
+              // Properties is an array of {name, value, displayValue} objects
+              for (const prop of properties) {
+                const propName = (prop as any).name || '';
+                const propNameNorm = normalizeName(propName);
+                const propValue = String((prop as any).displayValue ?? (prop as any).value ?? '');
+
+                // Check for assembly mark
+                if (!assemblyMark && setNameNorm === targetSetName && propNameNorm === targetPropName) {
+                  assemblyMark = propValue;
+                }
+
+                // Check for weight
+                if (!weight && setNameNorm === weightSetName && propNameNorm === weightPropName) {
+                  weight = propValue;
                 }
               }
-              if (assemblyMark) break;
             }
 
             if (!assemblyMark) {
@@ -170,6 +182,9 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
         } catch (e) {
           console.warn('Could not get assembly mark:', e);
         }
+
+        // Store weight
+        setSelectedWeight(weight || null);
 
         if (!assemblyMark && projectId) {
           try {
@@ -341,7 +356,14 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
       {/* Selected part info */}
       {selectedGuid && (
         <div style={{ marginBottom: '16px', padding: '10px 12px', background: '#f0f9ff', borderRadius: '6px', border: '1px solid #bae6fd' }}>
-          <div style={{ fontWeight: 600, fontSize: '13px', color: '#0369a1' }}>{selectedMark || 'Tundmatu mark'}</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+            <span style={{ fontWeight: 600, fontSize: '13px', color: '#0369a1' }}>{selectedMark || 'Tundmatu mark'}</span>
+            {selectedWeight && (
+              <span style={{ fontSize: '11px', color: '#0369a1', fontWeight: 500 }}>
+                {parseFloat(selectedWeight).toFixed(1)} kg
+              </span>
+            )}
+          </div>
           <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px', fontFamily: 'monospace' }}>GUID: {selectedGuid}</div>
         </div>
       )}
