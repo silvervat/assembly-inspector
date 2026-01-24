@@ -585,16 +585,19 @@ export default function ArrivedDeliveriesScreen({
   }, [projectId]);
 
   const loadConfirmations = useCallback(async () => {
+    console.log('[loadConfirmations] START - projectId:', projectId);
     try {
       const { data, error } = await supabase
         .from('trimble_arrival_confirmations')
         .select('*')
         .eq('trimble_project_id', projectId);
 
+      console.log('[loadConfirmations] Query result - count:', data?.length, 'error:', error);
       if (error) throw error;
       setConfirmations(data || []);
+      console.log('[loadConfirmations] State updated with', data?.length || 0, 'confirmations');
     } catch (e) {
-      console.error('Error loading confirmations:', e);
+      console.error('[loadConfirmations] Error:', e);
     }
   }, [projectId]);
 
@@ -1372,25 +1375,73 @@ export default function ArrivedDeliveriesScreen({
   // Confirm item was delivered
   const confirmItem = async (arrivedVehicleId: string, itemId: string, status: ArrivalItemStatus) => {
     setSaving(true);
+    console.log('[confirmItem] START - arrivedVehicleId:', arrivedVehicleId, 'itemId:', itemId, 'status:', status);
     try {
-      const { error } = await supabase
-        .from('trimble_arrival_confirmations')
-        .update({
-          status,
-          confirmed_at: new Date().toISOString(),
-          confirmed_by: tcUserEmail
-        })
-        .eq('arrived_vehicle_id', arrivedVehicleId)
-        .eq('item_id', itemId);
+      // Check if confirmation record exists
+      const existingConfirmation = confirmations.find(
+        c => c.arrived_vehicle_id === arrivedVehicleId && c.item_id === itemId
+      );
+      console.log('[confirmItem] Existing confirmation in local state:', existingConfirmation);
 
-      if (error) throw error;
+      if (existingConfirmation) {
+        // Update existing record
+        console.log('[confirmItem] Updating existing record...');
+        const { data: updateData, error: updateError } = await supabase
+          .from('trimble_arrival_confirmations')
+          .update({
+            status,
+            confirmed_at: new Date().toISOString(),
+            confirmed_by: tcUserEmail
+          })
+          .eq('arrived_vehicle_id', arrivedVehicleId)
+          .eq('item_id', itemId)
+          .select();
 
-      // Update local state
-      setConfirmations(prev => prev.map(c =>
-        c.arrived_vehicle_id === arrivedVehicleId && c.item_id === itemId
-          ? { ...c, status, confirmed_at: new Date().toISOString(), confirmed_by: tcUserEmail }
-          : c
-      ));
+        console.log('[confirmItem] UPDATE result - data:', updateData, 'error:', updateError);
+        if (updateError) throw updateError;
+
+        // Check if update actually affected any rows
+        if (!updateData || updateData.length === 0) {
+          console.warn('[confirmItem] UPDATE affected 0 rows! Record may not exist in DB. Will try INSERT...');
+          // Record exists in local state but not in DB - need to insert
+          const { data: insertData, error: insertError } = await supabase
+            .from('trimble_arrival_confirmations')
+            .insert({
+              trimble_project_id: projectId,
+              arrived_vehicle_id: arrivedVehicleId,
+              item_id: itemId,
+              status,
+              confirmed_at: new Date().toISOString(),
+              confirmed_by: tcUserEmail
+            })
+            .select();
+
+          console.log('[confirmItem] Fallback INSERT result - data:', insertData, 'error:', insertError);
+          if (insertError) throw insertError;
+        }
+      } else {
+        // Create new record
+        console.log('[confirmItem] No existing confirmation - creating new record...');
+        const { data: insertData, error: insertError } = await supabase
+          .from('trimble_arrival_confirmations')
+          .insert({
+            trimble_project_id: projectId,
+            arrived_vehicle_id: arrivedVehicleId,
+            item_id: itemId,
+            status,
+            confirmed_at: new Date().toISOString(),
+            confirmed_by: tcUserEmail
+          })
+          .select();
+
+        console.log('[confirmItem] INSERT result - data:', insertData, 'error:', insertError);
+        if (insertError) throw insertError;
+      }
+
+      // Reload confirmations from database to ensure consistency
+      console.log('[confirmItem] Reloading confirmations from database...');
+      await loadConfirmations();
+      console.log('[confirmItem] Confirmations reloaded successfully');
 
       // Update model color if active vehicle coloring is enabled
       if (activeColoredVehicleId) {
@@ -1498,19 +1549,58 @@ export default function ArrivedDeliveriesScreen({
     if (selectedItemsForConfirm.size === 0) return;
 
     setSaving(true);
+    const selectedItemIds = [...selectedItemsForConfirm];
+    console.log('[confirmSelectedItems] START - arrivedVehicleId:', arrivedVehicleId, 'status:', status, 'itemIds:', selectedItemIds);
     try {
-      const { error } = await supabase
-        .from('trimble_arrival_confirmations')
-        .update({
+      // Get existing confirmations for selected items
+      const existingConfirmations = confirmations.filter(
+        c => c.arrived_vehicle_id === arrivedVehicleId && selectedItemIds.includes(c.item_id)
+      );
+      const existingItemIds = new Set(existingConfirmations.map(c => c.item_id));
+      console.log('[confirmSelectedItems] Existing confirmations:', existingConfirmations.length, 'of', selectedItemIds.length);
+
+      // Update existing confirmations
+      if (existingItemIds.size > 0) {
+        console.log('[confirmSelectedItems] Updating', existingItemIds.size, 'existing records...');
+        const { data: updateData, error: updateError } = await supabase
+          .from('trimble_arrival_confirmations')
+          .update({
+            status,
+            confirmed_at: new Date().toISOString(),
+            confirmed_by: tcUserEmail
+          })
+          .eq('arrived_vehicle_id', arrivedVehicleId)
+          .in('item_id', [...existingItemIds])
+          .select();
+
+        console.log('[confirmSelectedItems] UPDATE result - data:', updateData?.length, 'error:', updateError);
+        if (updateError) throw updateError;
+      }
+
+      // Create new confirmations for items that don't have one yet
+      const newItemIds = selectedItemIds.filter(id => !existingItemIds.has(id));
+      if (newItemIds.length > 0) {
+        console.log('[confirmSelectedItems] Creating', newItemIds.length, 'new records...');
+        const newConfirmations = newItemIds.map(itemId => ({
+          trimble_project_id: projectId,
+          arrived_vehicle_id: arrivedVehicleId,
+          item_id: itemId,
           status,
           confirmed_at: new Date().toISOString(),
           confirmed_by: tcUserEmail
-        })
-        .eq('arrived_vehicle_id', arrivedVehicleId)
-        .in('item_id', [...selectedItemsForConfirm]);
+        }));
 
-      if (error) throw error;
+        const { data: insertData, error: insertError } = await supabase
+          .from('trimble_arrival_confirmations')
+          .insert(newConfirmations)
+          .select();
+
+        console.log('[confirmSelectedItems] INSERT result - data:', insertData?.length, 'error:', insertError);
+        if (insertError) throw insertError;
+      }
+
       await loadConfirmations();
+      console.log('[confirmSelectedItems] Confirmations reloaded');
       setSelectedItemsForConfirm(new Set());
       const statusLabels: Record<ArrivalItemStatus, string> = {
         confirmed: 'kinnitatud',
@@ -1519,7 +1609,7 @@ export default function ArrivedDeliveriesScreen({
         pending: 'ootel',
         added: 'lisatud'
       };
-      setMessage(`${selectedItemsForConfirm.size} detaili ${statusLabels[status]}`);
+      setMessage(`${selectedItemIds.length} detaili ${statusLabels[status]}`);
     } catch (e: any) {
       console.error('Error confirming selected items:', e);
       setMessage('Viga: ' + e.message);
