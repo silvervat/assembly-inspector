@@ -7446,6 +7446,177 @@ export default function AdminScreen({
                       }
                     }}
                   />
+                  <FunctionButton
+                    name="📏 Kalibreeritud mõõtjooned"
+                    result={functionResults["calibratedMarkups"]}
+                    onClick={async () => {
+                      updateFunctionResult("calibratedMarkups", { status: 'pending' });
+                      try {
+                        const sel = await api.viewer.getSelection();
+                        if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                        const modelId = sel[0].modelId;
+                        const runtimeIds = sel.flatMap(s => s.objectRuntimeIds || []);
+
+                        // Get bounding boxes and properties
+                        const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+                        const allProps = await api.viewer.getObjectProperties(modelId, runtimeIds);
+
+                        if (!bboxes || bboxes.length === 0) throw new Error('Bounding box pole saadaval');
+
+                        // Calculate calibration angle
+                        const angle = Math.atan2(
+                          calibrationPoint2!.y - calibrationPoint1!.y,
+                          calibrationPoint2!.x - calibrationPoint1!.x
+                        );
+                        const cosA = Math.cos(angle);
+                        const sinA = Math.sin(angle);
+
+                        const measurements: any[] = [];
+                        let addedCount = 0;
+
+                        for (let idx = 0; idx < runtimeIds.length; idx++) {
+                          const bbox = bboxes[idx];
+                          const props = allProps[idx];
+                          if (!bbox?.boundingBox) continue;
+
+                          const b = bbox.boundingBox;
+
+                          // Get center point (in meters)
+                          const centerX = (b.min.x + b.max.x) / 2;
+                          const centerY = (b.min.y + b.max.y) / 2;
+                          const bottomZ = b.min.z;
+                          const topZ = b.max.z;
+
+                          // Try to get actual dimensions from Tekla Quantity
+                          let teklaLength = 0;
+                          let teklaWidth = 0;
+
+                          if (props?.properties && Array.isArray(props.properties)) {
+                            for (const pset of props.properties as any[]) {
+                              const psetName = (pset.name || pset.set || '').toLowerCase();
+                              if (psetName.includes('tekla') && psetName.includes('quantity')) {
+                                for (const prop of (pset.properties || [])) {
+                                  const propName = (prop.name || '').toLowerCase();
+                                  const val = parseFloat(prop.value) || 0;
+                                  if (propName === 'length') teklaLength = val;
+                                  if (propName === 'width') teklaWidth = val;
+                                  // Note: Height is taken from bbox (topZ - bottomZ) for accuracy
+                                }
+                              }
+                            }
+                          }
+
+                          // If no Tekla properties, use bbox diagonal approach
+                          // Calculate dimensions along building axes
+                          let lengthAlongBuilding: number;
+                          let widthAcrossBuilding: number;
+
+                          if (teklaLength > 0) {
+                            // Use Tekla values (already in mm, convert to m)
+                            lengthAlongBuilding = teklaLength / 1000;
+                            widthAcrossBuilding = teklaWidth / 1000;
+                            // Height is taken directly from bbox (topZ - bottomZ)
+                          } else {
+                            // Estimate from bbox using calibration
+                            // Project bbox dimensions onto building axes
+                            const bboxW = b.max.x - b.min.x;
+                            const bboxD = b.max.y - b.min.y;
+
+                            // Length along building axis
+                            lengthAlongBuilding = Math.abs(bboxW * cosA + bboxD * sinA);
+                            // Width perpendicular to building axis
+                            widthAcrossBuilding = Math.abs(-bboxW * sinA + bboxD * cosA);
+                            // Height is taken directly from bbox (topZ - bottomZ)
+                          }
+
+                          // Calculate measurement endpoints along building axis (for length)
+                          // Length line: from center - length/2 to center + length/2 along building axis
+                          const halfLen = lengthAlongBuilding / 2;
+                          const lengthStart = {
+                            x: (centerX - halfLen * cosA) * 1000,
+                            y: (centerY - halfLen * sinA) * 1000,
+                            z: bottomZ * 1000 + 100 // Slightly above bottom
+                          };
+                          const lengthEnd = {
+                            x: (centerX + halfLen * cosA) * 1000,
+                            y: (centerY + halfLen * sinA) * 1000,
+                            z: bottomZ * 1000 + 100
+                          };
+
+                          // Width line: perpendicular to building axis
+                          const halfWidth = widthAcrossBuilding / 2;
+                          const widthStart = {
+                            x: (centerX - halfWidth * (-sinA)) * 1000,
+                            y: (centerY - halfWidth * cosA) * 1000,
+                            z: bottomZ * 1000 + 100
+                          };
+                          const widthEnd = {
+                            x: (centerX + halfWidth * (-sinA)) * 1000,
+                            y: (centerY + halfWidth * cosA) * 1000,
+                            z: bottomZ * 1000 + 100
+                          };
+
+                          // Height line: vertical at center
+                          const heightStart = {
+                            x: centerX * 1000,
+                            y: centerY * 1000,
+                            z: bottomZ * 1000
+                          };
+                          const heightEnd = {
+                            x: centerX * 1000,
+                            y: centerY * 1000,
+                            z: topZ * 1000
+                          };
+
+                          // Add length measurement (red)
+                          measurements.push({
+                            start: { positionX: lengthStart.x, positionY: lengthStart.y, positionZ: lengthStart.z },
+                            end: { positionX: lengthEnd.x, positionY: lengthEnd.y, positionZ: lengthEnd.z },
+                            mainLineStart: { positionX: lengthStart.x, positionY: lengthStart.y, positionZ: lengthStart.z },
+                            mainLineEnd: { positionX: lengthEnd.x, positionY: lengthEnd.y, positionZ: lengthEnd.z },
+                            color: { r: 255, g: 0, b: 0, a: 255 } // Red for length
+                          });
+
+                          // Add width measurement (green)
+                          measurements.push({
+                            start: { positionX: widthStart.x, positionY: widthStart.y, positionZ: widthStart.z },
+                            end: { positionX: widthEnd.x, positionY: widthEnd.y, positionZ: widthEnd.z },
+                            mainLineStart: { positionX: widthStart.x, positionY: widthStart.y, positionZ: widthStart.z },
+                            mainLineEnd: { positionX: widthEnd.x, positionY: widthEnd.y, positionZ: widthEnd.z },
+                            color: { r: 0, g: 200, b: 0, a: 255 } // Green for width
+                          });
+
+                          // Add height measurement (blue)
+                          measurements.push({
+                            start: { positionX: heightStart.x, positionY: heightStart.y, positionZ: heightStart.z },
+                            end: { positionX: heightEnd.x, positionY: heightEnd.y, positionZ: heightEnd.z },
+                            mainLineStart: { positionX: heightStart.x, positionY: heightStart.y, positionZ: heightStart.z },
+                            mainLineEnd: { positionX: heightEnd.x, positionY: heightEnd.y, positionZ: heightEnd.z },
+                            color: { r: 0, g: 100, b: 255, a: 255 } // Blue for height
+                          });
+
+                          addedCount++;
+                        }
+
+                        if (measurements.length > 0) {
+                          await api.markup.addMeasurementMarkups(measurements);
+                        }
+
+                        const angleDeg = angle * 180 / Math.PI;
+                        updateFunctionResult("calibratedMarkups", {
+                          status: 'success',
+                          result: `✅ ${measurements.length} mõõtjoont lisatud (${addedCount} objekti)\n\n` +
+                            `🧭 Hoone nurk: ${angleDeg.toFixed(1)}°\n` +
+                            `🔴 Punane = Pikkus (piki hoone telge)\n` +
+                            `🟢 Roheline = Laius (risti hoone teljega)\n` +
+                            `🔵 Sinine = Kõrgus (Z)`
+                        });
+                      } catch (e: any) {
+                        updateFunctionResult("calibratedMarkups", { status: 'error', error: e.message });
+                      }
+                    }}
+                  />
                 </div>
               )}
             </div>
