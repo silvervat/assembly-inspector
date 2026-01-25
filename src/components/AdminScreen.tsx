@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink, FiUsers, FiEdit2, FiPlus, FiSave, FiCamera, FiVideo, FiTruck, FiAlertTriangle, FiBox } from 'react-icons/fi';
+import { FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink, FiUsers, FiEdit2, FiPlus, FiSave, FiCamera, FiVideo, FiTruck, FiAlertTriangle, FiBox, FiTarget, FiRotateCcw } from 'react-icons/fi';
+import { BsQrCode } from 'react-icons/bs';
+import QRCode from 'qrcode';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser } from '../supabase';
 import { clearMappingsCache } from '../contexts/PropertyMappingsContext';
@@ -237,8 +239,8 @@ export default function AdminScreen({
   onStartCalibration,
   onCancelCalibration
 }: AdminScreenProps) {
-  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin'
-  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin'>('main');
+  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin' | 'qrActivator'
+  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin' | 'qrActivator'>('main');
 
   const [isLoading, setIsLoading] = useState(false);
   const [selectedObjects, setSelectedObjects] = useState<ObjectData[]>([]);
@@ -438,6 +440,23 @@ export default function AdminScreen({
   // Data export state
   const [dataExportLoading, setDataExportLoading] = useState(false);
   const [dataExportStatus, setDataExportStatus] = useState('');
+
+  // QR Aktivaator state
+  interface QrCodeItem {
+    id: string;
+    guid: string;
+    assembly_mark: string | null;
+    product_name: string | null;
+    weight: number | null;
+    status: 'pending' | 'activated' | 'expired';
+    qr_data_url: string | null;
+    activated_by_name?: string | null;
+    activated_at?: string | null;
+    created_at?: string;
+  }
+  const [qrCodes, setQrCodes] = useState<QrCodeItem[]>([]);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrGenerating, setQrGenerating] = useState(false);
 
   // Shape paste base point (for relative positioning)
   const [shapeBasePoint, setShapeBasePoint] = useState<{ x: number; y: number; z: number } | null>(null);
@@ -3063,6 +3082,276 @@ export default function AdminScreen({
   };
 
   // ==========================================
+  // QR AKTIVAATOR FUNCTIONS
+  // ==========================================
+
+  // Load QR codes
+  const loadQrCodes = useCallback(async () => {
+    if (!projectId) return;
+    setQrLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('qr_activation_codes')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading QR codes:', error);
+        return;
+      }
+
+      // Generate QR data URLs for pending codes
+      const codesWithQr: QrCodeItem[] = await Promise.all((data || []).map(async (code: any) => {
+        let qr_data_url = null;
+        if (code.status === 'pending') {
+          try {
+            const qrPageUrl = `https://silvervat.github.io/assembly-inspector/qr/${code.id}`;
+            qr_data_url = await QRCode.toDataURL(qrPageUrl, { width: 200, margin: 2 });
+          } catch (e) {
+            console.error('Error generating QR:', e);
+          }
+        }
+        return {
+          id: code.id,
+          guid: code.guid,
+          assembly_mark: code.assembly_mark,
+          product_name: code.product_name,
+          weight: code.weight,
+          status: code.status,
+          qr_data_url,
+          activated_by_name: code.activated_by_name,
+          activated_at: code.activated_at,
+          created_at: code.created_at
+        };
+      }));
+
+      setQrCodes(codesWithQr);
+    } catch (e) {
+      console.error('Error loading QR codes:', e);
+    } finally {
+      setQrLoading(false);
+    }
+  }, [projectId]);
+
+  // Generate QR for selected object
+  const handleGenerateQr = useCallback(async () => {
+    if (qrGenerating) return;
+    setQrGenerating(true);
+
+    try {
+      const selection = await api.viewer.getSelection();
+      if (!selection || selection.length === 0) {
+        setMessage('Vali mudelist detail');
+        setQrGenerating(false);
+        return;
+      }
+
+      const modelId = selection[0].modelId;
+      const runtimeId = selection[0].objectRuntimeIds?.[0];
+      if (!modelId || !runtimeId) {
+        setMessage('Vali üks detail');
+        setQrGenerating(false);
+        return;
+      }
+
+      const objPropsArr = await api.viewer.getObjectProperties(modelId, [runtimeId]);
+      const objProps = objPropsArr?.[0];
+      let guid = '';
+      let assemblyMark = '';
+      let productName = '';
+      let weight: number | null = null;
+
+      const normalizeGuid = (g: string): string => g ? g.trim().toLowerCase() : '';
+
+      // Search for GUID in properties
+      const propertySets = (objProps as any)?.propertySets || [];
+      for (const pset of propertySets) {
+        const propArray = pset.properties || [];
+        for (const prop of propArray) {
+          const propName = ((prop as any).name || '').toLowerCase().replace(/[\s_()]/g, '');
+          const propValue = (prop as any).displayValue ?? (prop as any).value;
+          if (!propValue) continue;
+          if (propName.includes('guid') || propName === 'globalid') {
+            const guidValue = normalizeGuid(String(propValue));
+            if (guidValue && !guid) guid = guidValue;
+          }
+        }
+      }
+
+      // Fallback methods for GUID
+      if (!guid) {
+        try {
+          const externalIds = await api.viewer.convertToObjectIds(modelId, [runtimeId]);
+          if (externalIds?.[0]) guid = normalizeGuid(String(externalIds[0]));
+        } catch (e) { /* ignore */ }
+      }
+
+      if (!guid && (objProps as any)?.product?.ifcGuid) {
+        guid = normalizeGuid((objProps as any).product.ifcGuid);
+      }
+
+      if (!guid) {
+        setMessage('Objektil puudub GUID');
+        setQrGenerating(false);
+        return;
+      }
+
+      // Get assembly_mark from trimble_model_objects
+      const { data: modelObj } = await supabase
+        .from('trimble_model_objects')
+        .select('assembly_mark, product_name')
+        .eq('trimble_project_id', projectId)
+        .eq('guid_ifc', guid.toLowerCase())
+        .maybeSingle();
+
+      if (modelObj) {
+        if (modelObj.assembly_mark && !modelObj.assembly_mark.startsWith('Object_')) {
+          assemblyMark = modelObj.assembly_mark;
+        }
+        if (modelObj.product_name) productName = modelObj.product_name;
+      }
+
+      // Check if QR already exists
+      const { data: existing } = await supabase
+        .from('qr_activation_codes')
+        .select('id')
+        .eq('project_id', projectId)
+        .eq('guid', guid.toLowerCase())
+        .maybeSingle();
+
+      if (existing) {
+        setMessage('QR kood juba eksisteerib selle detaili jaoks');
+        setQrGenerating(false);
+        return;
+      }
+
+      // Insert new QR code
+      const { data: newCode, error: insertError } = await supabase
+        .from('qr_activation_codes')
+        .insert({
+          project_id: projectId,
+          guid: guid.toLowerCase(),
+          assembly_mark: assemblyMark || null,
+          product_name: productName || null,
+          weight: weight,
+          status: 'pending',
+          created_by: user?.email || 'unknown',
+          created_by_name: user?.name || user?.email || 'unknown'
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        setMessage('Viga QR koodi loomisel');
+        setQrGenerating(false);
+        return;
+      }
+
+      // Generate QR image
+      const qrPageUrl = `https://silvervat.github.io/assembly-inspector/qr/${newCode.id}`;
+      const qrDataUrl = await QRCode.toDataURL(qrPageUrl, { width: 200, margin: 2 });
+
+      // Add to list
+      setQrCodes(prev => [{
+        id: newCode.id,
+        guid: newCode.guid,
+        assembly_mark: newCode.assembly_mark,
+        product_name: newCode.product_name,
+        weight: newCode.weight,
+        status: 'pending',
+        qr_data_url: qrDataUrl,
+        created_at: newCode.created_at
+      }, ...prev]);
+
+      setMessage('QR kood loodud!');
+
+    } catch (e) {
+      console.error('Error generating QR:', e);
+      setMessage('Viga QR genereerimisel');
+    } finally {
+      setQrGenerating(false);
+    }
+  }, [api, projectId, user, qrGenerating]);
+
+  // Select object in model by GUID
+  const handleSelectQrObject = useCallback(async (guid: string) => {
+    try {
+      const foundMap = await findObjectsInLoadedModels(api, [guid]);
+      if (foundMap.size > 0) {
+        const foundItem = foundMap.values().next().value;
+        if (foundItem) {
+          await api.viewer.setSelection(
+            { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
+            'set'
+          );
+          setMessage('Detail valitud mudelis');
+        }
+      } else {
+        setMessage('Detaili ei leitud mudelis');
+      }
+    } catch (e) {
+      console.error('Error selecting object:', e);
+      setMessage('Viga detaili valimisel');
+    }
+  }, [api]);
+
+  // Delete QR code
+  const handleDeleteQr = useCallback(async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('qr_activation_codes')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        setMessage('Viga kustutamisel');
+        return;
+      }
+
+      setQrCodes(prev => prev.filter(qr => qr.id !== id));
+      setMessage('QR kood kustutatud');
+    } catch (e) {
+      console.error('Error deleting QR:', e);
+      setMessage('Viga kustutamisel');
+    }
+  }, []);
+
+  // Reset QR code (clear activation, set back to pending)
+  const handleResetQr = useCallback(async (qr: QrCodeItem) => {
+    try {
+      const { error } = await supabase
+        .from('qr_activation_codes')
+        .update({
+          status: 'pending',
+          activated_by: null,
+          activated_by_name: null,
+          activated_at: null
+        })
+        .eq('id', qr.id);
+
+      if (error) {
+        setMessage('Viga lähtestamisel');
+        return;
+      }
+
+      // Generate new QR image
+      const qrPageUrl = `https://silvervat.github.io/assembly-inspector/qr/${qr.id}`;
+      const qrDataUrl = await QRCode.toDataURL(qrPageUrl, { width: 200, margin: 2 });
+
+      setQrCodes(prev => prev.map(q =>
+        q.id === qr.id
+          ? { ...q, status: 'pending', activated_by_name: null, activated_at: null, qr_data_url: qrDataUrl }
+          : q
+      ));
+      setMessage('Leidmine lähtestatud - saab uuesti skännida');
+    } catch (e) {
+      console.error('Error resetting QR:', e);
+      setMessage('Viga lähtestamisel');
+    }
+  }, []);
+
+  // ==========================================
   // CAMERA POSITIONS FUNCTIONS
   // ==========================================
 
@@ -4121,6 +4410,7 @@ export default function AdminScreen({
       case 'userPermissions': return 'Kasutajate õigused';
       case 'resources': return 'Ressursside haldus';
       case 'cameraPositions': return 'Kaamera positsioonid';
+      case 'qrActivator': return 'QR Aktivaator';
       case 'dataExport': return 'Ekspordi andmed';
       case 'fontTester': return 'Fontide testija';
       case 'deliveryScheduleAdmin': return 'Tarnegraafikud';
@@ -4246,6 +4536,18 @@ export default function AdminScreen({
           >
             <FiBox size={18} />
             <span>Kraanade Andmebaas</span>
+          </button>
+
+          <button
+            className="admin-tool-btn"
+            onClick={() => {
+              setAdminView('qrActivator');
+              loadQrCodes();
+            }}
+            style={{ background: '#10b981', color: 'white' }}
+          >
+            <BsQrCode size={18} />
+            <span>QR Aktivaator</span>
           </button>
 
           <button
@@ -16720,6 +17022,141 @@ document.body.appendChild(div);`;
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* QR Aktivaator View */}
+      {adminView === 'qrActivator' && (
+        <div className="admin-content" style={{ padding: '16px' }}>
+          <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px' }}>
+            Generate QR codes for model details. When scanned on-site, workers can confirm finding the part.
+          </p>
+
+          {/* Generate QR button */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+            <button
+              className="btn-primary"
+              onClick={handleGenerateQr}
+              disabled={qrGenerating}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              {qrGenerating ? <FiLoader className="spin" size={14} /> : <BsQrCode size={14} />}
+              <span>Generate QR for selected detail</span>
+            </button>
+            <button
+              className="admin-tool-btn"
+              onClick={loadQrCodes}
+              disabled={qrLoading}
+              style={{ padding: '8px 12px' }}
+            >
+              <FiRefreshCw size={14} className={qrLoading ? 'spin' : ''} />
+              <span>Refresh ({qrCodes.length})</span>
+            </button>
+          </div>
+
+          {/* QR codes list */}
+          {qrCodes.length > 0 ? (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              background: '#fafafa',
+              padding: '12px',
+              borderRadius: '8px',
+              border: '1px solid #e5e7eb',
+              maxHeight: '500px',
+              overflowY: 'auto'
+            }}>
+              {qrCodes.map(qr => (
+                <div
+                  key={qr.id}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    padding: '12px',
+                    background: qr.status === 'activated' ? '#d1fae5' : '#fff',
+                    borderRadius: '8px',
+                    border: `2px solid ${qr.status === 'activated' ? '#10b981' : '#e5e7eb'}`
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '14px' }}>
+                        {qr.assembly_mark || 'Unknown'}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                        {qr.product_name || ''} {qr.weight ? `• ${qr.weight.toFixed(1)} kg` : ''}
+                      </div>
+                    </div>
+                    <div style={{
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      background: qr.status === 'activated' ? '#10b981' : qr.status === 'expired' ? '#ef4444' : '#f59e0b',
+                      color: '#fff'
+                    }}>
+                      {qr.status === 'activated' ? 'FOUND' : qr.status === 'expired' ? 'EXPIRED' : 'PENDING'}
+                    </div>
+                  </div>
+
+                  {qr.status === 'activated' && qr.activated_by_name && (
+                    <div style={{ fontSize: '12px', color: '#059669' }}>
+                      Found by: {qr.activated_by_name} • {qr.activated_at ? new Date(qr.activated_at).toLocaleString('en-GB') : ''}
+                    </div>
+                  )}
+
+                  {qr.qr_data_url && qr.status === 'pending' && (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '8px' }}>
+                      <img src={qr.qr_data_url} alt="QR" style={{ width: '150px', height: '150px' }} />
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      className="admin-tool-btn"
+                      onClick={() => handleSelectQrObject(qr.guid)}
+                      style={{ flex: 1, background: '#3b82f6', color: '#fff' }}
+                    >
+                      <FiTarget size={12} />
+                      <span>Select in model</span>
+                    </button>
+                    {qr.status === 'activated' && (
+                      <button
+                        className="admin-tool-btn"
+                        onClick={() => handleResetQr(qr)}
+                        style={{ background: '#fef3c7', color: '#d97706' }}
+                        title="Reset finding - allows re-scanning"
+                      >
+                        <FiRotateCcw size={12} />
+                        <span>Reset</span>
+                      </button>
+                    )}
+                    <button
+                      className="admin-tool-btn"
+                      onClick={() => handleDeleteQr(qr.id)}
+                      style={{ background: '#fee2e2', color: '#ef4444' }}
+                      title="Delete QR code"
+                    >
+                      <FiTrash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{
+              padding: '24px',
+              textAlign: 'center',
+              color: '#9ca3af',
+              fontSize: '13px',
+              background: '#f9fafb',
+              borderRadius: '8px'
+            }}>
+              {qrLoading ? 'Loading...' : 'No QR codes yet. Select a detail in the model and generate a QR code.'}
+            </div>
+          )}
         </div>
       )}
 
