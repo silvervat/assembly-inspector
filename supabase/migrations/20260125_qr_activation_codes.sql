@@ -30,7 +30,12 @@ CREATE INDEX IF NOT EXISTS idx_qr_activation_codes_guid ON qr_activation_codes(g
 -- Enable RLS
 ALTER TABLE qr_activation_codes ENABLE ROW LEVEL SECURITY;
 
--- RLS policies
+-- RLS policies (drop and recreate to avoid conflicts)
+DROP POLICY IF EXISTS "qr_activation_codes_select" ON qr_activation_codes;
+DROP POLICY IF EXISTS "qr_activation_codes_insert" ON qr_activation_codes;
+DROP POLICY IF EXISTS "qr_activation_codes_update" ON qr_activation_codes;
+DROP POLICY IF EXISTS "qr_activation_codes_delete" ON qr_activation_codes;
+
 -- Anyone can read (for public QR activation page)
 CREATE POLICY "qr_activation_codes_select" ON qr_activation_codes
   FOR SELECT USING (true);
@@ -47,8 +52,17 @@ CREATE POLICY "qr_activation_codes_update" ON qr_activation_codes
 CREATE POLICY "qr_activation_codes_delete" ON qr_activation_codes
   FOR DELETE USING (true);
 
--- Enable realtime for this table
-ALTER PUBLICATION supabase_realtime ADD TABLE qr_activation_codes;
+-- Enable realtime for this table (skip if already added)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+    AND tablename = 'qr_activation_codes'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE qr_activation_codes;
+  END IF;
+END $$;
 
 -- Comment
 COMMENT ON TABLE qr_activation_codes IS 'QR codes for on-site detail confirmation. Scan QR to mark detail as found.';
