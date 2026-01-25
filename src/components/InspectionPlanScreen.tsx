@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { FiPlus, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage, FiEdit2, FiX, FiCheck, FiSearch, FiFilter, FiFileText, FiSettings } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
-import { supabase, InspectionTypeRef, InspectionCategory, InspectionPlanItem, InspectionPlanStats, TrimbleExUser } from '../supabase';
+import { supabase, InspectionTypeRef, InspectionCategory, InspectionPlanItem, InspectionPlanStats, TrimbleExUser, INSPECTION_STATUS_COLORS } from '../supabase';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
 import { InspectionHistory } from './InspectionHistory';
@@ -18,6 +18,7 @@ interface CheckpointResultData {
   inspector_name: string;
   user_email?: string;
   inspected_at: string;
+  review_status?: 'pending' | 'approved' | 'rejected';
   photos?: {
     id: string;
     url: string;
@@ -25,12 +26,16 @@ interface CheckpointResultData {
   }[];
 }
 
+// Inspection status type (matches INSPECTION_STATUS_COLORS keys)
+type InspectionStatusType = 'planned' | 'inProgress' | 'completed' | 'rejected' | 'approved';
+
 // Plan item with inspection statistics
 interface PlanItemWithStats extends InspectionPlanItem {
   checkpointResults?: CheckpointResultData[];
   inspection_count?: number;
   photo_count?: number;
   has_issues?: boolean;
+  inspection_status?: InspectionStatusType;  // Calculated status based on inspection results
 }
 
 interface InspectionPlanScreenProps {
@@ -372,7 +377,7 @@ export default function InspectionPlanScreen({
       const guids = data.map(item => item.guid).filter(Boolean);
       const planItemIds = data.map(item => item.id);
 
-      // Fetch checkpoint results with photos
+      // Fetch checkpoint results with photos and review status
       const { data: checkpointResults, error: resultsError } = await supabase
         .from('inspection_results')
         .select(`
@@ -386,6 +391,7 @@ export default function InspectionPlanScreen({
           inspector_name,
           user_email,
           inspected_at,
+          review_status,
           inspection_checkpoints(name)
         `)
         .eq('project_id', projectId)
@@ -429,6 +435,7 @@ export default function InspectionPlanScreen({
               inspector_name: result.inspector_name,
               user_email: result.user_email,
               inspected_at: result.inspected_at,
+              review_status: (result as any).review_status,
               photos: resultPhotos[result.id] || []
             });
           }
@@ -448,30 +455,60 @@ export default function InspectionPlanScreen({
         // Count as completed if has checkpoint results
         const isCompleted = itemCheckpointResults.length > 0 ? 1 : 0;
 
+        // Determine inspection status based on results and review status
+        let inspection_status: InspectionStatusType = 'planned';
+        if (itemCheckpointResults.length > 0) {
+          // Has inspection results - check review status
+          const allApproved = itemCheckpointResults.every(r => r.review_status === 'approved');
+          const anyRejected = itemCheckpointResults.some(r => r.review_status === 'rejected');
+          const allCompleted = itemCheckpointResults.length > 0;
+
+          if (allApproved && allCompleted) {
+            inspection_status = 'approved';
+          } else if (anyRejected) {
+            inspection_status = 'rejected';
+          } else {
+            inspection_status = 'completed';  // Has results but not yet reviewed/approved
+          }
+        } else if (item.status === 'in_progress') {
+          inspection_status = 'inProgress';
+        }
+
         return {
           ...item,
           checkpointResults: itemCheckpointResults,
           inspection_count: isCompleted,
           photo_count: photoCount,
-          has_issues: hasIssues
+          has_issues: hasIssues,
+          inspection_status
         };
       });
 
       setPlanItems(itemsWithStats);
 
-      // Calculate stats including inspection data
-      const totalInspected = itemsWithStats.filter(i => (i.inspection_count || 0) > 0).length;
+      // Calculate stats by inspection status
+      const statusCounts = {
+        planned: itemsWithStats.filter(i => i.inspection_status === 'planned').length,
+        inProgress: itemsWithStats.filter(i => i.inspection_status === 'inProgress').length,
+        completed: itemsWithStats.filter(i => i.inspection_status === 'completed').length,
+        rejected: itemsWithStats.filter(i => i.inspection_status === 'rejected').length,
+        approved: itemsWithStats.filter(i => i.inspection_status === 'approved').length
+      };
 
       const statsData: InspectionPlanStats = {
         project_id: projectId,
         total_items: data.length,
-        planned_count: data.filter(i => i.status === 'planned').length,
-        in_progress_count: data.filter(i => i.status === 'in_progress').length,
-        completed_count: totalInspected, // Use actual inspection count
-        skipped_count: data.filter(i => i.status === 'skipped').length,
+        planned_count: statusCounts.planned,
+        in_progress_count: statusCounts.inProgress,
+        completed_count: statusCounts.completed + statusCounts.approved,  // Total done (completed + approved)
+        skipped_count: statusCounts.rejected,  // Use skipped_count field for rejected
         assembly_on_count: data.filter(i => i.assembly_selection_mode).length,
-        assembly_off_count: data.filter(i => !i.assembly_selection_mode).length
-      };
+        assembly_off_count: data.filter(i => !i.assembly_selection_mode).length,
+        // Store additional status counts for display
+        approved_count: statusCounts.approved,
+        rejected_count: statusCounts.rejected,
+        pending_review_count: statusCounts.completed
+      } as InspectionPlanStats & { approved_count?: number; rejected_count?: number; pending_review_count?: number };
       setStats(statsData);
 
     } catch (error) {
@@ -1029,24 +1066,32 @@ export default function InspectionPlanScreen({
         )}
       </div>
 
-      {/* Statistics */}
+      {/* Statistics with status colors */}
       {stats && (
         <div className="plan-stats">
-          <div className="stat-item">
+          <div className="stat-item" style={{ borderColor: '#6b7280' }}>
             <span className="stat-value">{stats.total_items}</span>
             <span className="stat-label">Kokku</span>
           </div>
-          <div className="stat-item stat-planned">
-            <span className="stat-value">{stats.planned_count}</span>
-            <span className="stat-label">Ootel</span>
+          <div className="stat-item" style={{ borderColor: INSPECTION_STATUS_COLORS.planned.hex, backgroundColor: INSPECTION_STATUS_COLORS.planned.hex + '15' }}>
+            <span className="stat-value" style={{ color: INSPECTION_STATUS_COLORS.planned.hex }}>{stats.planned_count}</span>
+            <span className="stat-label">{INSPECTION_STATUS_COLORS.planned.label}</span>
           </div>
-          <div className="stat-item stat-progress">
-            <span className="stat-value">{stats.in_progress_count}</span>
-            <span className="stat-label">Pooleli</span>
+          <div className="stat-item" style={{ borderColor: INSPECTION_STATUS_COLORS.inProgress.hex, backgroundColor: INSPECTION_STATUS_COLORS.inProgress.hex + '15' }}>
+            <span className="stat-value" style={{ color: INSPECTION_STATUS_COLORS.inProgress.hex }}>{stats.in_progress_count}</span>
+            <span className="stat-label">{INSPECTION_STATUS_COLORS.inProgress.label}</span>
           </div>
-          <div className="stat-item stat-completed">
-            <span className="stat-value">{stats.completed_count}</span>
-            <span className="stat-label">Tehtud</span>
+          <div className="stat-item" style={{ borderColor: INSPECTION_STATUS_COLORS.completed.hex, backgroundColor: INSPECTION_STATUS_COLORS.completed.hex + '15' }}>
+            <span className="stat-value" style={{ color: INSPECTION_STATUS_COLORS.completed.hex }}>{(stats as any).pending_review_count || 0}</span>
+            <span className="stat-label">{INSPECTION_STATUS_COLORS.completed.label}</span>
+          </div>
+          <div className="stat-item" style={{ borderColor: INSPECTION_STATUS_COLORS.rejected.hex, backgroundColor: INSPECTION_STATUS_COLORS.rejected.hex + '15' }}>
+            <span className="stat-value" style={{ color: INSPECTION_STATUS_COLORS.rejected.hex }}>{(stats as any).rejected_count || 0}</span>
+            <span className="stat-label">{INSPECTION_STATUS_COLORS.rejected.label}</span>
+          </div>
+          <div className="stat-item" style={{ borderColor: INSPECTION_STATUS_COLORS.approved.hex, backgroundColor: INSPECTION_STATUS_COLORS.approved.hex + '15' }}>
+            <span className="stat-value" style={{ color: INSPECTION_STATUS_COLORS.approved.hex }}>{(stats as any).approved_count || 0}</span>
+            <span className="stat-label">{INSPECTION_STATUS_COLORS.approved.label}</span>
           </div>
         </div>
       )}
@@ -1397,11 +1442,21 @@ export default function InspectionPlanScreen({
                                               <span className={`item-asm-mode ${item.assembly_selection_mode ? 'asm-on' : 'asm-off'}`}>
                                                 {item.assembly_selection_mode ? 'ASM' : 'OFF'}
                                               </span>
-                                              {hasInspections ? (
-                                                <span className="item-status-badge done">✓</span>
-                                              ) : (
-                                                <span className="item-status-badge pending">○</span>
-                                              )}
+                                              {/* Status badge with color */}
+                                              <span
+                                                className="item-inspection-status"
+                                                style={{
+                                                  backgroundColor: INSPECTION_STATUS_COLORS[item.inspection_status || 'planned'].hex,
+                                                  color: item.inspection_status === 'approved' ? '#fff' : '#fff'
+                                                }}
+                                                title={INSPECTION_STATUS_COLORS[item.inspection_status || 'planned'].label}
+                                              >
+                                                {item.inspection_status === 'planned' && '○'}
+                                                {item.inspection_status === 'inProgress' && '◐'}
+                                                {item.inspection_status === 'completed' && '●'}
+                                                {item.inspection_status === 'rejected' && '✗'}
+                                                {item.inspection_status === 'approved' && '✓'}
+                                              </span>
                                             </div>
                                             <div className="item-actions">
                                               <button
