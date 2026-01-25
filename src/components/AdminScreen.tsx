@@ -3996,6 +3996,78 @@ export default function AdminScreen({
     }
   }, [api]);
 
+  // Add text marker at GPS position
+  const addGpsMarker = useCallback(async (position: DetailPosition) => {
+    if (!position.latitude || !position.longitude) {
+      setMessage('GPS koordinaadid puuduvad');
+      return;
+    }
+
+    try {
+      setMessage('Lisan markeri...');
+
+      // Convert GPS to model coordinates
+      const modelCoords = wgs84ToBelgianLambert72(position.latitude, position.longitude);
+
+      // Get Z coordinate from the detail if possible
+      let zCoord = 0;
+      const { data: modelObj } = await supabase
+        .from('trimble_model_objects')
+        .select('guid_ifc')
+        .eq('trimble_project_id', projectId)
+        .ilike('guid_ifc', position.guid)
+        .limit(1)
+        .maybeSingle();
+
+      if (modelObj?.guid_ifc) {
+        const guidsToSearch = [modelObj.guid_ifc, position.guid];
+        const foundMap = await findObjectsInLoadedModels(api, guidsToSearch);
+        const foundItem = foundMap.values().next().value;
+
+        if (foundItem) {
+          const boundsArray = await api.viewer.getObjectBoundingBoxes(foundItem.modelId, [foundItem.runtimeId]);
+          const bbox = boundsArray?.[0]?.boundingBox;
+          if (bbox?.max) {
+            zCoord = bbox.max.z; // Use top of object
+          }
+        }
+      }
+
+      // Convert to mm
+      const posX = modelCoords.x * 1000;
+      const posY = modelCoords.y * 1000;
+      const posZ = zCoord * 1000;
+      const markerHeight = 3000; // 3m marker height
+
+      // Create marker text with assembly mark and GPS coords
+      const markerText = `📍 ${position.assembly_mark || 'GPS'}\n${position.latitude.toFixed(6)}, ${position.longitude.toFixed(6)}`;
+
+      // Add text markup
+      const markupApi = api.markup as any;
+      if (!markupApi?.addTextMarkup) {
+        setMessage('Text markup API pole saadaval');
+        return;
+      }
+
+      const result = await markupApi.addTextMarkup([{
+        text: markerText,
+        start: { positionX: posX, positionY: posY, positionZ: posZ },
+        end: { positionX: posX, positionY: posY, positionZ: posZ + markerHeight },
+        color: { r: 0, g: 128, b: 255, a: 255 } // Blue marker
+      }]);
+
+      if (result && result.length > 0) {
+        setMessage(`✅ Marker lisatud: ${position.assembly_mark || position.guid.slice(0, 8)}`);
+      } else {
+        setMessage('Marker loodud');
+      }
+
+    } catch (e: any) {
+      console.error('Error adding GPS marker:', e);
+      setMessage('Viga markeri lisamisel: ' + e.message);
+    }
+  }, [api, projectId]);
+
   // Select positioned detail in model
   const selectPositionedDetail = useCallback(async (position: DetailPosition) => {
     try {
@@ -18270,6 +18342,15 @@ document.body.appendChild(div);`;
                             <span>Joonista</span>
                           </button>
                         )}
+                        <button
+                          className="admin-tool-btn"
+                          onClick={() => addGpsMarker(pos)}
+                          style={{ flex: '1', minWidth: '80px', background: '#8b5cf6', color: '#fff' }}
+                          title="Lisa tekstiga marker GPS asukohta"
+                        >
+                          <FiMapPin size={12} />
+                          <span>Marker</span>
+                        </button>
                         <button
                           className="admin-tool-btn"
                           onClick={() => window.open(`https://www.google.com/maps?q=${pos.latitude},${pos.longitude}`, '_blank')}
