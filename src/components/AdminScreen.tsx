@@ -3277,13 +3277,33 @@ export default function AdminScreen({
   // Select object in model by GUID
   const handleSelectQrObject = useCallback(async (guid: string) => {
     try {
-      const foundMap = await findObjectsInLoadedModels(api, [guid]);
+      // QR codes store lowercase GUIDs, but Trimble API needs original case
+      // First find the object in trimble_model_objects to get original GUID
+      const { data: modelObj } = await supabase
+        .from('trimble_model_objects')
+        .select('guid_ifc')
+        .eq('trimble_project_id', projectId)
+        .ilike('guid_ifc', guid) // Case-insensitive search
+        .limit(1)
+        .maybeSingle();
+
+      const guidsToSearch = modelObj?.guid_ifc
+        ? [modelObj.guid_ifc, guid] // Try original case first, then lowercase
+        : [guid, guid.toUpperCase()]; // Fallback: try lowercase and uppercase
+
+      console.log('[QR Select] Searching with GUIDs:', guidsToSearch);
+
+      const foundMap = await findObjectsInLoadedModels(api, guidsToSearch);
       if (foundMap.size > 0) {
         const foundItem = foundMap.values().next().value;
         if (foundItem) {
           await api.viewer.setSelection(
             { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
             'set'
+          );
+          await api.viewer.setCamera(
+            { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
+            { animationTime: 300 }
           );
           setMessage('Detail valitud mudelis');
         }
@@ -3294,7 +3314,7 @@ export default function AdminScreen({
       console.error('Error selecting object:', e);
       setMessage('Viga detaili valimisel');
     }
-  }, [api]);
+  }, [api, projectId]);
 
   // Delete QR code
   const handleDeleteQr = useCallback(async (id: string) => {
