@@ -107,5 +107,39 @@
   "loading": "Loading...",
   "keywordsPlaceholder": "keywords, comma separated",
   "dragFieldsPlaceholder": "Drag fields here or type text...",
-  "guidExamplePlaceholder": "Example:\\n3f2504e0-4f89-11d3-9a0c-0305e82c3301\\n..."
+  "guidExamplePlaceholder": "Example:\\n3f2504e0-4f89-11d3-9a0c-0305e82c3301\\n...",
+  "undo": {
+    "nothingToUndo": "Nothing to undo",
+    "itemsAddUndone": "Items add undone",
+    "itemsRemoveUndone": "Items remove undone",
+    "itemsMoveUndone": "Items move undone",
+    "groupCreateUndone": "Group creation undone",
+    "groupDeleteUndone": "Group deletion undone",
+    "groupCloneUndone": "Group clone undone",
+    "groupEditUndone": "Group edit undone",
+    "fieldEditUndone": "Field edit undone",
+    "undoError": "Error undoing"
+  },
+  "toast": {
+    "photoUploadError": "Photo upload failed",
+    "fileUploadError": "File upload failed",
+    "fileUploadedInBackground": "File uploaded in background",
+    "photoDeleteError": "Photo delete failed",
+    "urlCopied": "URL copied to clipboard",
+    "urlCopyError": "URL copy failed",
+    "colorUpdateError": "Error updating color",
+    "subgroupCreateError": "Subgroup creation failed",
+    "fieldNameRequired": "Field name is required",
+    "fieldAdded": "Field added",
+    "fieldAddError": "Error adding field",
+    "fieldUpdated": "Field updated",
+    "fieldUpdateError": "Error updating field",
+    "fieldDeleted": "Field deleted",
+    "fieldAndFilesDeleted": "Field and related files deleted",
+    "fieldDeleteError": "Error deleting field",
+    "fieldOrderError": "Error reordering fields",
+    "noPermissionAdd": "You do not have permission to add items to this group",
+    "lockedItems": "{{type}} is locked ({{user}})",
+    "lockedItemsMultiple": "Some selected items are locked ({{user}})"
+  }
 }
