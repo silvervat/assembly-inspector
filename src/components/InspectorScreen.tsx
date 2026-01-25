@@ -318,10 +318,10 @@ export default function InspectorScreen({
           await onColorModelWhite();
         }
 
-        // Fetch all plan items for this inspection type
+        // Fetch all plan items for this inspection type (including review_status)
         const { data: planItems, error } = await supabase
           .from('inspection_plan_items')
-          .select('id, guid, guid_ifc')
+          .select('id, guid, guid_ifc, review_status')
           .eq('project_id', projectId)
           .eq('inspection_type_id', inspectionTypeId);
 
@@ -330,31 +330,19 @@ export default function InspectorScreen({
           return;
         }
 
-        // Get inspection results to calculate actual status (same logic as loadPlanItemsWithStatus)
+        // Get inspection results to know which plan items have been inspected
+        // We only need plan_item_id to check existence - review_status is on inspection_plan_items
         const { data: results } = await supabase
           .from('inspection_results')
-          .select('plan_item_id, assembly_guid, review_status')
+          .select('plan_item_id')
           .eq('project_id', projectId);
 
-        // Create map to track status by plan_item_id or assembly_guid
-        type ReviewStatus = 'pending' | 'approved' | 'rejected' | null;
-        const itemStatusMap = new Map<string, ReviewStatus>();
-
+        // Create set of plan item IDs that have inspection results
+        const inspectedPlanItemIds = new Set<string>();
         if (results) {
           for (const r of results) {
-            const key = r.plan_item_id || r.assembly_guid;
-            if (!key) continue;
-
-            const currentStatus = itemStatusMap.get(key);
-            const newStatus = r.review_status as ReviewStatus;
-
-            // Priority: approved > rejected > pending > null
-            if (!currentStatus) {
-              itemStatusMap.set(key, newStatus || 'pending');
-            } else if (newStatus === 'rejected' && currentStatus !== 'approved') {
-              itemStatusMap.set(key, 'rejected');
-            } else if (newStatus === 'approved') {
-              itemStatusMap.set(key, 'approved');
+            if (r.plan_item_id) {
+              inspectedPlanItemIds.add(r.plan_item_id);
             }
           }
         }
@@ -374,22 +362,23 @@ export default function InspectorScreen({
           const guid = item.guid_ifc || item.guid;
           if (!guid) continue;
 
-          // Calculate actual status based on inspection_results
-          const resultStatus = itemStatusMap.get(item.id) ||
-            (item.guid ? itemStatusMap.get(item.guid) : undefined) ||
-            (item.guid_ifc ? itemStatusMap.get(item.guid_ifc) : undefined);
+          // Check if this plan item has been inspected (has results)
+          const hasResults = inspectedPlanItemIds.has(item.id);
+          // Get review_status from plan item (not from inspection_results)
+          const reviewStatus = (item as { review_status?: string }).review_status;
 
           let actualStatus: string;
-          if (resultStatus === 'approved') {
+          if (!hasResults) {
+            actualStatus = 'planned'; // No results = not yet inspected
+          } else if (reviewStatus === 'approved') {
             actualStatus = 'approved';
             completedCount++;
-          } else if (resultStatus === 'rejected') {
+          } else if (reviewStatus === 'rejected') {
             actualStatus = 'rejected';
-          } else if (resultStatus === 'pending') {
-            actualStatus = 'completed'; // Has results but pending review
-            completedCount++;
           } else {
-            actualStatus = 'planned'; // No results
+            // Has results but pending review (or review_status is 'pending'/'returned')
+            actualStatus = 'completed';
+            completedCount++;
           }
 
           if (statusGroups[actualStatus]) {
@@ -1871,10 +1860,10 @@ export default function InspectorScreen({
     if (inspectionMode !== 'inspection_type' || !inspectionTypeId) return;
 
     try {
-      // Get all plan items for this inspection type
+      // Get all plan items for this inspection type (including review_status)
       const { data: planItems, error: planError } = await supabase
         .from('inspection_plan_items')
-        .select('id, guid, guid_ifc, model_id, object_runtime_id, assembly_mark, object_name, product_name, assembly_selection_mode')
+        .select('id, guid, guid_ifc, model_id, object_runtime_id, assembly_mark, object_name, product_name, assembly_selection_mode, review_status')
         .eq('project_id', projectId)
         .eq('inspection_type_id', inspectionTypeId);
 
@@ -1893,36 +1882,24 @@ export default function InspectorScreen({
         setAssemblySelectionEnabled(true);
       }
 
-      // Get inspection results to calculate actual status (same logic as InspectionPlansScreen)
+      // Get inspection results to know which plan items have been inspected
+      // We only need plan_item_id to check existence - review_status is on inspection_plan_items
       const { data: results } = await supabase
         .from('inspection_results')
-        .select('plan_item_id, assembly_guid, review_status')
+        .select('plan_item_id')
         .eq('project_id', projectId);
 
-      // Create map to track status by plan_item_id or assembly_guid
-      type ReviewStatus = 'pending' | 'approved' | 'rejected' | null;
-      const itemStatusMap = new Map<string, ReviewStatus>();
-
+      // Create set of plan item IDs that have inspection results
+      const inspectedPlanItemIds = new Set<string>();
       if (results) {
         for (const r of results) {
-          const key = r.plan_item_id || r.assembly_guid;
-          if (!key) continue;
-
-          const currentStatus = itemStatusMap.get(key);
-          const newStatus = r.review_status as ReviewStatus;
-
-          // Priority: approved > rejected > pending > null
-          if (!currentStatus) {
-            itemStatusMap.set(key, newStatus || 'pending');
-          } else if (newStatus === 'rejected' && currentStatus !== 'approved') {
-            itemStatusMap.set(key, 'rejected');
-          } else if (newStatus === 'approved') {
-            itemStatusMap.set(key, 'approved');
+          if (r.plan_item_id) {
+            inspectedPlanItemIds.add(r.plan_item_id);
           }
         }
       }
 
-      // Calculate status counts based on inspection_results (same as InspectionPlansScreen)
+      // Calculate status counts based on inspection results existence and review_status from plan items
       const counts: Record<string, number> = {
         planned: 0,
         inProgress: 0,
@@ -1932,21 +1909,21 @@ export default function InspectorScreen({
       };
 
       for (const item of planItems) {
-        // Check status by plan_item_id or matching GUID
-        const status = itemStatusMap.get(item.id) ||
-          (item.guid ? itemStatusMap.get(item.guid) : undefined) ||
-          (item.guid_ifc ? itemStatusMap.get(item.guid_ifc) : undefined);
+        // Check if this plan item has been inspected (has results)
+        const hasResults = inspectedPlanItemIds.has(item.id);
+        // Get review_status from plan item
+        const reviewStatus = item.review_status;
 
-        if (status === 'approved') {
-          counts.approved++;
-        } else if (status === 'rejected') {
-          counts.rejected++;
-        } else if (status === 'pending') {
-          // Has results but pending review - show as "completed" (green)
-          counts.completed++;
-        } else {
+        if (!hasResults) {
           // No results - planned (blue)
           counts.planned++;
+        } else if (reviewStatus === 'approved') {
+          counts.approved++;
+        } else if (reviewStatus === 'rejected') {
+          counts.rejected++;
+        } else {
+          // Has results but pending review - show as "completed" (green)
+          counts.completed++;
         }
       }
 
@@ -1971,10 +1948,10 @@ export default function InspectorScreen({
     setInspectionListLoading(true);
 
     try {
-      // Get ALL plan items for this inspection type
+      // Get ALL plan items for this inspection type (including review_status)
       const { data: planItems, error: planError } = await supabase
         .from('inspection_plan_items')
-        .select('id, guid, guid_ifc, model_id, object_runtime_id, assembly_mark, object_name, product_name')
+        .select('id, guid, guid_ifc, model_id, object_runtime_id, assembly_mark, object_name, product_name, review_status')
         .eq('project_id', projectId)
         .eq('inspection_type_id', inspectionTypeId);
 
@@ -1987,31 +1964,19 @@ export default function InspectorScreen({
         return;
       }
 
-      // Get inspection results to calculate actual status (same logic as InspectionPlansScreen)
+      // Get inspection results to know which plan items have been inspected
+      // We only need plan_item_id to check existence - review_status is on inspection_plan_items
       const { data: results } = await supabase
         .from('inspection_results')
-        .select('plan_item_id, assembly_guid, review_status')
+        .select('plan_item_id')
         .eq('project_id', projectId);
 
-      // Create map to track status by plan_item_id or assembly_guid
-      type ReviewStatus = 'pending' | 'approved' | 'rejected' | null;
-      const itemStatusMap = new Map<string, ReviewStatus>();
-
+      // Create set of plan item IDs that have inspection results
+      const inspectedPlanItemIds = new Set<string>();
       if (results) {
         for (const r of results) {
-          const key = r.plan_item_id || r.assembly_guid;
-          if (!key) continue;
-
-          const currentStatus = itemStatusMap.get(key);
-          const newStatus = r.review_status as ReviewStatus;
-
-          // Priority: approved > rejected > pending > null
-          if (!currentStatus) {
-            itemStatusMap.set(key, newStatus || 'pending');
-          } else if (newStatus === 'rejected' && currentStatus !== 'approved') {
-            itemStatusMap.set(key, 'rejected');
-          } else if (newStatus === 'approved') {
-            itemStatusMap.set(key, 'approved');
+          if (r.plan_item_id) {
+            inspectedPlanItemIds.add(r.plan_item_id);
           }
         }
       }
@@ -2026,24 +1991,25 @@ export default function InspectorScreen({
         assembly_mark: string | null;
         object_name: string | null;
         product_name: string | null;
+        review_status: string | null;
         actualStatus: string;
       }
 
       const itemsWithStatus: PlanItemWithStatus[] = planItems.map(item => {
-        // Check status by plan_item_id or matching GUID
-        const resultStatus = itemStatusMap.get(item.id) ||
-          (item.guid ? itemStatusMap.get(item.guid) : undefined) ||
-          (item.guid_ifc ? itemStatusMap.get(item.guid_ifc) : undefined);
+        // Check if this plan item has been inspected (has results)
+        const hasResults = inspectedPlanItemIds.has(item.id);
+        // Get review_status from plan item
+        const reviewStatus = item.review_status;
 
         let actualStatus: string;
-        if (resultStatus === 'approved') {
-          actualStatus = 'approved';
-        } else if (resultStatus === 'rejected') {
-          actualStatus = 'rejected';
-        } else if (resultStatus === 'pending') {
-          actualStatus = 'completed'; // Has results but pending review
-        } else {
+        if (!hasResults) {
           actualStatus = 'planned'; // No results
+        } else if (reviewStatus === 'approved') {
+          actualStatus = 'approved';
+        } else if (reviewStatus === 'rejected') {
+          actualStatus = 'rejected';
+        } else {
+          actualStatus = 'completed'; // Has results but pending review
         }
 
         return { ...item, actualStatus };
