@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { TrimbleExUser, supabase } from '../supabase';
+import { TrimbleExUser, supabase, INSPECTION_STATUS_COLORS } from '../supabase';
 import {
   FiSearch, FiTool, FiBox, FiDroplet, FiZap, FiLayers,
   FiGrid, FiSquare, FiMoreHorizontal, FiLoader, FiChevronRight, FiClipboard, FiAlertTriangle, FiShield
@@ -34,6 +34,12 @@ interface TypeStats {
   typeId: string;
   totalItems: number;
   completedItems: number;
+  // Detailed status counts
+  plannedCount: number;      // Not yet inspected
+  inProgressCount: number;   // Started but not completed
+  pendingReviewCount: number; // Completed, awaiting review
+  rejectedCount: number;     // Rejected by reviewer
+  approvedCount: number;     // Approved by reviewer
 }
 
 // Map database icon names to React icons
@@ -90,19 +96,33 @@ export default function InspectionPlansScreen({
           return;
         }
 
-        // Get all completed inspection results for this project
+        // Get all inspection results with review_status for this project
         const { data: results, error: resultsError } = await supabase
           .from('inspection_results')
-          .select('plan_item_id, assembly_guid')
+          .select('plan_item_id, assembly_guid, review_status')
           .eq('project_id', projectId);
 
-        // Create a set of completed plan_item_ids and assembly_guids
-        const completedPlanItemIds = new Set<string>();
-        const completedGuids = new Set<string>();
+        // Create maps to track status by plan_item_id and assembly_guid
+        // Store the "highest" status for each item (approved > rejected > pending)
+        type ReviewStatus = 'pending' | 'approved' | 'rejected' | null;
+        const itemStatusMap = new Map<string, ReviewStatus>();
+
         if (!resultsError && results) {
           for (const r of results) {
-            if (r.plan_item_id) completedPlanItemIds.add(r.plan_item_id);
-            if (r.assembly_guid) completedGuids.add(r.assembly_guid);
+            const key = r.plan_item_id || r.assembly_guid;
+            if (!key) continue;
+
+            const currentStatus = itemStatusMap.get(key);
+            const newStatus = r.review_status as ReviewStatus;
+
+            // Priority: approved > rejected > pending > null
+            if (!currentStatus) {
+              itemStatusMap.set(key, newStatus || 'pending');
+            } else if (newStatus === 'rejected' && currentStatus !== 'approved') {
+              itemStatusMap.set(key, 'rejected');
+            } else if (newStatus === 'approved') {
+              itemStatusMap.set(key, 'approved');
+            }
           }
         }
 
@@ -122,19 +142,34 @@ export default function InspectionPlansScreen({
             statsMap[typeData.id] = {
               typeId: typeData.id,
               totalItems: 0,
-              completedItems: 0
+              completedItems: 0,
+              plannedCount: 0,
+              inProgressCount: 0,
+              pendingReviewCount: 0,
+              rejectedCount: 0,
+              approvedCount: 0
             };
           }
 
           statsMap[typeData.id].totalItems++;
 
-          // Check if this plan item is completed (has results by plan_item_id or matching GUID)
-          const isCompleted = completedPlanItemIds.has(item.id) ||
-            (item.guid && completedGuids.has(item.guid)) ||
-            (item.guid_ifc && completedGuids.has(item.guid_ifc));
+          // Check status by plan_item_id or matching GUID
+          const status = itemStatusMap.get(item.id) ||
+            (item.guid ? itemStatusMap.get(item.guid) : undefined) ||
+            (item.guid_ifc ? itemStatusMap.get(item.guid_ifc) : undefined);
 
-          if (isCompleted) {
+          if (status === 'approved') {
+            statsMap[typeData.id].approvedCount++;
             statsMap[typeData.id].completedItems++;
+          } else if (status === 'rejected') {
+            statsMap[typeData.id].rejectedCount++;
+          } else if (status === 'pending') {
+            // Has results but pending review
+            statsMap[typeData.id].pendingReviewCount++;
+            statsMap[typeData.id].completedItems++;
+          } else {
+            // No results - planned
+            statsMap[typeData.id].plannedCount++;
           }
         }
 
@@ -221,7 +256,6 @@ export default function InspectionPlansScreen({
             {inspectionTypes.map((type) => {
               const IconComponent = getIcon(type.icon);
               const stats = typeStats[type.id];
-              const pendingCount = stats ? stats.totalItems - stats.completedItems : 0;
               const isMatched = matchedTypeIds.includes(type.id);
               const isCompleted = completedTypeIds.includes(type.id);
               const matchClass = isMatched ? (isCompleted ? 'matched-completed' : 'matched-pending') : '';
@@ -249,18 +283,35 @@ export default function InspectionPlansScreen({
 
                   {stats && (
                     <div className="inspection-plan-stats">
-                      <div className="inspection-plan-counts">
-                        <span className="stat-item">
-                          <span className="stat-label">Kokku:</span>
-                          <span className="stat-value">{stats.totalItems}</span>
+                      {/* Status indicators with colors */}
+                      <div className="inspection-plan-status-row">
+                        <span
+                          className="status-indicator"
+                          style={{ backgroundColor: INSPECTION_STATUS_COLORS.planned.hex }}
+                          title={INSPECTION_STATUS_COLORS.planned.label}
+                        >
+                          {stats.plannedCount}
                         </span>
-                        <span className="stat-item">
-                          <span className="stat-label">Tehtud:</span>
-                          <span className="stat-value">{stats.completedItems}</span>
+                        <span
+                          className="status-indicator"
+                          style={{ backgroundColor: INSPECTION_STATUS_COLORS.completed.hex }}
+                          title={INSPECTION_STATUS_COLORS.completed.label}
+                        >
+                          {stats.pendingReviewCount}
                         </span>
-                        <span className="stat-item">
-                          <span className="stat-label">Tegemata:</span>
-                          <span className="stat-value">{pendingCount}</span>
+                        <span
+                          className="status-indicator"
+                          style={{ backgroundColor: INSPECTION_STATUS_COLORS.rejected.hex }}
+                          title={INSPECTION_STATUS_COLORS.rejected.label}
+                        >
+                          {stats.rejectedCount}
+                        </span>
+                        <span
+                          className="status-indicator"
+                          style={{ backgroundColor: INSPECTION_STATUS_COLORS.approved.hex }}
+                          title={INSPECTION_STATUS_COLORS.approved.label}
+                        >
+                          {stats.approvedCount}
                         </span>
                       </div>
                       {stats.totalItems > 0 && (
