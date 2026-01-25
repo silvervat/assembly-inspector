@@ -2500,7 +2500,8 @@ export default function InspectorScreen({
         )}
       </div>
 
-      {requiresAssemblySelection && !assemblySelectionEnabled && (
+      {/* Only show warning if assembly is required AND not intentionally locked OFF */}
+      {requiresAssemblySelection && !assemblySelectionEnabled && lockedAssemblyMode !== false && (
         <div className="warning-banner">
           ⚠️ Assembly Selection pole sisse lülitatud
         </div>
