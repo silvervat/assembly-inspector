@@ -481,6 +481,10 @@ export default function AdminScreen({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  // Manual GPS input when geolocation fails (Trimble iframe restriction)
+  const [pendingQrCode, setPendingQrCode] = useState<{ guid: string; assembly_mark: string | null } | null>(null);
+  const [manualLat, setManualLat] = useState('');
+  const [manualLng, setManualLng] = useState('');
   const addDebugLog = (msg: string) => {
     const timestamp = new Date().toLocaleTimeString('et-EE');
     setDebugLogs(prev => [`[${timestamp}] ${msg}`, ...prev].slice(0, 50));
@@ -3678,7 +3682,12 @@ export default function AdminScreen({
         },
         (gpsError) => {
           console.error('GPS error:', gpsError);
-          setMessage(`GPS viga: ${gpsError.message}. Luba asukoha kasutamine.`);
+          // GPS failed - likely Trimble iframe restriction. Show manual input form.
+          addDebugLog(`GPS viga: ${gpsError.message}`);
+          setPendingQrCode(qrCode);
+          setManualLat('');
+          setManualLng('');
+          setMessage(`GPS ei tööta Trimble iframe'is. Sisesta koordinaadid käsitsi või ava Google Maps`);
           setPositionCapturing(false);
         },
         {
@@ -3693,6 +3702,61 @@ export default function AdminScreen({
       setPositionCapturing(false);
     }
   }, [projectId, user, stopScanner, loadPositions]);
+
+  // Save manually entered coordinates
+  const saveManualPosition = useCallback(async () => {
+    if (!pendingQrCode) return;
+
+    const lat = parseFloat(manualLat.replace(',', '.'));
+    const lng = parseFloat(manualLng.replace(',', '.'));
+
+    if (isNaN(lat) || isNaN(lng)) {
+      setMessage('Vigased koordinaadid. Formaat: 59.123456, 24.123456');
+      return;
+    }
+
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      setMessage('Koordinaadid vahemikust väljas');
+      return;
+    }
+
+    setPositionCapturing(true);
+    const { error: saveError } = await supabase
+      .from('detail_positions')
+      .upsert({
+        project_id: projectId,
+        guid: pendingQrCode.guid,
+        assembly_mark: pendingQrCode.assembly_mark,
+        latitude: lat,
+        longitude: lng,
+        altitude: null,
+        accuracy: null,
+        positioned_at: new Date().toISOString(),
+        positioned_by: user?.email || 'unknown',
+        positioned_by_name: user?.name || user?.email || 'unknown'
+      }, {
+        onConflict: 'project_id,guid'
+      });
+
+    if (saveError) {
+      console.error('Error saving position:', saveError);
+      setMessage('Viga positsiooni salvestamisel');
+    } else {
+      setMessage(`✅ Positsioon salvestatud: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+      loadPositions();
+      setPendingQrCode(null);
+      setManualLat('');
+      setManualLng('');
+    }
+    setPositionCapturing(false);
+  }, [pendingQrCode, manualLat, manualLng, projectId, user, loadPositions]);
+
+  // Open Google Maps to get current location
+  const openGoogleMaps = useCallback(() => {
+    // Open Google Maps which will show user's current location
+    window.open('https://www.google.com/maps/@0,0,2z', '_blank');
+    setMessage('Ava Google Maps, tee "long press" oma asukohale ja kopeeri koordinaadid');
+  }, []);
 
   // Draw position circle on model (10m radius red circle)
   const drawPositionCircle = useCallback(async (position: DetailPosition) => {
@@ -17822,6 +17886,99 @@ document.body.appendChild(div);`;
               }}>
                 <FiLoader className="spin" size={14} />
                 GPS asukohta määratakse...
+              </div>
+            )}
+
+            {/* Manual GPS input form (when GPS fails in iframe) */}
+            {pendingQrCode && !positionCapturing && (
+              <div style={{
+                padding: '12px',
+                background: '#f0f9ff',
+                borderRadius: '8px',
+                border: '1px solid #0ea5e9',
+                marginTop: '12px'
+              }}>
+                <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '8px', color: '#0369a1' }}>
+                  📍 {pendingQrCode.assembly_mark || pendingQrCode.guid.slice(0, 8)}
+                </div>
+                <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>
+                  GPS ei tööta iframe'is. Ava Google Maps, tee pikk vajutus oma asukohale ja kopeeri koordinaadid siia.
+                </p>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                  <input
+                    type="text"
+                    placeholder="Lat (59.123456)"
+                    value={manualLat}
+                    onChange={(e) => setManualLat(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '8px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Lng (24.123456)"
+                    value={manualLng}
+                    onChange={(e) => setManualLng(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '8px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={openGoogleMaps}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      background: '#f3f4f6',
+                      color: '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '13px'
+                    }}
+                  >
+                    Ava Maps
+                  </button>
+                  <button
+                    onClick={saveManualPosition}
+                    disabled={!manualLat || !manualLng}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      background: manualLat && manualLng ? '#0ea5e9' : '#d1d5db',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: manualLat && manualLng ? 'pointer' : 'not-allowed',
+                      fontSize: '13px'
+                    }}
+                  >
+                    Salvesta
+                  </button>
+                  <button
+                    onClick={() => { setPendingQrCode(null); setManualLat(''); setManualLng(''); }}
+                    style={{
+                      padding: '8px 12px',
+                      background: 'transparent',
+                      color: '#6b7280',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '13px'
+                    }}
+                  >
+                    Tühista
+                  </button>
+                </div>
               </div>
             )}
           </div>
