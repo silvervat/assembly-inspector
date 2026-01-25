@@ -3495,8 +3495,8 @@ export default function AdminScreen({
           const foundMap = await findObjectsInLoadedModels(api, guidsToSearch);
           addDebugLog(`[${pos.assembly_mark}] Model search: found ${foundMap.size} objects`);
 
-          const foundItem = foundMap.get(pos.guid.toLowerCase()) ||
-                           (modelObj?.guid_ifc ? foundMap.get(modelObj.guid_ifc.toLowerCase()) : undefined);
+          // Get the first found item - Map keys might be in different case
+          const foundItem = foundMap.size > 0 ? foundMap.values().next().value : undefined;
 
           if (foundItem) {
             addDebugLog(`[${pos.assembly_mark}] Found in model: ${foundItem.modelId}:${foundItem.runtimeId}`);
