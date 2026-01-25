@@ -1978,10 +1978,10 @@ export default function InspectorScreen({
     setInspectionListLoading(true);
 
     try {
-      // Get ALL plan items for this inspection type (including review_status)
+      // Get ALL plan items for this inspection type (including review_status and location data)
       const { data: planItems, error: planError } = await supabase
         .from('inspection_plan_items')
-        .select('id, guid, guid_ifc, model_id, object_runtime_id, assembly_mark, object_name, object_type, product_name, review_status')
+        .select('id, guid, guid_ifc, model_id, object_runtime_id, assembly_mark, object_name, object_type, product_name, review_status, cast_unit_bottom_elevation, cast_unit_top_elevation, cast_unit_position_code, parent_assembly_mark')
         .eq('project_id', projectId)
         .eq('inspection_type_id', inspectionTypeId);
 
@@ -2100,7 +2100,12 @@ export default function InspectorScreen({
           guid: item.guid || undefined,
           guid_ifc: item.guid_ifc || undefined,
           // product_name: prefer plan item, then model objects, then IFC class
-          product_name: item.product_name || modelObj?.product_name || item.object_type || undefined
+          product_name: item.product_name || modelObj?.product_name || item.object_type || undefined,
+          // Location data
+          cast_unit_bottom_elevation: (item as any).cast_unit_bottom_elevation || undefined,
+          cast_unit_top_elevation: (item as any).cast_unit_top_elevation || undefined,
+          cast_unit_position_code: (item as any).cast_unit_position_code || undefined,
+          parent_assembly_mark: (item as any).parent_assembly_mark || undefined
         };
       });
 

@@ -19,6 +19,11 @@ export interface InspectionItem {
   file_name?: string;
   user_email?: string;
   product_name?: string;
+  // Location data
+  cast_unit_bottom_elevation?: string;
+  cast_unit_top_elevation?: string;
+  cast_unit_position_code?: string;
+  parent_assembly_mark?: string;
 }
 
 // Extended result with checkpoint name
@@ -685,6 +690,15 @@ export default function InspectionList({
             <span className="inspection-mark">
               {insp.assembly_mark || `#${insp.object_runtime_id || '?'}`}
             </span>
+            {/* Location info */}
+            {(insp.cast_unit_position_code || insp.cast_unit_bottom_elevation || insp.cast_unit_top_elevation || insp.parent_assembly_mark) && (
+              <span className="inspection-location" style={{ fontSize: '10px', color: '#94a3b8', marginLeft: '8px' }}>
+                {insp.cast_unit_position_code && <span title="Telje asukoht">📍{insp.cast_unit_position_code}</span>}
+                {insp.cast_unit_bottom_elevation && <span title="Alumine kõrgus"> ⬇️{insp.cast_unit_bottom_elevation}</span>}
+                {insp.cast_unit_top_elevation && <span title="Ülemine kõrgus"> ⬆️{insp.cast_unit_top_elevation}</span>}
+                {insp.parent_assembly_mark && <span title="Ema detaili mark"> 🏠{insp.parent_assembly_mark}</span>}
+              </span>
+            )}
           </div>
           <button
             className="inspection-info-btn"
@@ -771,6 +785,15 @@ export default function InspectionList({
               {insp.assembly_mark || `#${insp.object_runtime_id || '?'}`}
               {insp.product_name && <span className="inspection-product"> | {insp.product_name}</span>}
             </span>
+            {/* Location info */}
+            {(insp.cast_unit_position_code || insp.cast_unit_bottom_elevation || insp.cast_unit_top_elevation || insp.parent_assembly_mark) && (
+              <span className="inspection-location" style={{ fontSize: '10px', color: '#94a3b8', marginLeft: '8px' }}>
+                {insp.cast_unit_position_code && <span title="Telje asukoht">📍{insp.cast_unit_position_code}</span>}
+                {insp.cast_unit_bottom_elevation && <span title="Alumine kõrgus"> ⬇️{insp.cast_unit_bottom_elevation}</span>}
+                {insp.cast_unit_top_elevation && <span title="Ülemine kõrgus"> ⬆️{insp.cast_unit_top_elevation}</span>}
+                {insp.parent_assembly_mark && <span title="Ema detaili mark"> 🏠{insp.parent_assembly_mark}</span>}
+              </span>
+            )}
             {mode === 'all' && (
               <span className="inspection-inspector">{insp.inspector_name}</span>
             )}

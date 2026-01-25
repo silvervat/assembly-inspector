@@ -63,6 +63,11 @@ interface SelectedObject {
   objectName?: string;
   objectType?: string;
   productName?: string;
+  // Location data
+  bottomElevation?: string;
+  topElevation?: string;
+  positionCode?: string;
+  parentAssemblyMark?: string;
 }
 
 // Duplicate warning info
@@ -226,6 +231,11 @@ export default function InspectionPlanScreen({
               let objectName = '';
               let objectType = '';
               let productName = '';
+              // Location properties
+              let bottomElevation = '';
+              let topElevation = '';
+              let positionCode = '';
+              let parentAssemblyMark = '';
 
               if (objProps?.properties) {
                 // Get property mapping settings (with defaults)
@@ -268,12 +278,26 @@ export default function InspectionPlanScreen({
                       psetName === assemblyMarkSet) {
                     for (const prop of psetAny.properties || []) {
                       const propNameNorm = (prop.name || '').replace(/[_\s]+/g, '').toLowerCase();
+                      const propValue = String(prop.displayValue ?? prop.value ?? '');
+                      if (!propValue) continue;
+
                       // Match configured property or fallback to cast_unit_mark/assembly_mark patterns
-                      if (propNameNorm === assemblyMarkPropNorm ||
+                      if (!assemblyMark && (propNameNorm === assemblyMarkPropNorm ||
                           (propNameNorm.includes('cast') && propNameNorm.includes('mark')) ||
-                          (propNameNorm.includes('assembly') && propNameNorm.includes('mark'))) {
-                        assemblyMark = String(prop.displayValue ?? prop.value ?? '');
-                        break;
+                          (propNameNorm.includes('assembly') && propNameNorm.includes('mark')))) {
+                        assemblyMark = propValue;
+                      }
+                      // Bottom elevation (Assembly/Cast unit bottom elevation)
+                      if (!bottomElevation && propNameNorm.includes('bottom') && propNameNorm.includes('elevation')) {
+                        bottomElevation = propValue;
+                      }
+                      // Top elevation (Assembly/Cast unit top elevation)
+                      if (!topElevation && propNameNorm.includes('top') && propNameNorm.includes('elevation')) {
+                        topElevation = propValue;
+                      }
+                      // Position code (Assembly/Cast unit position code)
+                      if (!positionCode && propNameNorm.includes('position') && propNameNorm.includes('code')) {
+                        positionCode = propValue;
                       }
                     }
                   }
@@ -339,6 +363,73 @@ export default function InspectionPlanScreen({
                 duplicateWarnings.push({ guid, existingItem });
               }
 
+              // Try to find parent assembly mark if object doesn't have its own
+              // and assembly selection is OFF (meaning we selected a child object directly)
+              if (!assemblyMark && assemblyMode === 'off') {
+                try {
+                  // Temporarily enable assembly selection to find parent
+                  await (api.viewer as any).setSettings?.({ assemblySelection: true });
+
+                  // Select same object - with assembly selection ON, it will select the parent assembly
+                  await api.viewer.setSelection({
+                    modelObjectIds: [{ modelId: sel.modelId, objectRuntimeIds: [runtimeId] }]
+                  }, 'set');
+
+                  // Get current selection (should be the parent assembly)
+                  const parentSelection = await api.viewer.getSelection();
+
+                  if (parentSelection && parentSelection.length > 0) {
+                    const parentRuntimeIds = parentSelection[0].objectRuntimeIds || [];
+                    if (parentRuntimeIds.length > 0 && parentRuntimeIds[0] !== runtimeId) {
+                      // We found a different (parent) object
+                      const parentProps = await api.viewer.getObjectProperties(sel.modelId, [parentRuntimeIds[0]]);
+                      const parentObjProps = parentProps?.[0];
+
+                      if (parentObjProps?.properties) {
+                        for (const pset of parentObjProps.properties) {
+                          const psetAny = pset as any;
+                          const psetNameNormalized = (psetAny.set || psetAny.name || '').replace(/\s+/g, '').toLowerCase();
+
+                          if (psetNameNormalized.includes('tekla') && psetNameNormalized.includes('assembly')) {
+                            for (const prop of psetAny.properties || []) {
+                              const propNameNorm = (prop.name || '').replace(/[_\s]+/g, '').toLowerCase();
+                              const propValue = String(prop.displayValue ?? prop.value ?? '');
+                              if (!propValue) continue;
+
+                              // Get parent's assembly mark
+                              if (!parentAssemblyMark &&
+                                  ((propNameNorm.includes('cast') && propNameNorm.includes('mark')) ||
+                                   (propNameNorm.includes('assembly') && propNameNorm.includes('mark')))) {
+                                parentAssemblyMark = propValue;
+                              }
+                              // Also copy elevation/position from parent if child doesn't have them
+                              if (!bottomElevation && propNameNorm.includes('bottom') && propNameNorm.includes('elevation')) {
+                                bottomElevation = propValue;
+                              }
+                              if (!topElevation && propNameNorm.includes('top') && propNameNorm.includes('elevation')) {
+                                topElevation = propValue;
+                              }
+                              if (!positionCode && propNameNorm.includes('position') && propNameNorm.includes('code')) {
+                                positionCode = propValue;
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+
+                  // Restore assembly selection mode
+                  await (api.viewer as any).setSettings?.({ assemblySelection: false });
+                } catch (e) {
+                  console.warn('Could not get parent assembly info:', e);
+                  // Restore assembly selection mode on error
+                  try {
+                    await (api.viewer as any).setSettings?.({ assemblySelection: false });
+                  } catch { /* ignore */ }
+                }
+              }
+
               objects.push({
                 modelId: sel.modelId,
                 runtimeId,
@@ -348,7 +439,11 @@ export default function InspectionPlanScreen({
                 assemblyMark,
                 objectName,
                 objectType,
-                productName
+                productName,
+                bottomElevation,
+                topElevation,
+                positionCode,
+                parentAssemblyMark
               });
             }
           }
@@ -678,6 +773,11 @@ export default function InspectionPlanScreen({
         object_name: obj.objectName || null,
         object_type: obj.objectType || null,
         product_name: obj.productName || obj.objectType || null,  // Fallback to IFC class
+        // Location data
+        cast_unit_bottom_elevation: obj.bottomElevation || null,
+        cast_unit_top_elevation: obj.topElevation || null,
+        cast_unit_position_code: obj.positionCode || null,
+        parent_assembly_mark: obj.parentAssemblyMark || null,
         inspection_type_id: selectedTypeId || null,
         category_id: selectedCategoryId || null,
         assembly_selection_mode: assemblyMode === 'on',
@@ -1536,6 +1636,15 @@ export default function InspectionPlanScreen({
                       <span className="selected-product">{obj.productName}</span>
                     )}
                     <span className="selected-type">{obj.objectType}</span>
+                    {/* Location info */}
+                    {(obj.positionCode || obj.bottomElevation || obj.topElevation || obj.parentAssemblyMark) && (
+                      <span className="selected-location" style={{ fontSize: '10px', color: '#64748b' }}>
+                        {obj.positionCode && <span title="Telje asukoht">📍{obj.positionCode}</span>}
+                        {obj.bottomElevation && <span title="Alumine kõrgus"> ⬇️{obj.bottomElevation}</span>}
+                        {obj.topElevation && <span title="Ülemine kõrgus"> ⬆️{obj.topElevation}</span>}
+                        {obj.parentAssemblyMark && <span title="Ema detaili mark"> 🏠{obj.parentAssemblyMark}</span>}
+                      </span>
+                    )}
                     {duplicates.find(d => d.guid === obj.guid) && (
                       <span className="duplicate-badge">⚠️ Juba kavas</span>
                     )}
@@ -1858,6 +1967,23 @@ export default function InspectionPlanScreen({
                                           {/* Expanded item details */}
                                           {isItemExpanded && (
                                             <div className="item-expanded">
+                                              {/* Location info */}
+                                              {(item.cast_unit_position_code || item.cast_unit_bottom_elevation || item.cast_unit_top_elevation || item.parent_assembly_mark) && (
+                                                <div className="item-location-info" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px', fontSize: '11px', color: '#64748b' }}>
+                                                  {item.cast_unit_position_code && (
+                                                    <span title="Telje asukoht">📍 {item.cast_unit_position_code}</span>
+                                                  )}
+                                                  {item.cast_unit_bottom_elevation && (
+                                                    <span title="Alumine kõrgus">⬇️ {item.cast_unit_bottom_elevation}</span>
+                                                  )}
+                                                  {item.cast_unit_top_elevation && (
+                                                    <span title="Ülemine kõrgus">⬆️ {item.cast_unit_top_elevation}</span>
+                                                  )}
+                                                  {item.parent_assembly_mark && (
+                                                    <span title="Ema detaili mark">🏠 {item.parent_assembly_mark}</span>
+                                                  )}
+                                                </div>
+                                              )}
                                               {item.planner_notes && (
                                                 <div className="item-notes">📝 {item.planner_notes}</div>
                                               )}
