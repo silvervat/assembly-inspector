@@ -35,7 +35,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.979';
+export const APP_VERSION = '3.0.981';
 
 // Super admin emails from environment variable (comma-separated)
 // These users always have full access regardless of database settings

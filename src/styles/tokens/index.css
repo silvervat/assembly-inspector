@@ -1,0 +1,34 @@
+/* Assembly Inspector - Design Tokens Index
+   Import all tokens
+   ============================================================ */
+
+@import './colors.css';
+@import './spacing.css';
+@import './typography.css';
+@import './shadows.css';
+@import './borders.css';
+
+/* Transitions */
+:root {
+  --transition-fast: 100ms ease;
+  --transition-base: 150ms ease;
+  --transition-slow: 200ms ease;
+}
+
+/* Z-index scale */
+:root {
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 1000;
+  --z-toast: 1100;
+  --z-tooltip: 1200;
+}
+
+/* Component heights (compact) */
+:root {
+  --height-input: 30px;
+  --height-input-sm: 26px;
+  --height-btn: 28px;
+  --height-btn-sm: 24px;
+  --height-btn-xs: 22px;
+}

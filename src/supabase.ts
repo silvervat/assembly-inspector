@@ -55,6 +55,9 @@ export interface TrimbleExUser {
   // Admin access
   can_access_admin: boolean;
 
+  // User preferences
+  preferred_language?: 'et' | 'en' | 'ru' | 'fi';
+
   created_at: string;
   updated_at?: string;
   trimble_project_id: string;
