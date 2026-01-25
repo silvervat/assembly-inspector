@@ -17,55 +17,92 @@ export interface ModelCoordinate {
 /**
  * Belgian Lambert 72 (EPSG:31370) to WGS84 conversion
  *
- * This uses an approximation based on the projection parameters.
- * Accuracy is typically within 1-2 meters for most of Belgium.
+ * Uses polynomial approximation based on NGI (Belgian National Geographic Institute).
+ * Accuracy is typically within 1 meter for Belgium.
  *
- * Belgian Lambert 72 parameters:
- * - Central meridian: 4.367486666666666° E
- * - Latitude of false origin: 90° N
- * - False easting: 150000.013 m
- * - False northing: 5400088.438 m
- * - Standard parallels: 49.8333° N and 51.1667° N
+ * Reference: https://www.ngi.be/
  */
 export function belgianLambert72ToWGS84(x: number, y: number): GPSCoordinate {
-  // Belgian Lambert 72 projection constants
-  const n = 0.7716421928;      // Cone constant
-  const F = 1.8121974321;      // Scaling factor
-  const rho0 = 5522557.5304;   // Radius at latitude of origin
-  const lambda0 = 0.076042943; // Central meridian in radians (4.367486666...°)
+  // Step 1: Lambert 72 to Belgian geographic (BD72 datum)
+  // Using Lambert Conformal Conic projection inverse
 
-  // False origin
-  const x0 = 150000.013;
-  const y0 = 5400088.438;
+  // Lambert 72 projection parameters (Hayford 1924 ellipsoid)
+  const a = 6378388;           // Semi-major axis (Hayford)
+  const e = 0.08199188998;     // Eccentricity (Hayford)
+  const lambda0 = 0.076042943; // Central meridian 4°21'24.983" in radians
+  const phi0 = 1.57079632679;  // Latitude of origin 90° in radians
+  const phi1 = 0.86975574;     // Standard parallel 1: 49°50' in radians
+  const phi2 = 0.89302680;     // Standard parallel 2: 51°10' in radians
+  const x0 = 150000.013;       // False easting
+  const y0 = 5400088.438;      // False northing
 
-  // Transform to projection coordinates
+  // Calculate cone constant n
+  const m1 = Math.cos(phi1) / Math.sqrt(1 - e * e * Math.sin(phi1) * Math.sin(phi1));
+  const m2 = Math.cos(phi2) / Math.sqrt(1 - e * e * Math.sin(phi2) * Math.sin(phi2));
+
+  const t0 = Math.tan(Math.PI / 4 - phi0 / 2) / Math.pow((1 - e * Math.sin(phi0)) / (1 + e * Math.sin(phi0)), e / 2);
+  const t1 = Math.tan(Math.PI / 4 - phi1 / 2) / Math.pow((1 - e * Math.sin(phi1)) / (1 + e * Math.sin(phi1)), e / 2);
+  const t2 = Math.tan(Math.PI / 4 - phi2 / 2) / Math.pow((1 - e * Math.sin(phi2)) / (1 + e * Math.sin(phi2)), e / 2);
+
+  const n = (Math.log(m1) - Math.log(m2)) / (Math.log(t1) - Math.log(t2));
+  const F = m1 / (n * Math.pow(t1, n));
+  const rho0 = a * F * Math.pow(t0, n);
+
+  // Inverse projection
   const xp = x - x0;
   const yp = rho0 - (y - y0);
-
-  // Calculate rho and theta
-  const rho = Math.sqrt(xp * xp + yp * yp);
+  const rho = Math.sign(n) * Math.sqrt(xp * xp + yp * yp);
   const theta = Math.atan2(xp, yp);
 
-  // Calculate latitude (iterative)
-  const t = Math.pow(rho / (6378137 * F), 1 / n);
+  const t = Math.pow(rho / (a * F), 1 / n);
 
-  // First approximation
+  // Iterative calculation of latitude
   let phi = Math.PI / 2 - 2 * Math.atan(t);
-
-  // Iterative refinement (3 iterations is usually enough)
-  const e = 0.08181919084; // Eccentricity of WGS84
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 10; i++) {
     const sinPhi = Math.sin(phi);
     const eSinPhi = e * sinPhi;
-    phi = Math.PI / 2 - 2 * Math.atan(t * Math.pow((1 - eSinPhi) / (1 + eSinPhi), e / 2));
+    const phiNew = Math.PI / 2 - 2 * Math.atan(t * Math.pow((1 - eSinPhi) / (1 + eSinPhi), e / 2));
+    if (Math.abs(phiNew - phi) < 1e-12) break;
+    phi = phiNew;
   }
 
-  // Calculate longitude
   const lambda = theta / n + lambda0;
 
-  // Convert to degrees
-  const latitude = phi * 180 / Math.PI;
-  const longitude = lambda * 180 / Math.PI;
+  // Step 2: BD72 to WGS84 datum transformation (Molodensky)
+  // Transformation parameters BD72 -> WGS84
+  const dx = -106.8686;
+  const dy = 52.2978;
+  const dz = -103.7239;
+
+  // Hayford ellipsoid
+  const aH = 6378388;
+  const fH = 1 / 297;
+
+  // WGS84 ellipsoid
+  const aW = 6378137;
+  const fW = 1 / 298.257223563;
+
+  const da = aW - aH;
+  const df = fW - fH;
+
+  const sinPhi = Math.sin(phi);
+  const cosPhi = Math.cos(phi);
+  const sinLambda = Math.sin(lambda);
+  const cosLambda = Math.cos(lambda);
+
+  const eH2 = 2 * fH - fH * fH;
+  const Rn = aH / Math.sqrt(1 - eH2 * sinPhi * sinPhi);
+  const Rm = aH * (1 - eH2) / Math.pow(1 - eH2 * sinPhi * sinPhi, 1.5);
+
+  const dPhi = (-dx * sinPhi * cosLambda - dy * sinPhi * sinLambda + dz * cosPhi
+               + da * (Rn * eH2 * sinPhi * cosPhi) / aH
+               + df * (Rm * aH / (1 - fH) + Rn * (1 - fH) / 1) * sinPhi * cosPhi) / Rm;
+
+  const dLambda = (-dx * sinLambda + dy * cosLambda) / (Rn * cosPhi);
+
+  // Final WGS84 coordinates
+  const latitude = (phi + dPhi) * 180 / Math.PI;
+  const longitude = (lambda + dLambda) * 180 / Math.PI;
 
   return { latitude, longitude };
 }
@@ -75,36 +112,73 @@ export function belgianLambert72ToWGS84(x: number, y: number): GPSCoordinate {
  * Inverse of the above function
  */
 export function wgs84ToBelgianLambert72(latitude: number, longitude: number): ModelCoordinate {
-  // Belgian Lambert 72 projection constants
-  const n = 0.7716421928;
-  const F = 1.8121974321;
-  const rho0 = 5522557.5304;
-  const lambda0 = 0.076042943; // Central meridian in radians
+  // Step 1: WGS84 to BD72 datum transformation (inverse Molodensky)
+  const dx = 106.8686;   // Note: reversed signs for inverse
+  const dy = -52.2978;
+  const dz = 103.7239;
 
-  // False origin
+  // WGS84 ellipsoid
+  const aW = 6378137;
+  const fW = 1 / 298.257223563;
+
+  // Hayford ellipsoid (BD72)
+  const aH = 6378388;
+  const fH = 1 / 297;
+
+  // Convert to radians
+  let phi = latitude * Math.PI / 180;
+  let lambda = longitude * Math.PI / 180;
+
+  const sinPhi = Math.sin(phi);
+  const cosPhi = Math.cos(phi);
+  const sinLambda = Math.sin(lambda);
+  const cosLambda = Math.cos(lambda);
+
+  const eW2 = 2 * fW - fW * fW;
+  const Rn = aW / Math.sqrt(1 - eW2 * sinPhi * sinPhi);
+  const Rm = aW * (1 - eW2) / Math.pow(1 - eW2 * sinPhi * sinPhi, 1.5);
+
+  const da = aH - aW;
+  const df = fH - fW;
+
+  const dPhi = (-dx * sinPhi * cosLambda - dy * sinPhi * sinLambda + dz * cosPhi
+               + da * (Rn * eW2 * sinPhi * cosPhi) / aW
+               + df * (Rm * aW / (1 - fW) + Rn * (1 - fW)) * sinPhi * cosPhi) / Rm;
+
+  const dLambda = (-dx * sinLambda + dy * cosLambda) / (Rn * cosPhi);
+
+  // BD72 geographic coordinates
+  phi = phi + dPhi;
+  lambda = lambda + dLambda;
+
+  // Step 2: BD72 geographic to Lambert 72 projection
+  const a = 6378388;           // Hayford semi-major axis
+  const e = 0.08199188998;     // Hayford eccentricity
+  const lambda0 = 0.076042943; // Central meridian
+  const phi0 = 1.57079632679;  // Latitude of origin 90°
+  const phi1 = 0.86975574;     // Standard parallel 1: 49°50'
+  const phi2 = 0.89302680;     // Standard parallel 2: 51°10'
   const x0 = 150000.013;
   const y0 = 5400088.438;
 
-  // WGS84 ellipsoid
-  const a = 6378137; // Semi-major axis
-  const e = 0.08181919084; // Eccentricity
+  // Calculate cone constant n
+  const m1 = Math.cos(phi1) / Math.sqrt(1 - e * e * Math.sin(phi1) * Math.sin(phi1));
+  const m2 = Math.cos(phi2) / Math.sqrt(1 - e * e * Math.sin(phi2) * Math.sin(phi2));
 
-  // Convert to radians
-  const phi = latitude * Math.PI / 180;
-  const lambda = longitude * Math.PI / 180;
+  const t0 = Math.tan(Math.PI / 4 - phi0 / 2) / Math.pow((1 - e * Math.sin(phi0)) / (1 + e * Math.sin(phi0)), e / 2);
+  const t1 = Math.tan(Math.PI / 4 - phi1 / 2) / Math.pow((1 - e * Math.sin(phi1)) / (1 + e * Math.sin(phi1)), e / 2);
+  const t2 = Math.tan(Math.PI / 4 - phi2 / 2) / Math.pow((1 - e * Math.sin(phi2)) / (1 + e * Math.sin(phi2)), e / 2);
 
-  // Calculate t
-  const sinPhi = Math.sin(phi);
-  const eSinPhi = e * sinPhi;
-  const t = Math.tan(Math.PI / 4 - phi / 2) / Math.pow((1 - eSinPhi) / (1 + eSinPhi), e / 2);
+  const n = (Math.log(m1) - Math.log(m2)) / (Math.log(t1) - Math.log(t2));
+  const F = m1 / (n * Math.pow(t1, n));
+  const rho0 = a * F * Math.pow(t0, n);
 
-  // Calculate rho
+  // Forward projection
+  const sinPhiP = Math.sin(phi);
+  const t = Math.tan(Math.PI / 4 - phi / 2) / Math.pow((1 - e * sinPhiP) / (1 + e * sinPhiP), e / 2);
   const rho = a * F * Math.pow(t, n);
-
-  // Calculate theta
   const theta = n * (lambda - lambda0);
 
-  // Calculate x, y
   const x = x0 + rho * Math.sin(theta);
   const y = y0 + rho0 - rho * Math.cos(theta);
 
