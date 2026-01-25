@@ -193,5 +193,10 @@
     "speed": "Kiirus",
     "playing": "Esitamine",
     "paused": "Peatatud"
+  },
+  "viewMode": {
+    "byDate": "Kuupäevade järgi",
+    "byFactory": "Tehaste järgi",
+    "openFullView": "Ava täisvaade eraldi aknas"
   }
 }

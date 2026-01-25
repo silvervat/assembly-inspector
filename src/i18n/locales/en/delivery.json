@@ -193,5 +193,10 @@
     "speed": "Speed",
     "playing": "Playing",
     "paused": "Paused"
+  },
+  "viewMode": {
+    "byDate": "By date",
+    "byFactory": "By factory",
+    "openFullView": "Open full view in new window"
   }
 }
