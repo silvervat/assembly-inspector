@@ -480,6 +480,11 @@ export default function AdminScreen({
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const addDebugLog = (msg: string) => {
+    const timestamp = new Date().toLocaleTimeString('et-EE');
+    setDebugLogs(prev => [`[${timestamp}] ${msg}`, ...prev].slice(0, 50));
+  };
 
   // Shape paste base point (for relative positioning)
   const [shapeBasePoint, setShapeBasePoint] = useState<{ x: number; y: number; z: number } | null>(null);
@@ -3463,15 +3468,34 @@ export default function AdminScreen({
   // Start QR scanner
   const startScanner = useCallback(async () => {
     try {
-      console.log('[Scanner] Starting camera...');
+      addDebugLog('Starting camera...');
 
       // Check if BarcodeDetector is available
       if (!('BarcodeDetector' in window)) {
+        addDebugLog('ERROR: BarcodeDetector not supported');
         setMessage('QR skänner pole selles brauseris toetatud. Kasuta Chrome\'i.');
         return;
       }
+      addDebugLog('BarcodeDetector OK');
+
+      // Check if getUserMedia is available
+      if (!navigator.mediaDevices?.getUserMedia) {
+        addDebugLog('ERROR: getUserMedia not supported');
+        setMessage('Kaamera API pole toetatud.');
+        return;
+      }
+      addDebugLog('getUserMedia OK');
+
+      // IMPORTANT: Set scannerActive FIRST so video element is rendered
+      setScannerActive(true);
+      scannerActiveRef.current = true;
+      addDebugLog('Scanner activated, video element should render now');
+
+      // Small delay to ensure React renders the video element
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Request camera permission
+      addDebugLog('Requesting camera permission...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment', // Use back camera on mobile
@@ -3480,24 +3504,26 @@ export default function AdminScreen({
         }
       });
 
-      console.log('[Scanner] Camera stream obtained');
+      addDebugLog(`Camera stream obtained: ${stream.getVideoTracks().length} tracks`);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        addDebugLog('Stream assigned to video element');
 
         // Wait for video to be ready
         videoRef.current.onloadedmetadata = () => {
-          console.log('[Scanner] Video metadata loaded');
+          addDebugLog(`Video metadata loaded: ${videoRef.current?.videoWidth}x${videoRef.current?.videoHeight}`);
           if (videoRef.current) {
             videoRef.current.play().then(() => {
-              console.log('[Scanner] Video playing');
-              setScannerActive(true);
-              scannerActiveRef.current = true;
+              addDebugLog('Video playing');
+              // scannerActive already set at start
               setMessage('Suuna kaamera QR koodile...');
 
               // Start scanning loop
+              let scanCount = 0;
               scanIntervalRef.current = setInterval(async () => {
                 if (!videoRef.current || !canvasRef.current || !scannerActiveRef.current) {
+                  addDebugLog('Scan loop stopped - refs invalid');
                   if (scanIntervalRef.current) {
                     clearInterval(scanIntervalRef.current);
                     scanIntervalRef.current = null;
@@ -3505,6 +3531,7 @@ export default function AdminScreen({
                   return;
                 }
 
+                scanCount++;
                 const video = videoRef.current;
                 const canvas = canvasRef.current;
                 const ctx = canvas.getContext('2d');
@@ -3514,11 +3541,15 @@ export default function AdminScreen({
                   canvas.height = video.videoHeight;
                   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+                  if (scanCount % 20 === 0) {
+                    addDebugLog(`Scanning... (${scanCount} frames)`);
+                  }
+
                   try {
                     const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
                     const barcodes = await barcodeDetector.detect(canvas);
                     if (barcodes.length > 0 && scannerActiveRef.current) {
-                      console.log('[Scanner] QR detected:', barcodes[0].rawValue);
+                      addDebugLog(`QR DETECTED: ${barcodes[0].rawValue}`);
                       if (scanIntervalRef.current) {
                         clearInterval(scanIntervalRef.current);
                         scanIntervalRef.current = null;
@@ -3530,15 +3561,22 @@ export default function AdminScreen({
                   }
                 }
               }, 250);
+              addDebugLog('Scan loop started');
             }).catch(e => {
-              console.error('[Scanner] Video play error:', e);
+              addDebugLog(`ERROR: Video play failed: ${e.message}`);
               setMessage('Video ei käivitu. Kontrolli kaamera õigusi.');
             });
           }
         };
+
+        videoRef.current.onerror = (e) => {
+          addDebugLog(`ERROR: Video error: ${e}`);
+        };
+      } else {
+        addDebugLog('ERROR: videoRef is null');
       }
     } catch (e: any) {
-      console.error('[Scanner] Camera error:', e);
+      addDebugLog(`ERROR: ${e.name}: ${e.message}`);
       if (e.name === 'NotAllowedError') {
         setMessage('Kaamera ligipääs keelatud. Luba kaamera kasutamine brauseri seadetes.');
       } else if (e.name === 'NotFoundError') {
@@ -17732,6 +17770,7 @@ document.body.appendChild(div);`;
                     maxHeight: '300px',
                     objectFit: 'cover'
                   }}
+                  autoPlay
                   playsInline
                   muted
                 />
@@ -17786,6 +17825,53 @@ document.body.appendChild(div);`;
               </div>
             )}
           </div>
+
+          {/* Debug log display */}
+          {debugLogs.length > 0 && (
+            <div style={{
+              marginBottom: '16px',
+              padding: '8px',
+              background: '#1f2937',
+              borderRadius: '8px',
+              maxHeight: '150px',
+              overflowY: 'auto',
+              fontFamily: 'monospace',
+              fontSize: '11px'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '4px'
+              }}>
+                <span style={{ color: '#9ca3af', fontWeight: 500 }}>Debug Log</span>
+                <button
+                  onClick={() => setDebugLogs([])}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#6b7280',
+                    cursor: 'pointer',
+                    fontSize: '10px'
+                  }}
+                >
+                  Tühjenda
+                </button>
+              </div>
+              {debugLogs.map((log, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    color: log.includes('ERROR') ? '#ef4444' :
+                           log.includes('QR DETECTED') ? '#22c55e' : '#d1d5db',
+                    lineHeight: '1.4'
+                  }}
+                >
+                  {log}
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Refresh button */}
           <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
