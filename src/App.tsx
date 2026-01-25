@@ -33,7 +33,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.921';
+export const APP_VERSION = '3.0.922';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -2025,23 +2025,53 @@ export default function App() {
           const installedGuids = installations.map(i => i.guid_ifc).filter(Boolean) as string[];
           const installedGuidsSet = new Set(installedGuids.map(g => g.toLowerCase()));
 
-          // Get all objects from database
-          const { data: allObjects } = await supabase
-            .from('trimble_model_objects')
-            .select('guid_ifc')
-            .eq('trimble_project_id', projectId)
-            .not('guid_ifc', 'is', null);
+          // Get ALL objects from database using pagination (same as InstallationsScreen)
+          const PAGE_SIZE = 5000;
+          const allGuids: string[] = [];
+          let offset = 0;
 
-          const allGuids = (allObjects || []).map(o => o.guid_ifc).filter(Boolean) as string[];
+          while (true) {
+            const { data, error } = await supabase
+              .from('trimble_model_objects')
+              .select('guid_ifc')
+              .eq('trimble_project_id', projectId)
+              .not('guid_ifc', 'is', null)
+              .range(offset, offset + PAGE_SIZE - 1);
+
+            if (error) {
+              console.error('ALT+SHIFT+3 DB error:', error);
+              break;
+            }
+
+            if (!data || data.length === 0) break;
+
+            for (const obj of data) {
+              if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+            }
+            offset += data.length;
+            if (data.length < PAGE_SIZE) break;
+          }
+
+          console.log(`[ALT+SHIFT+3] Total GUIDs from DB: ${allGuids.length}`);
+
+          if (allGuids.length === 0) {
+            showGlobalToast('Andmebaasis pole objekte', 'error');
+            setShortcutLoading(null);
+            return;
+          }
 
           // Find objects in model
           const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+          console.log(`[ALT+SHIFT+3] Found ${foundObjects.size} objects in model`);
 
           if (foundObjects.size === 0) {
             showGlobalToast('Mudel pole laaditud', 'error');
             setShortcutLoading(null);
             return;
           }
+
+          // Reset all colors first for clean state
+          await api.viewer.setObjectState(undefined, { color: "reset" });
 
           // Separate installed and non-installed
           const installedObjects: { modelId: string; runtimeId: number }[] = [];
@@ -2068,10 +2098,10 @@ export default function App() {
             whiteByModel[obj.modelId].push(obj.runtimeId);
           }
 
-          // Color white first
+          // Color white first (use larger batch size like InstallationsScreen)
+          const BATCH_SIZE = 5000;
           const white = { r: 255, g: 255, b: 255, a: 255 };
           for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
-            const BATCH_SIZE = 500;
             for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
               const batch = runtimeIds.slice(i, i + BATCH_SIZE);
               await api.viewer.setObjectState(
@@ -2084,7 +2114,6 @@ export default function App() {
           // Color installed dark blue (same as InstallationsScreen: #0a3a67)
           const darkBlue = { r: 10, g: 58, b: 103, a: 255 };
           for (const [modelId, runtimeIds] of Object.entries(installedByModel)) {
-            const BATCH_SIZE = 500;
             for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
               const batch = runtimeIds.slice(i, i + BATCH_SIZE);
               await api.viewer.setObjectState(
@@ -2094,6 +2123,7 @@ export default function App() {
             }
           }
 
+          console.log(`[ALT+SHIFT+3] Colored ${installedObjects.length} installed (blue), ${whiteObjects.length} not installed (white)`);
           showGlobalToast(`${installedObjects.length} paigaldatud detaili tumesiniseks`, 'success');
         } catch (err) {
           console.error('ALT+SHIFT+3 error:', err);
