@@ -239,8 +239,8 @@ export default function AdminScreen({
   onStartCalibration,
   onCancelCalibration
 }: AdminScreenProps) {
-  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin' | 'qrActivator'
-  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin' | 'qrActivator'>('main');
+  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin' | 'qrActivator' | 'positioner'
+  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin' | 'qrActivator' | 'positioner'>('main');
 
   const [isLoading, setIsLoading] = useState(false);
   const [selectedObjects, setSelectedObjects] = useState<ObjectData[]>([]);
@@ -457,6 +457,27 @@ export default function AdminScreen({
   const [qrCodes, setQrCodes] = useState<QrCodeItem[]>([]);
   const [qrLoading, setQrLoading] = useState(false);
   const [qrGenerating, setQrGenerating] = useState(false);
+
+  // Positsioneerija state
+  interface DetailPosition {
+    id: string;
+    guid: string;
+    assembly_mark: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    altitude: number | null;
+    accuracy: number | null;
+    photo_url: string | null;
+    positioned_at: string | null;
+    positioned_by_name: string | null;
+    markup_id: string | null;
+  }
+  const [positions, setPositions] = useState<DetailPosition[]>([]);
+  const [positionsLoading, setPositionsLoading] = useState(false);
+  const [positionCapturing, setPositionCapturing] = useState(false);
+  const [scannerActive, setScannerActive] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Shape paste base point (for relative positioning)
   const [shapeBasePoint, setShapeBasePoint] = useState<{ x: number; y: number; z: number } | null>(null);
@@ -3413,6 +3434,270 @@ export default function AdminScreen({
   }, []);
 
   // ==========================================
+  // POSITSIONEERIJA FUNCTIONS
+  // ==========================================
+
+  // Load positions from database
+  const loadPositions = useCallback(async () => {
+    if (!projectId) return;
+    setPositionsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('detail_positions')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('positioned_at', { ascending: false });
+
+      if (error) throw error;
+      setPositions(data || []);
+    } catch (e: any) {
+      console.error('Error loading positions:', e);
+      setMessage(`Viga positsioonide laadimisel: ${e.message}`);
+    } finally {
+      setPositionsLoading(false);
+    }
+  }, [projectId]);
+
+  // Start QR scanner
+  const startScanner = useCallback(async () => {
+    try {
+      // Request camera permission
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' } // Use back camera on mobile
+      });
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+        setScannerActive(true);
+        setMessage('Suuna kaamera QR koodile...');
+
+        // Start scanning loop
+        const scanInterval = setInterval(async () => {
+          if (!videoRef.current || !canvasRef.current || !scannerActive) {
+            clearInterval(scanInterval);
+            return;
+          }
+
+          const video = videoRef.current;
+          const canvas = canvasRef.current;
+          const ctx = canvas.getContext('2d');
+
+          if (video.readyState === video.HAVE_ENOUGH_DATA && ctx) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Use built-in BarcodeDetector API for QR scanning
+            if ('BarcodeDetector' in window) {
+              try {
+                const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+                const barcodes = await barcodeDetector.detect(canvas);
+                if (barcodes.length > 0) {
+                  clearInterval(scanInterval);
+                  handleQrScanned(barcodes[0].rawValue);
+                }
+              } catch (e) {
+                console.warn('BarcodeDetector error:', e);
+              }
+            }
+          }
+        }, 200);
+      }
+    } catch (e: any) {
+      console.error('Camera error:', e);
+      setMessage('Kaamera ligipääs keelatud. Luba kaamera kasutamine.');
+    }
+  }, [scannerActive]);
+
+  // Stop scanner
+  const stopScanner = useCallback(() => {
+    if (videoRef.current?.srcObject) {
+      const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
+      tracks.forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setScannerActive(false);
+  }, []);
+
+  // Handle scanned QR code
+  const handleQrScanned = useCallback(async (qrData: string) => {
+    stopScanner();
+    setPositionCapturing(true);
+
+    try {
+      // Extract QR ID from URL (format: https://silvervat.github.io/assembly-inspector/qr/{id})
+      const match = qrData.match(/\/qr\/([a-f0-9-]+)/i);
+      if (!match) {
+        setMessage('Tundmatu QR kood');
+        setPositionCapturing(false);
+        return;
+      }
+
+      const qrId = match[1];
+
+      // Get QR code details from database
+      const { data: qrCode, error: qrError } = await supabase
+        .from('qr_activation_codes')
+        .select('guid, assembly_mark')
+        .eq('id', qrId)
+        .single();
+
+      if (qrError || !qrCode) {
+        setMessage('QR koodi ei leitud andmebaasist');
+        setPositionCapturing(false);
+        return;
+      }
+
+      setMessage(`Detekt ${qrCode.assembly_mark || qrCode.guid}. Küsin GPS asukohta...`);
+
+      // Request GPS location
+      if (!navigator.geolocation) {
+        setMessage('GPS pole toetatud selles seadmes');
+        setPositionCapturing(false);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude, altitude, accuracy } = position.coords;
+
+          // Save or update position in database
+          const { error: saveError } = await supabase
+            .from('detail_positions')
+            .upsert({
+              project_id: projectId,
+              guid: qrCode.guid,
+              assembly_mark: qrCode.assembly_mark,
+              latitude,
+              longitude,
+              altitude: altitude || null,
+              accuracy: accuracy || null,
+              positioned_at: new Date().toISOString(),
+              positioned_by: user?.email || 'unknown',
+              positioned_by_name: user?.name || user?.email || 'unknown'
+            }, {
+              onConflict: 'project_id,guid'
+            });
+
+          if (saveError) {
+            console.error('Error saving position:', saveError);
+            setMessage('Viga positsiooni salvestamisel');
+          } else {
+            setMessage(`✅ Positsioon salvestatud: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (täpsus: ${accuracy?.toFixed(1)}m)`);
+            loadPositions(); // Refresh list
+          }
+
+          setPositionCapturing(false);
+        },
+        (gpsError) => {
+          console.error('GPS error:', gpsError);
+          setMessage(`GPS viga: ${gpsError.message}. Luba asukoha kasutamine.`);
+          setPositionCapturing(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 30000,
+          maximumAge: 0
+        }
+      );
+    } catch (e: any) {
+      console.error('QR processing error:', e);
+      setMessage('Viga QR töötlemisel');
+      setPositionCapturing(false);
+    }
+  }, [projectId, user, stopScanner, loadPositions]);
+
+  // Draw position circle on model (10m radius red circle)
+  const drawPositionCircle = useCallback(async (position: DetailPosition) => {
+    if (!position.latitude || !position.longitude) {
+      setMessage('Positsioonil puuduvad koordinaadid');
+      return;
+    }
+
+    try {
+      setMessage('Joonistan asukohta mudelile...');
+
+      // Check if model is loaded
+      const loadedModels = await api.viewer.getModels('loaded');
+      if (!loadedModels || loadedModels.length === 0) {
+        setMessage('Mudel pole laaditud');
+        return;
+      }
+
+      // TODO: Implement proper GPS to model coordinate transformation
+      // For now, open Google Maps to show the location
+      // In future: use model geo-reference to convert GPS coords and draw markup circle
+
+      const mapsUrl = `https://www.google.com/maps?q=${position.latitude},${position.longitude}`;
+      window.open(mapsUrl, '_blank');
+      setMessage(`📍 GPS: ${position.latitude!.toFixed(6)}, ${position.longitude!.toFixed(6)} - Avatud Google Maps`);
+
+    } catch (e: any) {
+      console.error('Error drawing position:', e);
+      setMessage('Viga asukha joonistamisel');
+    }
+  }, [api]);
+
+  // Select positioned detail in model
+  const selectPositionedDetail = useCallback(async (position: DetailPosition) => {
+    try {
+      // Find the object in loaded models using the same logic as QR select
+      const { data: modelObj } = await supabase
+        .from('trimble_model_objects')
+        .select('guid_ifc')
+        .eq('trimble_project_id', projectId)
+        .ilike('guid_ifc', position.guid)
+        .limit(1)
+        .maybeSingle();
+
+      const guidsToSearch = modelObj?.guid_ifc
+        ? [modelObj.guid_ifc, position.guid]
+        : [position.guid];
+
+      const foundMap = await findObjectsInLoadedModels(api, guidsToSearch);
+      if (foundMap.size > 0) {
+        const foundItem = foundMap.values().next().value;
+        if (foundItem) {
+          await api.viewer.setSelection(
+            { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
+            'set'
+          );
+          await api.viewer.setCamera(
+            { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
+            { animationTime: 300 }
+          );
+          setMessage('Detail valitud mudelis');
+        }
+      } else {
+        setMessage('Detaili ei leitud mudelis');
+      }
+    } catch (e) {
+      console.error('Error selecting detail:', e);
+      setMessage('Viga detaili valimisel');
+    }
+  }, [api, projectId]);
+
+  // Delete position
+  const deletePosition = useCallback(async (position: DetailPosition) => {
+    if (!confirm(`Kustuta positsioon detailile ${position.assembly_mark || position.guid}?`)) return;
+
+    try {
+      const { error } = await supabase
+        .from('detail_positions')
+        .delete()
+        .eq('id', position.id);
+
+      if (error) throw error;
+      setPositions(prev => prev.filter(p => p.id !== position.id));
+      setMessage('Positsioon kustutatud');
+    } catch (e) {
+      console.error('Error deleting position:', e);
+      setMessage('Viga kustutamisel');
+    }
+  }, []);
+
+  // ==========================================
   // CAMERA POSITIONS FUNCTIONS
   // ==========================================
 
@@ -4472,6 +4757,7 @@ export default function AdminScreen({
       case 'resources': return 'Ressursside haldus';
       case 'cameraPositions': return 'Kaamera positsioonid';
       case 'qrActivator': return 'QR Aktivaator';
+      case 'positioner': return 'Positsioneerija';
       case 'dataExport': return 'Ekspordi andmed';
       case 'fontTester': return 'Fontide testija';
       case 'deliveryScheduleAdmin': return 'Tarnegraafikud';
@@ -4609,6 +4895,18 @@ export default function AdminScreen({
           >
             <BsQrCode size={18} />
             <span>QR Aktivaator</span>
+          </button>
+
+          <button
+            className="admin-tool-btn"
+            onClick={() => {
+              setAdminView('positioner');
+              loadPositions();
+            }}
+            style={{ background: '#8b5cf6', color: 'white' }}
+          >
+            <FiTarget size={18} />
+            <span>Positsioneerija</span>
           </button>
 
           <button
@@ -17216,6 +17514,215 @@ document.body.appendChild(div);`;
               borderRadius: '8px'
             }}>
               {qrLoading ? 'Loading...' : 'No QR codes yet. Select a detail in the model and generate a QR code.'}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Positsioneerija View */}
+      {adminView === 'positioner' && (
+        <div className="admin-content" style={{ padding: '16px' }}>
+          <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px' }}>
+            Positsioneeri detaile platsil. Skänni QR kood ja süsteem salvestab GPS asukoha.
+          </p>
+
+          {/* Scanner section */}
+          <div style={{ marginBottom: '16px' }}>
+            {!scannerActive ? (
+              <button
+                className="btn-primary"
+                onClick={startScanner}
+                disabled={positionCapturing}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                <FiCamera size={16} />
+                <span>Skänni QR koodi</span>
+              </button>
+            ) : (
+              <div style={{
+                position: 'relative',
+                background: '#000',
+                borderRadius: '8px',
+                overflow: 'hidden',
+                marginBottom: '12px'
+              }}>
+                <video
+                  ref={videoRef}
+                  style={{
+                    width: '100%',
+                    maxHeight: '300px',
+                    objectFit: 'cover'
+                  }}
+                  playsInline
+                  muted
+                />
+                <canvas ref={canvasRef} style={{ display: 'none' }} />
+                <div style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  border: '3px solid #22c55e',
+                  width: '200px',
+                  height: '200px',
+                  borderRadius: '12px',
+                  pointerEvents: 'none'
+                }} />
+                <button
+                  onClick={stopScanner}
+                  style={{
+                    position: 'absolute',
+                    top: '8px',
+                    right: '8px',
+                    padding: '8px 12px',
+                    background: 'rgba(0,0,0,0.7)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <FiX size={14} />
+                  Sulge
+                </button>
+              </div>
+            )}
+
+            {positionCapturing && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '12px',
+                background: '#fef3c7',
+                borderRadius: '8px',
+                color: '#d97706',
+                fontSize: '13px'
+              }}>
+                <FiLoader className="spin" size={14} />
+                GPS asukohta määratakse...
+              </div>
+            )}
+          </div>
+
+          {/* Refresh button */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+            <button
+              className="admin-tool-btn"
+              onClick={loadPositions}
+              disabled={positionsLoading}
+              style={{ padding: '8px 12px' }}
+            >
+              <FiRefreshCw size={14} className={positionsLoading ? 'spin' : ''} />
+              <span>Värskenda ({positions.length})</span>
+            </button>
+          </div>
+
+          {/* Positions list */}
+          {positions.length > 0 ? (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              background: '#fafafa',
+              padding: '12px',
+              borderRadius: '8px',
+              border: '1px solid #e5e7eb',
+              maxHeight: '500px',
+              overflowY: 'auto'
+            }}>
+              {positions.map(pos => (
+                <div
+                  key={pos.id}
+                  style={{
+                    padding: '12px',
+                    background: 'white',
+                    borderRadius: '8px',
+                    border: '1px solid #e5e7eb',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                    <div>
+                      <div style={{ fontWeight: '600', fontSize: '14px', color: '#1f2937' }}>
+                        {pos.assembly_mark || pos.guid?.substring(0, 12) + '...'}
+                      </div>
+                      {pos.latitude && pos.longitude ? (
+                        <div style={{ fontSize: '12px', color: '#22c55e', marginTop: '4px' }}>
+                          📍 {pos.latitude.toFixed(6)}, {pos.longitude.toFixed(6)}
+                          {pos.accuracy && <span style={{ color: '#6b7280' }}> (±{pos.accuracy.toFixed(0)}m)</span>}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px' }}>
+                          GPS puudub
+                        </div>
+                      )}
+                      {pos.positioned_at && (
+                        <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '2px' }}>
+                          {new Date(pos.positioned_at).toLocaleString('et-EE')}
+                          {pos.positioned_by_name && ` • ${pos.positioned_by_name}`}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    <button
+                      className="admin-tool-btn"
+                      onClick={() => selectPositionedDetail(pos)}
+                      style={{ flex: '1', minWidth: '80px', background: '#3b82f6', color: '#fff' }}
+                      title="Vali detail mudelis"
+                    >
+                      <FiTarget size={12} />
+                      <span>Vali</span>
+                    </button>
+                    {pos.latitude && pos.longitude && (
+                      <>
+                        <button
+                          className="admin-tool-btn"
+                          onClick={() => drawPositionCircle(pos)}
+                          style={{ flex: '1', minWidth: '80px', background: '#22c55e', color: '#fff' }}
+                          title="Joonista asukoht mudelile"
+                        >
+                          <FiTarget size={12} />
+                          <span>Joonista</span>
+                        </button>
+                        <button
+                          className="admin-tool-btn"
+                          onClick={() => window.open(`https://www.google.com/maps?q=${pos.latitude},${pos.longitude}`, '_blank')}
+                          style={{ flex: '1', minWidth: '80px', background: '#f59e0b', color: '#fff' }}
+                          title="Ava Google Maps'is"
+                        >
+                          <FiExternalLink size={12} />
+                          <span>Maps</span>
+                        </button>
+                      </>
+                    )}
+                    <button
+                      className="admin-tool-btn"
+                      onClick={() => deletePosition(pos)}
+                      style={{ background: '#fee2e2', color: '#ef4444' }}
+                      title="Kustuta positsioon"
+                    >
+                      <FiTrash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{
+              padding: '24px',
+              textAlign: 'center',
+              color: '#9ca3af',
+              fontSize: '13px',
+              background: '#f9fafb',
+              borderRadius: '8px'
+            }}>
+              {positionsLoading ? 'Laadin...' : 'Positsioneeritud detaile pole. Skänni QR kood detaili asukohaga.'}
             </div>
           )}
         </div>
