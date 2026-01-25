@@ -2351,14 +2351,31 @@ export interface InspectionRGBAColor {
   a: number;
 }
 
+// Hardcoded inspection status colors (not configurable)
+export const INSPECTION_STATUS_COLORS = {
+  // Kontrollikavasse määratud - Sinine #0C77BE
+  planned: { r: 12, g: 119, b: 190, a: 255, hex: '#0C77BE', label: 'Kontrollikavasse määratud' },
+  // Pooleli - Oranž #E5850A
+  inProgress: { r: 229, g: 133, b: 10, a: 255, hex: '#E5850A', label: 'Pooleli' },
+  // Valmis - Roheline #34A853
+  completed: { r: 52, g: 168, b: 83, a: 255, hex: '#34A853', label: 'Valmis' },
+  // Tagasi lükatud - Punane #DC3545
+  rejected: { r: 220, g: 53, b: 69, a: 255, hex: '#DC3545', label: 'Tagasi lükatud' },
+  // Lõpetatud ja heaks kiidetud - Must #18181B
+  approved: { r: 24, g: 24, b: 27, a: 255, hex: '#18181B', label: 'Lõpetatud ja heaks kiidetud' },
+  // Ülejäänud mudel - Valge
+  background: { r: 255, g: 255, b: 255, a: 255, hex: '#FFFFFF', label: 'Muu' },
+} as const;
+
+// Legacy colors for backward compatibility
 export const INSPECTION_COLORS: Record<string, InspectionRGBAColor> = {
   background: { r: 255, g: 255, b: 255, a: 255 },      // Valge
-  toBeChecked: { r: 74, g: 85, b: 104, a: 255 },       // Tumehall #4A5568
-  inProgress: { r: 245, g: 158, b: 11, a: 255 },       // Kollane #F59E0B
-  completed: { r: 59, g: 130, b: 246, a: 255 },        // Sinine #3B82F6
-  approved: { r: 16, g: 185, b: 129, a: 255 },         // Roheline #10B981
-  rejected: { r: 239, g: 68, b: 68, a: 255 },          // Punane #EF4444
-  returned: { r: 249, g: 115, b: 22, a: 255 },         // Oranž #F97316
+  toBeChecked: { r: 12, g: 119, b: 190, a: 255 },      // Sinine #0C77BE (planned)
+  inProgress: { r: 229, g: 133, b: 10, a: 255 },       // Oranž #E5850A
+  completed: { r: 52, g: 168, b: 83, a: 255 },         // Roheline #34A853
+  approved: { r: 24, g: 24, b: 27, a: 255 },           // Must #18181B
+  rejected: { r: 220, g: 53, b: 69, a: 255 },          // Punane #DC3545
+  returned: { r: 229, g: 133, b: 10, a: 255 },         // Oranž #E5850A (sama kui inProgress)
   hovered: { r: 139, g: 92, b: 246, a: 255 },          // Lilla #8B5CF6
   groupSelected: { r: 236, g: 72, b: 153, a: 255 },    // Roosa #EC4899
 };

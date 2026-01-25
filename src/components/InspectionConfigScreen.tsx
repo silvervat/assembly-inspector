@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FiArrowLeft, FiPlus, FiEdit2, FiTrash2, FiSave, FiChevronDown, FiChevronRight, FiFileText, FiX, FiCheck, FiSettings, FiCopy, FiEye, FiMove } from 'react-icons/fi';
-import { supabase, InspectionTypeRef, InspectionCategory, InspectionCheckpoint, ResponseOption, CheckpointAttachment, TrimbleExUser } from '../supabase';
+import { supabase, InspectionTypeRef, InspectionCategory, InspectionCheckpoint, ResponseOption, CheckpointAttachment, TrimbleExUser, INSPECTION_STATUS_COLORS } from '../supabase';
 
 // ============================================
 // TYPES
@@ -10,17 +10,6 @@ interface InspectionConfigScreenProps {
   projectId: string;
   user: TrimbleExUser;
   onBack: () => void;
-}
-
-interface ExtendedInspectionType extends InspectionTypeRef {
-  color_uninspected_r?: number;
-  color_uninspected_g?: number;
-  color_uninspected_b?: number;
-  color_uninspected_a?: number;
-  color_inspected_r?: number;
-  color_inspected_g?: number;
-  color_inspected_b?: number;
-  color_inspected_a?: number;
 }
 
 interface ExtendedCheckpoint extends InspectionCheckpoint {
@@ -54,7 +43,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
   const [activeTab, setActiveTab] = useState<ActiveTab>('types');
 
   // Data states
-  const [types, setTypes] = useState<ExtendedInspectionType[]>([]);
+  const [types, setTypes] = useState<InspectionTypeRef[]>([]);
   const [categories, setCategories] = useState<InspectionCategory[]>([]);
   const [checkpoints, setCheckpoints] = useState<ExtendedCheckpoint[]>([]);
 
@@ -63,7 +52,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
 
   // Edit states
-  const [editingType, setEditingType] = useState<Partial<ExtendedInspectionType> | null>(null);
+  const [editingType, setEditingType] = useState<Partial<InspectionTypeRef> | null>(null);
   const [editingCategory, setEditingCategory] = useState<Partial<InspectionCategory> | null>(null);
   const [editingCheckpoint, setEditingCheckpoint] = useState<Partial<ExtendedCheckpoint> | null>(null);
 
@@ -164,19 +153,6 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
     return prefix ? `${prefix}_${cleanName}` : cleanName;
   };
 
-  const rgbToHex = (r: number, g: number, b: number): string => {
-    return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
-  };
-
-  const hexToRgb = (hex: string): { r: number; g: number; b: number } => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-      r: parseInt(result[1], 16),
-      g: parseInt(result[2], 16),
-      b: parseInt(result[3], 16)
-    } : { r: 200, g: 200, b: 200 };
-  };
-
   // ============================================
   // TYPE CRUD
   // ============================================
@@ -197,15 +173,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
         color: editingType.color || 'blue',
         sort_order: editingType.sort_order || types.length,
         is_active: editingType.is_active !== false,
-        is_system: false,
-        color_uninspected_r: editingType.color_uninspected_r ?? 200,
-        color_uninspected_g: editingType.color_uninspected_g ?? 200,
-        color_uninspected_b: editingType.color_uninspected_b ?? 200,
-        color_uninspected_a: editingType.color_uninspected_a ?? 255,
-        color_inspected_r: editingType.color_inspected_r ?? 0,
-        color_inspected_g: editingType.color_inspected_g ?? 200,
-        color_inspected_b: editingType.color_inspected_b ?? 100,
-        color_inspected_a: editingType.color_inspected_a ?? 255
+        is_system: false
       };
 
       if (isNew) {
@@ -379,7 +347,6 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
           .single();
         if (error) throw error;
 
-        // Handle attachments for new checkpoint
         if (editingCheckpoint.attachments?.length) {
           await saveCheckpointAttachments(data.id, editingCheckpoint.attachments);
         }
@@ -392,7 +359,6 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
           .eq('id', editingCheckpoint.id);
         if (error) throw error;
 
-        // Handle attachments
         if (editingCheckpoint.id) {
           await saveCheckpointAttachments(editingCheckpoint.id, editingCheckpoint.attachments || []);
         }
@@ -411,13 +377,11 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
   };
 
   const saveCheckpointAttachments = async (checkpointId: string, attachments: CheckpointAttachment[]) => {
-    // Delete existing attachments
     await supabase
       .from('inspection_checkpoint_attachments')
       .delete()
       .eq('checkpoint_id', checkpointId);
 
-    // Insert new attachments
     if (attachments.length > 0) {
       const attachmentData = attachments.map((att, idx) => ({
         checkpoint_id: checkpointId,
@@ -519,26 +483,6 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                   </div>
                 )}
                 <div className="detail-row">
-                  <span className="label">Kontrollimata värv:</span>
-                  <div className="color-preview" style={{
-                    backgroundColor: rgbToHex(
-                      type.color_uninspected_r ?? 200,
-                      type.color_uninspected_g ?? 200,
-                      type.color_uninspected_b ?? 200
-                    )
-                  }} />
-                </div>
-                <div className="detail-row">
-                  <span className="label">Kontrollitud värv:</span>
-                  <div className="color-preview" style={{
-                    backgroundColor: rgbToHex(
-                      type.color_inspected_r ?? 0,
-                      type.color_inspected_g ?? 200,
-                      type.color_inspected_b ?? 100
-                    )
-                  }} />
-                </div>
-                <div className="detail-row">
                   <span className="label">Kategooriaid:</span>
                   <span className="value">{categories.filter(c => c.type_id === type.id).length}</span>
                 </div>
@@ -557,20 +501,9 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
   const renderTypeEditModal = () => {
     if (!editingType) return null;
 
-    const uninspectedColor = rgbToHex(
-      editingType.color_uninspected_r ?? 200,
-      editingType.color_uninspected_g ?? 200,
-      editingType.color_uninspected_b ?? 200
-    );
-    const inspectedColor = rgbToHex(
-      editingType.color_inspected_r ?? 0,
-      editingType.color_inspected_g ?? 200,
-      editingType.color_inspected_b ?? 100
-    );
-
     return (
       <div className="modal-overlay">
-        <div className="modal-content modal-large">
+        <div className="modal-content">
           <div className="modal-header">
             <h3>{editingType.id ? 'Muuda tüüpi' : 'Uus inspektsioonitüüp'}</h3>
             <button className="btn-icon" onClick={() => setEditingType(null)}>
@@ -616,52 +549,6 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                 onChange={e => setEditingType({ ...editingType, description: e.target.value })}
                 rows={2}
               />
-            </div>
-
-            <div className="form-divider">Mudeli värvid</div>
-
-            <div className="form-row">
-              <div className="form-group">
-                <label>Kontrollimata elementide värv</label>
-                <div className="color-input-group">
-                  <input
-                    type="color"
-                    value={uninspectedColor}
-                    onChange={e => {
-                      const rgb = hexToRgb(e.target.value);
-                      setEditingType({
-                        ...editingType,
-                        color_uninspected_r: rgb.r,
-                        color_uninspected_g: rgb.g,
-                        color_uninspected_b: rgb.b
-                      });
-                    }}
-                  />
-                  <span className="color-hex">{uninspectedColor}</span>
-                </div>
-                <p className="form-hint">See värv näidatakse mudelis elementidel, mida pole veel kontrollitud</p>
-              </div>
-
-              <div className="form-group">
-                <label>Kontrollitud elementide värv</label>
-                <div className="color-input-group">
-                  <input
-                    type="color"
-                    value={inspectedColor}
-                    onChange={e => {
-                      const rgb = hexToRgb(e.target.value);
-                      setEditingType({
-                        ...editingType,
-                        color_inspected_r: rgb.r,
-                        color_inspected_g: rgb.g,
-                        color_inspected_b: rgb.b
-                      });
-                    }}
-                  />
-                  <span className="color-hex">{inspectedColor}</span>
-                </div>
-                <p className="form-hint">See värv näidatakse mudelis elementidel, mis on kontrollitud</p>
-              </div>
             </div>
 
             <div className="form-group">
@@ -1340,45 +1227,76 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
   const renderWorkflowTab = () => (
     <div className="config-section">
       <div className="section-header">
-        <h3>Töövoo seaded</h3>
+        <h3>Töövoo seaded ja värvid</h3>
       </div>
 
       <div className="workflow-info">
+        {/* Status Colors */}
+        <div className="info-card">
+          <h4>Inspektsioonide staatuse värvid (fikseeritud)</h4>
+          <p>Need värvid kuvatakse mudelis ja nimekirjades vastavalt inspektsiooni staatusele:</p>
+
+          <div className="status-colors-list">
+            <div className="status-color-item">
+              <div className="color-dot" style={{ backgroundColor: INSPECTION_STATUS_COLORS.planned.hex }} />
+              <span className="color-label">{INSPECTION_STATUS_COLORS.planned.label}</span>
+              <span className="color-hex">{INSPECTION_STATUS_COLORS.planned.hex}</span>
+            </div>
+            <div className="status-color-item">
+              <div className="color-dot" style={{ backgroundColor: INSPECTION_STATUS_COLORS.inProgress.hex }} />
+              <span className="color-label">{INSPECTION_STATUS_COLORS.inProgress.label}</span>
+              <span className="color-hex">{INSPECTION_STATUS_COLORS.inProgress.hex}</span>
+            </div>
+            <div className="status-color-item">
+              <div className="color-dot" style={{ backgroundColor: INSPECTION_STATUS_COLORS.completed.hex }} />
+              <span className="color-label">{INSPECTION_STATUS_COLORS.completed.label}</span>
+              <span className="color-hex">{INSPECTION_STATUS_COLORS.completed.hex}</span>
+            </div>
+            <div className="status-color-item">
+              <div className="color-dot" style={{ backgroundColor: INSPECTION_STATUS_COLORS.rejected.hex }} />
+              <span className="color-label">{INSPECTION_STATUS_COLORS.rejected.label}</span>
+              <span className="color-hex">{INSPECTION_STATUS_COLORS.rejected.hex}</span>
+            </div>
+            <div className="status-color-item">
+              <div className="color-dot" style={{ backgroundColor: INSPECTION_STATUS_COLORS.approved.hex }} />
+              <span className="color-label">{INSPECTION_STATUS_COLORS.approved.label}</span>
+              <span className="color-hex">{INSPECTION_STATUS_COLORS.approved.hex}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Workflow */}
         <div className="info-card">
           <h4>Kinnitamise töövoog</h4>
           <p>Pärast inspektsiooni lõpetamist peab moderaator tulemused üle vaatama ja kinnitama.</p>
           <ul>
-            <li><strong>Ootel</strong> - Inspektsioon on tehtud, ootab ülevaatust</li>
-            <li><strong>Kinnitatud</strong> - Moderaator on kinnitanud, kasutaja ei saa enam muuta</li>
-            <li><strong>Tagasi suunatud</strong> - Moderaator saatis parandamiseks tagasi</li>
-            <li><strong>Tagasi lükatud</strong> - Moderaator lükkas tagasi</li>
-          </ul>
-        </div>
-
-        <div className="info-card">
-          <h4>Lukustamine</h4>
-          <p>Kui inspektsioon on kinnitatud, siis:</p>
-          <ul>
-            <li>Kasutaja näeb tulemusi, kuid ei saa neid muuta</li>
-            <li>Ainult moderaator saab lukust avada</li>
-            <li>Kõik muudatused logitakse auditi tabelisse</li>
+            <li><strong>Kontrollikavasse määratud</strong> - Element on lisatud kontrolli kavasse, ootab kontrollimist</li>
+            <li><strong>Pooleli</strong> - Kontroll on alustatud, kuid pole veel lõpetatud</li>
+            <li><strong>Valmis</strong> - Kontroll on tehtud, ootab moderaatori ülevaatust</li>
+            <li><strong>Tagasi lükatud</strong> - Moderaator saatis parandamiseks tagasi</li>
+            <li><strong>Lõpetatud ja heaks kiidetud</strong> - Moderaator on kinnitanud, kasutaja ei saa enam muuta</li>
           </ul>
         </div>
 
         <div className="workflow-diagram">
           <div className="workflow-step">
-            <div className="step-icon pending">📝</div>
-            <div className="step-label">Tehtud</div>
+            <div className="step-icon" style={{ backgroundColor: INSPECTION_STATUS_COLORS.planned.hex + '30', color: INSPECTION_STATUS_COLORS.planned.hex }}>📋</div>
+            <div className="step-label">Kavasse<br/>määratud</div>
           </div>
           <div className="workflow-arrow">→</div>
           <div className="workflow-step">
-            <div className="step-icon review">👁</div>
-            <div className="step-label">Ülevaatus</div>
+            <div className="step-icon" style={{ backgroundColor: INSPECTION_STATUS_COLORS.inProgress.hex + '30', color: INSPECTION_STATUS_COLORS.inProgress.hex }}>🔄</div>
+            <div className="step-label">Pooleli</div>
           </div>
           <div className="workflow-arrow">→</div>
           <div className="workflow-step">
-            <div className="step-icon approved">✓</div>
-            <div className="step-label">Kinnitatud</div>
+            <div className="step-icon" style={{ backgroundColor: INSPECTION_STATUS_COLORS.completed.hex + '30', color: INSPECTION_STATUS_COLORS.completed.hex }}>✓</div>
+            <div className="step-label">Valmis</div>
+          </div>
+          <div className="workflow-arrow">→</div>
+          <div className="workflow-step">
+            <div className="step-icon" style={{ backgroundColor: INSPECTION_STATUS_COLORS.approved.hex + '30', color: '#fff' }}>✓✓</div>
+            <div className="step-label">Heaks<br/>kiidetud</div>
           </div>
         </div>
       </div>
@@ -1444,7 +1362,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
           className={`tab ${activeTab === 'workflow' ? 'active' : ''}`}
           onClick={() => setActiveTab('workflow')}
         >
-          <FiMove size={16} /> Töövoog
+          <FiMove size={16} /> Töövoog & värvid
         </button>
       </div>
 

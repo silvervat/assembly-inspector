@@ -4261,7 +4261,8 @@ button.stat-toggle.off:hover {
 /* Statistics */
 .plan-stats {
   display: flex;
-  gap: var(--modus-spacing-xs);
+  flex-wrap: wrap;
+  gap: 4px;
   padding: var(--modus-spacing-xs) var(--modus-spacing-sm);
   background: white;
   border-bottom: 1px solid var(--modus-border);
@@ -4275,18 +4276,26 @@ button.stat-toggle.off:hover {
   padding: var(--modus-spacing-xs);
   background: var(--modus-bg-secondary);
   border-radius: var(--modus-radius-sm);
+  border-left: 3px solid transparent;
+  min-width: 0;  /* Allow shrinking */
 }
 
 .stat-value {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: var(--modus-text-primary);
 }
 
 .stat-label {
-  font-size: 0.65rem;
+  font-size: 0.55rem;
   color: var(--modus-text-secondary);
-  text-transform: uppercase;
+  text-transform: none;
+  text-align: center;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .stat-planned .stat-value { color: #6b7280; }
@@ -5492,6 +5501,20 @@ button.stat-toggle.off:hover {
 .item-status-badge.pending {
   background: var(--modus-bg-tertiary);
   color: var(--modus-text-tertiary);
+}
+
+/* Inspection status badge with dynamic colors */
+.item-inspection-status {
+  min-width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0 4px;
+  letter-spacing: -0.5px;
 }
 
 .item-actions {
