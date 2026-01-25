@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { FiPlus, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage, FiEdit2, FiX, FiCheck, FiSearch, FiFilter, FiFileText } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage, FiEdit2, FiX, FiCheck, FiSearch, FiFilter, FiFileText, FiSettings } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, InspectionTypeRef, InspectionCategory, InspectionPlanItem, InspectionPlanStats, TrimbleExUser } from '../supabase';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
 import { InspectionHistory } from './InspectionHistory';
+import InspectionConfigScreen from './InspectionConfigScreen';
 
 // Checkpoint result data (from inspection_results table)
 interface CheckpointResultData {
@@ -117,6 +118,9 @@ export default function InspectionPlanScreen({
   const [filterStatus, setFilterStatus] = useState<'all' | 'done' | 'pending'>('all');
   const [filterInspector, setFilterInspector] = useState<string>('');
   const [showFilters, setShowFilters] = useState(false);
+
+  // Config screen state (for admin/moderator)
+  const [showConfigScreen, setShowConfigScreen] = useState(false);
 
   // Ref for tracking last selection to avoid duplicate processing
   const lastSelectionRef = useRef<string>('');
@@ -1012,6 +1016,17 @@ export default function InspectionPlanScreen({
           <FiList size={16} />
           Kava nimekiri ({planItems.length})
         </button>
+        {/* Config button - only for admin/moderator */}
+        {user && (user.role === 'admin' || user.role === 'moderator') && (
+          <button
+            className="config-btn"
+            onClick={() => setShowConfigScreen(true)}
+            title="Seadista inspektsioone"
+          >
+            <FiSettings size={16} />
+            Seadista
+          </button>
+        )}
       </div>
 
       {/* Statistics */}
@@ -1656,6 +1671,19 @@ export default function InspectionPlanScreen({
         <InspectionHistory
           planItemId={historyItemId}
           onClose={() => setHistoryItemId(null)}
+        />
+      )}
+
+      {/* Inspection Config Screen (admin/moderator only) */}
+      {showConfigScreen && user && (
+        <InspectionConfigScreen
+          projectId={projectId}
+          user={user}
+          onBack={() => {
+            setShowConfigScreen(false);
+            // Refresh types and categories after config changes
+            fetchInspectionTypes();
+          }}
         />
       )}
     </div>
