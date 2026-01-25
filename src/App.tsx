@@ -35,10 +35,18 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.978';
+export const APP_VERSION = '3.0.979';
 
-// Super admin - always has full access regardless of database settings
-const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
+// Super admin emails from environment variable (comma-separated)
+// These users always have full access regardless of database settings
+const SUPER_ADMIN_EMAILS = (import.meta.env.VITE_SUPER_ADMIN_EMAILS || '')
+  .split(',')
+  .map((email: string) => email.trim().toLowerCase())
+  .filter((email: string) => email.length > 0);
+
+const isSuperAdminEmail = (email: string): boolean => {
+  return SUPER_ADMIN_EMAILS.includes(email.toLowerCase());
+};
 
 // Trimble Connect kasutaja info
 interface TrimbleConnectUser {
@@ -720,7 +728,7 @@ export default function App() {
             console.log('TC User:', tcUserData);
 
             // Super admin check - always has full access
-            const isSuperAdmin = userData.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+            const isSuperAdmin = isSuperAdminEmail(userData.email);
 
             // Kontrolli kas kasutaja on registreeritud trimble_inspection_users tabelis
             // Email võrdlus on case-insensitive (mõlemad lowercase)

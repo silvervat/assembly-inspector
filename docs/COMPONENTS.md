@@ -45,7 +45,7 @@ clearMappingsCache(projectId);
 
 **Funktsioonid:**
 - Autentimine Trimble kasutaja järgi
-- Super admin kontroll (`SUPER_ADMIN_EMAIL`)
+- Super admin kontroll (`VITE_SUPER_ADMIN_EMAILS` env variable)
 - Navigatsioon ekraanide vahel
 
 ---
