@@ -9,7 +9,7 @@ import { BsQrCode } from 'react-icons/bs';
 import PartDatabasePanel from './PartDatabasePanel';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
-import { findObjectsInLoadedModels, selectObjectsByGuid } from '../utils/navigationHelper';
+import { findObjectsInLoadedModels, selectObjectsByGuid, colorAndSelectObjectsByGuid } from '../utils/navigationHelper';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 
 // Constants
@@ -282,9 +282,8 @@ export default function ToolsScreen({
         let qr_data_url = null;
         if (code.status === 'pending') {
           try {
-            // Generate public URL for the QR page
-            const baseUrl = window.location.origin;
-            const qrPageUrl = `${baseUrl}/qr/${code.id}`;
+            // Generate public URL for the QR page (GitHub Pages)
+            const qrPageUrl = `https://silvervat.github.io/assembly-inspector/qr/${code.id}`;
             qr_data_url = await QRCode.toDataURL(qrPageUrl, { width: 200, margin: 2 });
           } catch (e) {
             console.error('Error generating QR:', e);
@@ -466,9 +465,8 @@ export default function ToolsScreen({
         return;
       }
 
-      // Generate QR image
-      const baseUrl = window.location.origin;
-      const qrPageUrl = `${baseUrl}/qr/${newCode.id}`;
+      // Generate QR image (GitHub Pages URL)
+      const qrPageUrl = `https://silvervat.github.io/assembly-inspector/qr/${newCode.id}`;
       const qrDataUrl = await QRCode.toDataURL(qrPageUrl, { width: 200, margin: 2 });
 
       // Add to list
@@ -482,6 +480,10 @@ export default function ToolsScreen({
         qr_data_url: qrDataUrl,
         created_at: newCode.created_at
       }, ...prev]);
+
+      // Color and select the detail in the model (orange highlight)
+      const highlightColor = { r: 249, g: 115, b: 22, a: 255 }; // Orange
+      await colorAndSelectObjectsByGuid(api, [guid], highlightColor, true); // skipZoom=true
 
       showToast('QR kood loodud!', 'success');
 

@@ -99,6 +99,11 @@ const guideCategories: GuideCategory[] = [
         id: 'alt_shift_3',
         title: 'ALT + SHIFT + 3',
         description: 'Värvib kõik paigaldatud detailid tumesiniseks, ülejäänud mudel värvitakse valgeks. Sama loogika mis Paigaldamiste lehel.'
+      },
+      {
+        id: 'alt_shift_4',
+        title: 'ALT + SHIFT + 4',
+        description: 'Valib kõik paigaldatud detailid (ilma värvimata). Töötab osade kaupa, toetab suuri mahtusid (20k+ detaili).'
       }
     ]
   }
