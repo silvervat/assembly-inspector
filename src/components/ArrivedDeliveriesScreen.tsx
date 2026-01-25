@@ -1011,7 +1011,7 @@ export default function ArrivedDeliveriesScreen({
         }
 
         if (selectedObjects.length === 0) {
-          setMessage('Valitud objektidel pole GUID-i');
+          setMessage(t('delivery:messages.noGuids'));
           return;
         }
 
@@ -1056,11 +1056,11 @@ export default function ArrivedDeliveriesScreen({
           setModelSelectionMode(false);
           setMessage('');
         } else {
-          setMessage('Valitud objektid ei ole tarnegraafikus');
+          setMessage(t('delivery:messages.noSelection'));
         }
       } catch (e) {
         console.error('Error handling model selection:', e);
-        setMessage('Viga mudeli valiku töötlemisel');
+        setMessage(t('common:arrivals.modelSelectionError'));
       }
     };
 
@@ -1193,10 +1193,10 @@ export default function ArrivedDeliveriesScreen({
       setEditingArrivalId(data.id);
       originalArrivalDataRef.current = data;
       setHasUnsavedChanges(false);
-      setMessage('Saabumise registreerimine alustatud - täida andmed ja salvesta');
+      setMessage(t('common:arrivals.registrationStarted'));
     } catch (e: any) {
       console.error('Error starting arrival:', e);
-      setMessage('Viga: ' + e.message);
+      setMessage(t('delivery:messages.genericError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -1222,7 +1222,7 @@ export default function ArrivedDeliveriesScreen({
     setEditingArrivalId(null);
     setHasUnsavedChanges(false);
     originalArrivalDataRef.current = null;
-    setMessage('Muudatused tühistatud');
+    setMessage(t('common:arrivals.changesCancelled'));
   };
 
   // Save current arrival edits
@@ -1257,10 +1257,10 @@ export default function ArrivedDeliveriesScreen({
       setEditingArrivalId(null);
       setHasUnsavedChanges(false);
       originalArrivalDataRef.current = null;
-      setMessage('Andmed salvestatud');
+      setMessage(t('delivery:messages.saved'));
     } catch (e: any) {
       console.error('Error saving arrival:', e);
-      setMessage('Viga salvestamisel: ' + e.message);
+      setMessage(t('delivery:messages.saveError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -1325,7 +1325,7 @@ export default function ArrivedDeliveriesScreen({
   // Create unplanned vehicle (not in original schedule)
   const createUnplannedVehicle = async () => {
     if (!unplannedVehicleCode.trim()) {
-      setMessage('Sisesta veoki kood');
+      setMessage(t('common:arrivals.enterVehicleCode'));
       return;
     }
 
@@ -1375,10 +1375,10 @@ export default function ArrivedDeliveriesScreen({
       setUnplannedVehicleCode('');
       setUnplannedFactoryId('');
       setUnplannedNotes('');
-      setMessage('Planeerimata veok lisatud');
+      setMessage(t('delivery:messages.success'));
     } catch (e: any) {
       console.error('Error creating unplanned vehicle:', e);
-      setMessage('Viga: ' + e.message);
+      setMessage(t('delivery:messages.genericError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -1483,7 +1483,7 @@ export default function ArrivedDeliveriesScreen({
       }
     } catch (e: any) {
       console.error('Error confirming item:', e);
-      setMessage('Viga: ' + e.message);
+      setMessage(t('delivery:messages.genericError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -1550,7 +1550,7 @@ export default function ArrivedDeliveriesScreen({
       setMessage(`${itemsToConfirm.length} detaili kinnitatud`);
     } catch (e: any) {
       console.error('Error confirming all items:', e);
-      setMessage('Viga: ' + e.message);
+      setMessage(t('delivery:messages.genericError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -1624,7 +1624,7 @@ export default function ArrivedDeliveriesScreen({
       setMessage(`${selectedItemIds.length} detaili ${statusLabels[status]}`);
     } catch (e: any) {
       console.error('Error confirming selected items:', e);
-      setMessage('Viga: ' + e.message);
+      setMessage(t('delivery:messages.genericError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -1680,7 +1680,7 @@ export default function ArrivedDeliveriesScreen({
         if (error) throw error;
       } catch (e: any) {
         console.error('Error updating arrival:', e);
-        setMessage('Viga: ' + e.message);
+        setMessage(t('delivery:messages.genericError') + ': ' + e.message);
       }
     };
 
@@ -1909,7 +1909,7 @@ export default function ArrivedDeliveriesScreen({
       setMessage('Detail lisatud');
     } catch (e: any) {
       console.error('Error adding item:', e);
-      setMessage('Viga: ' + e.message);
+      setMessage(t('delivery:messages.genericError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2163,7 +2163,7 @@ export default function ArrivedDeliveriesScreen({
       setMessage('Foto kustutatud');
     } catch (e: any) {
       console.error('Error deleting photo:', e);
-      setMessage('Viga: ' + e.message);
+      setMessage(t('delivery:messages.genericError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2273,7 +2273,7 @@ export default function ArrivedDeliveriesScreen({
       setMessage('Kommentaar salvestatud');
     } catch (e: any) {
       console.error('Error updating item comment:', e);
-      setMessage('Viga: ' + e.message);
+      setMessage(t('delivery:messages.genericError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -5295,7 +5295,7 @@ export default function ArrivedDeliveriesScreen({
 
             setMessage(`✓ ${guids.size} objekti mudelist, ${matchingItemIds.length} leitud nimekirjast`);
           } catch (e: any) {
-            setMessage('Viga: ' + e.message);
+            setMessage(t('delivery:messages.genericError') + ': ' + e.message);
           }
         };
 
@@ -5463,7 +5463,7 @@ export default function ArrivedDeliveriesScreen({
             setItemsListSelectedIds(new Set());
             setMessage(`✓ ${updated} staatust uuendatud`);
           } catch (e: any) {
-            setMessage('Viga: ' + e.message);
+            setMessage(t('delivery:messages.genericError') + ': ' + e.message);
           } finally {
             setItemsListSaving(false);
           }
@@ -5754,7 +5754,7 @@ export default function ArrivedDeliveriesScreen({
                           setItemsListEditMode(false);
                           setMessage(`✓ ${updated} staatust salvestatud`);
                         } catch (e: any) {
-                          setMessage('Viga: ' + e.message);
+                          setMessage(t('delivery:messages.genericError') + ': ' + e.message);
                         } finally {
                           setItemsListSaving(false);
                         }
@@ -5968,7 +5968,7 @@ export default function ArrivedDeliveriesScreen({
                           }
                         } catch (e: any) {
                           console.error('Mass arrival error:', e);
-                          setMessage('Viga: ' + e.message);
+                          setMessage(t('delivery:messages.genericError') + ': ' + e.message);
                         } finally {
                           setItemsListSaving(false);
                         }
