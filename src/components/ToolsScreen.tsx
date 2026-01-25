@@ -528,14 +528,10 @@ export default function ToolsScreen({
     }
   }, [showToast]);
 
-  // Subscribe to QR code activations and color model
+  // Subscribe to QR code activations - update local state only (coloring handled in App.tsx)
   useEffect(() => {
-    if (!_projectId || expandedSection !== 'qr') return;
+    if (!_projectId) return;
 
-    // Load initial data
-    loadQrCodes();
-
-    // Subscribe to realtime changes
     const channel = supabase
       .channel('qr_activations')
       .on('postgres_changes', {
@@ -543,7 +539,7 @@ export default function ToolsScreen({
         schema: 'public',
         table: 'qr_activation_codes',
         filter: `project_id=eq.${_projectId}`
-      }, async (payload) => {
+      }, (payload) => {
         const updated = payload.new as any;
 
         // Update local state
@@ -558,41 +554,20 @@ export default function ToolsScreen({
               }
             : qr
         ));
-
-        // If activated, color the model
-        if (updated.status === 'activated') {
-          showToast(`${updated.assembly_mark || 'Detail'} leitud platsilt!`, 'success');
-
-          // Color model: all white, then this element green
-          try {
-            const foundMap = await findObjectsInLoadedModels(api, [updated.guid]);
-            if (foundMap.size > 0) {
-              const foundItem = foundMap.values().next().value;
-
-              // First color all white
-              if (onColorModelWhite) {
-                onColorModelWhite();
-              }
-
-              // Then color this element green
-              if (foundItem) {
-                await api.viewer.setObjectState(
-                  { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
-                  { color: { r: 34, g: 197, b: 94, a: 255 } } // Green
-                );
-              }
-            }
-          } catch (e) {
-            console.error('Error coloring model:', e);
-          }
-        }
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [_projectId, expandedSection, loadQrCodes, showToast, api, onColorModelWhite]);
+  }, [_projectId]);
+
+  // Load QR codes when section is expanded
+  useEffect(() => {
+    if (expandedSection === 'qr') {
+      loadQrCodes();
+    }
+  }, [expandedSection, loadQrCodes]);
 
   // ========== END QR AKTIVAATOR FUNCTIONS ==========
 
