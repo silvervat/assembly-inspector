@@ -46,7 +46,9 @@
     "loaded": "Loaded",
     "in_transit": "In Transit",
     "delivered": "Delivered",
-    "cancelled": "Cancelled"
+    "cancelled": "Cancelled",
+    "wrong_vehicle": "Wrong vehicle",
+    "added": "Added"
   },
   "unloadMethods": {
     "crane": "Crane",
