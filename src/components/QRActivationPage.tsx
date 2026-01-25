@@ -40,13 +40,13 @@ export default function QRActivationPage({ qrCodeId }: QRActivationPageProps) {
 
         if (fetchError) {
           console.error('Error loading QR code:', fetchError);
-          setError('Viga QR koodi lugemisel');
+          setError('Error loading QR code');
           setLoading(false);
           return;
         }
 
         if (!data) {
-          setError('QR koodi ei leitud');
+          setError('QR code not found');
           setLoading(false);
           return;
         }
@@ -59,7 +59,7 @@ export default function QRActivationPage({ qrCodeId }: QRActivationPageProps) {
         setQrData(data);
       } catch (e) {
         console.error('Error:', e);
-        setError('Viga andmete lugemisel');
+        setError('Error loading data');
       } finally {
         setLoading(false);
       }
@@ -87,7 +87,7 @@ export default function QRActivationPage({ qrCodeId }: QRActivationPageProps) {
 
       if (updateError) {
         console.error('Error activating:', updateError);
-        setError('Viga kinnitamisel');
+        setError('Error confirming');
         setActivating(false);
         return;
       }
@@ -102,7 +102,7 @@ export default function QRActivationPage({ qrCodeId }: QRActivationPageProps) {
 
     } catch (e) {
       console.error('Error:', e);
-      setError('Viga kinnitamisel');
+      setError('Error confirming');
     } finally {
       setActivating(false);
     }
@@ -114,7 +114,7 @@ export default function QRActivationPage({ qrCodeId }: QRActivationPageProps) {
       <div style={styles.container}>
         <div style={styles.card}>
           <FiLoader size={48} style={{ animation: 'spin 1s linear infinite' }} />
-          <p>Laadin...</p>
+          <p>Loading...</p>
         </div>
       </div>
     );
@@ -126,7 +126,7 @@ export default function QRActivationPage({ qrCodeId }: QRActivationPageProps) {
       <div style={styles.container}>
         <div style={styles.card}>
           <FiAlertCircle size={48} color="#ef4444" />
-          <h2 style={{ color: '#ef4444', margin: '16px 0 8px' }}>Viga</h2>
+          <h2 style={{ color: '#ef4444', margin: '16px 0 8px' }}>Error</h2>
           <p>{error}</p>
         </div>
       </div>
@@ -139,8 +139,8 @@ export default function QRActivationPage({ qrCodeId }: QRActivationPageProps) {
       <div style={styles.container}>
         <div style={styles.card}>
           <FiAlertCircle size={48} color="#f59e0b" />
-          <h2 style={{ color: '#f59e0b', margin: '16px 0 8px' }}>Ei leitud</h2>
-          <p>QR koodi ei leitud</p>
+          <h2 style={{ color: '#f59e0b', margin: '16px 0 8px' }}>Not Found</h2>
+          <p>QR code not found</p>
         </div>
       </div>
     );
@@ -153,29 +153,29 @@ export default function QRActivationPage({ qrCodeId }: QRActivationPageProps) {
         <div style={{ ...styles.card, borderColor: '#10b981' }}>
           <FiCheckCircle size={64} color="#10b981" />
           <h2 style={{ color: '#10b981', margin: '16px 0 8px' }}>
-            {success ? 'Kinnitatud!' : 'Juba kinnitatud'}
+            {success ? 'Confirmed!' : 'Already Confirmed'}
           </h2>
           <div style={styles.detailBox}>
-            <div style={styles.detailLabel}>Detail</div>
-            <div style={styles.detailValue}>{qrData.assembly_mark || 'Tundmatu'}</div>
+            <div style={styles.detailLabel}>Cast Unit Mark</div>
+            <div style={styles.detailValue}>{qrData.assembly_mark || 'Unknown'}</div>
           </div>
           {qrData.product_name && (
             <div style={styles.detailBox}>
-              <div style={styles.detailLabel}>Toode</div>
+              <div style={styles.detailLabel}>Product</div>
               <div style={styles.detailValue}>{qrData.product_name}</div>
             </div>
           )}
           {qrData.weight && (
             <div style={styles.detailBox}>
-              <div style={styles.detailLabel}>Kaal</div>
+              <div style={styles.detailLabel}>Weight</div>
               <div style={styles.detailValue}>{qrData.weight.toFixed(1)} kg</div>
             </div>
           )}
           <div style={{ ...styles.detailBox, background: '#d1fae5' }}>
-            <div style={styles.detailLabel}>Leidis</div>
+            <div style={styles.detailLabel}>Found by</div>
             <div style={styles.detailValue}>{qrData.activated_by_name}</div>
             <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-              {qrData.activated_at ? new Date(qrData.activated_at).toLocaleString('et-EE') : ''}
+              {qrData.activated_at ? new Date(qrData.activated_at).toLocaleString('en-GB') : ''}
             </div>
           </div>
         </div>
@@ -189,11 +189,11 @@ export default function QRActivationPage({ qrCodeId }: QRActivationPageProps) {
       <div style={styles.container}>
         <div style={{ ...styles.card, borderColor: '#ef4444' }}>
           <FiAlertCircle size={48} color="#ef4444" />
-          <h2 style={{ color: '#ef4444', margin: '16px 0 8px' }}>Aegunud</h2>
-          <p>See QR kood on aegunud</p>
+          <h2 style={{ color: '#ef4444', margin: '16px 0 8px' }}>Expired</h2>
+          <p>This QR code has expired</p>
           <div style={styles.detailBox}>
-            <div style={styles.detailLabel}>Detail</div>
-            <div style={styles.detailValue}>{qrData.assembly_mark || 'Tundmatu'}</div>
+            <div style={styles.detailLabel}>Cast Unit Mark</div>
+            <div style={styles.detailValue}>{qrData.assembly_mark || 'Unknown'}</div>
           </div>
         </div>
       </div>
@@ -205,36 +205,36 @@ export default function QRActivationPage({ qrCodeId }: QRActivationPageProps) {
     <div style={styles.container}>
       <div style={styles.card}>
         <FiMapPin size={48} color="#3b82f6" />
-        <h2 style={{ color: '#1f2937', margin: '16px 0 8px' }}>Kinnita leidmine</h2>
+        <h2 style={{ color: '#1f2937', margin: '16px 0 8px' }}>Confirm Part Found</h2>
 
         <div style={styles.detailBox}>
-          <div style={styles.detailLabel}>Detail</div>
-          <div style={styles.detailValue}>{qrData.assembly_mark || 'Tundmatu'}</div>
+          <div style={styles.detailLabel}>Cast Unit Mark</div>
+          <div style={styles.detailValue}>{qrData.assembly_mark || 'Unknown'}</div>
         </div>
 
         {qrData.product_name && (
           <div style={styles.detailBox}>
-            <div style={styles.detailLabel}>Toode</div>
+            <div style={styles.detailLabel}>Product</div>
             <div style={styles.detailValue}>{qrData.product_name}</div>
           </div>
         )}
 
         {qrData.weight && (
           <div style={styles.detailBox}>
-            <div style={styles.detailLabel}>Kaal</div>
+            <div style={styles.detailLabel}>Weight</div>
             <div style={styles.detailValue}>{qrData.weight.toFixed(1)} kg</div>
           </div>
         )}
 
         <div style={{ width: '100%', marginTop: '16px' }}>
           <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, color: '#374151' }}>
-            Sinu nimi
+            Your Name
           </label>
           <input
             type="text"
             value={activatorName}
             onChange={(e) => setActivatorName(e.target.value)}
-            placeholder="Sisesta oma nimi"
+            placeholder="Enter your name"
             style={styles.input}
             autoFocus
           />
@@ -252,18 +252,18 @@ export default function QRActivationPage({ qrCodeId }: QRActivationPageProps) {
           {activating ? (
             <>
               <FiLoader size={20} style={{ animation: 'spin 1s linear infinite' }} />
-              <span>Kinnitan...</span>
+              <span>Confirming...</span>
             </>
           ) : (
             <>
               <FiCheckCircle size={20} />
-              <span>Kinnita - Detail leitud!</span>
+              <span>Confirm - Part Found!</span>
             </>
           )}
         </button>
 
         <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '16px', textAlign: 'center' }}>
-          Loodud: {qrData.created_by_name}
+          Created by: {qrData.created_by_name}
         </p>
       </div>
 
@@ -283,7 +283,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    background: 'linear-gradient(135deg, #1e3a5f 0%, #0d2137 100%)',
     padding: '16px',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
   },
@@ -293,7 +293,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '32px 24px',
     maxWidth: '400px',
     width: '100%',
-    boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+    boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',

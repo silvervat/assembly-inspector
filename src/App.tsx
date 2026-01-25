@@ -34,7 +34,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.950';
+export const APP_VERSION = '3.0.953';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -996,18 +996,26 @@ export default function App() {
 
         // If activated, color the detail green
         if (updated.status === 'activated' && updated.guid) {
-          console.log('[QR Activation] Detail found:', updated.assembly_mark || updated.guid);
+          console.log('[QR Activation] Realtime event received! Status:', updated.status, 'GUID:', updated.guid);
           showGlobalToast(`${updated.assembly_mark || 'Detail'} leitud platsilt!`, 'success');
 
           try {
             // First color entire model white
+            console.log('[QR Activation] Resetting model colors...');
             await api.viewer.setObjectState(undefined, { color: 'reset' });
 
+            // Try both lowercase and original case GUID
+            const guidsToTry = [updated.guid.toLowerCase(), updated.guid];
+            console.log('[QR Activation] Searching for GUIDs:', guidsToTry);
+
             // Find and color this element green
-            const foundMap = await findObjectsInLoadedModels(api, [updated.guid]);
+            const foundMap = await findObjectsInLoadedModels(api, guidsToTry);
+            console.log('[QR Activation] Found objects:', foundMap.size);
+
             if (foundMap.size > 0) {
               const foundItem = foundMap.values().next().value;
               if (foundItem) {
+                console.log('[QR Activation] Found item - ModelId:', foundItem.modelId, 'RuntimeId:', foundItem.runtimeId);
                 const green = { r: 34, g: 197, b: 94, a: 255 };
                 await api.viewer.setObjectState(
                   { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
@@ -1018,8 +1026,10 @@ export default function App() {
                   { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
                   'set'
                 );
-                console.log('[QR Activation] Detail colored green and selected');
+                console.log('[QR Activation] Detail colored green and selected!');
               }
+            } else {
+              console.warn('[QR Activation] Object not found in loaded models for GUID:', updated.guid);
             }
           } catch (e) {
             console.error('[QR Activation] Error coloring model:', e);
