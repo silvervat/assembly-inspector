@@ -1,1 +1,55 @@
-{}
+{
+  "general": {
+    "error": "Error",
+    "unknown": "Unknown error",
+    "tryAgain": "Try again",
+    "connectionError": "Connection error",
+    "networkError": "Network error",
+    "serverError": "Server error",
+    "timeout": "Request timed out",
+    "unauthorized": "You are not authorized to do this",
+    "forbidden": "Access denied",
+    "notFound": "Not found"
+  },
+  "model": {
+    "noModelsLoaded": "No models loaded",
+    "objectNotFound": "Object not found in model",
+    "noSelection": "Nothing selected",
+    "selectFirst": "Select from model first",
+    "selectDetails": "Select details from model!",
+    "selectDetail": "Select detail from model",
+    "selectOneDetail": "Select one detail",
+    "selectObjects": "Select objects first!",
+    "noObjectsFound": "No objects found",
+    "noAssembliesFound": "No assemblies found",
+    "objectIdMissing": "Object identifier missing"
+  },
+  "data": {
+    "loadError": "Error loading data",
+    "saveError": "Error saving",
+    "deleteError": "Error deleting",
+    "updateError": "Error updating",
+    "exportError": "Error exporting",
+    "importError": "Error importing",
+    "invalidData": "Invalid data",
+    "noGuids": "No GUIDs found"
+  },
+  "file": {
+    "readError": "Error reading file",
+    "openError": "Error opening file",
+    "uploadError": "Error uploading file",
+    "downloadError": "Error downloading",
+    "fileEmpty": "File is empty",
+    "invalidFormat": "Invalid file format"
+  },
+  "photo": {
+    "uploadError": "Error uploading photo",
+    "deleteError": "Failed to delete photo",
+    "copyError": "Failed to copy image",
+    "sizeLimit": "Image must be smaller than {{size}}MB!"
+  },
+  "color": {
+    "error": "Error coloring",
+    "dbError": "Error reading from Supabase"
+  }
+}

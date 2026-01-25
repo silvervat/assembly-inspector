@@ -1,1 +1,85 @@
-{}
+{
+  "title": "Inspection",
+  "status": {
+    "pending": "Pending",
+    "inProgress": "In progress",
+    "completed": "Completed",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "reviewed": "Reviewed"
+  },
+  "plan": {
+    "title": "Inspection plan",
+    "empty": "Plan is empty",
+    "category": "Category",
+    "selectCategory": "Select inspection category first",
+    "noTypesInCategory": "This category has no inspection types",
+    "addNotes": "Add notes to plan...",
+    "deleteConfirm": "Delete {{count}} items from plan?",
+    "deleteResultsConfirm": "Delete {{count}} inspection results?",
+    "selectAll": "Select all"
+  },
+  "config": {
+    "title": "Inspection configuration",
+    "types": "Inspection types",
+    "newType": "New inspection type",
+    "editType": "Edit type",
+    "deleteTypeConfirm": "Are you sure? This will also delete all categories and checkpoints.",
+    "deleteCategoryConfirm": "Are you sure? This will also delete all checkpoints.",
+    "deleteCheckpointConfirm": "Are you sure?",
+    "basicInfo": "Basic info",
+    "checkpointQuestion": "e.g. Is the element installed correctly?",
+    "checkpointDescription": "Short description of checkpoint",
+    "checkpointGuide": "How to perform check? What to look for?",
+    "value": "Value",
+    "requiresPhoto": "Requires photo",
+    "requiresComment": "Requires comment",
+    "workflowSettings": "Workflow settings and colors",
+    "statusColors": "Inspection status colors (fixed)",
+    "approvalWorkflow": "Approval workflow",
+    "describeTypeGoal": "Describe the goal of this inspection type...",
+    "describeTypeContent": "Describe the content of this type...",
+    "exampleTypeName": "e.g. General check"
+  },
+  "list": {
+    "loadMore": "Load more ({{count}} left)",
+    "loading": "Loading...",
+    "lowerHeight": "Lower height",
+    "upperHeight": "Upper height",
+    "showDetails": "Show details",
+    "selectAndZoomAll": "Select and zoom all details",
+    "selectAndZoomProduct": "Select and zoom all product details",
+    "selectAndZoomDay": "Select and zoom all day details",
+    "selectAndZoomMonth": "Select and zoom all month details"
+  },
+  "gallery": {
+    "deleteError": "Failed to delete photo",
+    "image": "Image"
+  },
+  "builder": {
+    "describeGoal": "Describe the goal of this inspection type...",
+    "exampleName": "e.g. General check",
+    "describeContent": "Describe the content of this type...",
+    "questionText": "What is being checked? What question is asked to inspector?",
+    "guideText": "How to perform check? What to look for?",
+    "deleteTypeConfirm": "Are you sure? This will also delete all related types and checkpoints.",
+    "deleteCategoryConfirm": "Are you sure? This will also delete all related checkpoints."
+  },
+  "adminPanel": {
+    "confirmedCount": "Confirmed: {{success}}, Failed: {{failure}}",
+    "redirectedCount": "Redirected: {{success}}, Failed: {{failure}}",
+    "rejectedCount": "Rejected: {{success}}, Failed: {{failure}}",
+    "assignedCount": "Assigned: {{success}}, Failed: {{failure}}"
+  },
+  "bulkAction": {
+    "commentRequired": "Comment is required when rejecting"
+  },
+  "actions": {
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "saving": "Saving...",
+    "remove": "Remove",
+    "editComment": "Edit comment"
+  }
+}

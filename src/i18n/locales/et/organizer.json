@@ -1,1 +1,111 @@
-{}
+{
+  "title": "Organiseerija",
+  "group": {
+    "new": "Uus grupp",
+    "edit": "Muuda gruppi",
+    "delete": "Kustuta grupp",
+    "deleteConfirm": "Kas oled kindel, et soovid selle grupi kustutada?",
+    "save": "Salvesta",
+    "saving": "Salvestan...",
+    "create": "Loo grupp",
+    "deleting": "Kustutan...",
+    "settings": "Muuda grupi seadeid",
+    "maxDepth": "Maksimaalne grupi sügavus on 3 taset",
+    "moveExceedsDepth": "Liigutamine ületaks maksimaalse sügavuse (3 taset)",
+    "locked": "Grupp on lukustatud",
+    "lockedBy": "Grupp on lukustatud ({{user}})",
+    "colorLocked": "Grupi värvi ei saa muuta - grupp on lukustatud",
+    "allItemsAlreadyInGroup": "Kõik valitud detailid on juba selles grupis",
+    "noPermissionDelete": "Sul pole õigust detaile kustutada",
+    "noPermissionDeleteOthers": "Sul pole õigust teiste lisatud detaile kustutada ({{count}} detaili)"
+  },
+  "field": {
+    "new": "Lisa väli",
+    "edit": "Muuda välja",
+    "delete": "Kustuta väli",
+    "deleteConfirm": "Kas oled kindel, et soovid selle välja kustutada?",
+    "save": "Salvesta",
+    "saving": "Salvestan...",
+    "saveError": "Viga välja salvestamisel",
+    "updateError": "Viga välja uuendamisel",
+    "enterValue": "Sisesta vähemalt üks väärtus või vali failid"
+  },
+  "item": {
+    "add": "Lisa detailid",
+    "remove": "Eemalda",
+    "moveUp": "Liiguta üles",
+    "selectInModel": "Vali mudelis",
+    "requiredFieldsMissing": "Grupil on kohustuslikud väljad ({{fields}}). Kasuta tavalist lisamist mudelist.",
+    "emptyInput": "Sisend on tühi",
+    "noMatchingElements": "Ühtegi sobivat elementi ei leitud ({{format}})",
+    "allAlreadyInGroup": "Kõik leitud elemendid on juba grupis",
+    "updateCount": "{{count}} detaili uuendatud, {{uploadCount}} faili laetud üles",
+    "existingValuesOverwrite": "{{count}} detailil on juba väärtused. Kas kirjutad üle?"
+  },
+  "search": {
+    "placeholder": "Otsi kõikidest gruppidest...",
+    "all": "Kõik"
+  },
+  "excel": {
+    "fileEmpty": "Excel fail on tühi",
+    "missingRequiredValues": "Hoiatus: {{count}} rida puuduvate kohustuslike väärtustega ({{fields}})",
+    "guidColumnNotFound": "GUID veergu ei leitud või kõik read on tühjad",
+    "loadingPropertyValues": "Laen property väärtusi mudelist...",
+    "groupHeader": "Grupp",
+    "parentGroupHeader": "Ülemgrupp",
+    "descriptionHeader": "Kirjeldus",
+    "itemsHeader": "Detaile",
+    "weightHeader": "Kaal (t)",
+    "missingDetailsSheet": "Failis puudub \"Detailid\" leht",
+    "hierarchyHelp": "Hierarhia: \"Ülemgrupp > Alamgrupp > Alamalamgrupp\""
+  },
+  "color": {
+    "coloringProgress": "Värvin {{mode}}... Loen andmebaasist...",
+    "readObjects": "Värvin... Loetud {{count}} objekti",
+    "searchingModels": "Värvin... Otsin mudelitest...",
+    "resetPreviousGroup": "Lähtestan eelmise grupi värve...",
+    "coloringWhite": "Värvin valged... {{current}}/{{total}}",
+    "coloringGroups": "Värvin gruppe... {{current}}/{{total}}",
+    "coloringSubDetails": "Värvin alamdetaile...",
+    "done": "Värvitud! Valged={{white}}, Grupeeritud={{colored}}{{subInfo}}",
+    "error": "Viga värvimisel",
+    "reset": "Värvid lähtestatud",
+    "coloringSelected": "Värvin {{count}} valitud detaili...",
+    "selectedColored": "{{count}} detaili värvitud",
+    "selectColor": "Vali värv",
+    "selectMarkupColor": "Vali markup värv"
+  },
+  "heights": {
+    "calculating": "Arvutan automaatseid kõrgusi..."
+  },
+  "order": {
+    "processing": "Töötlen... {{current}}/{{total}}",
+    "error": "Viga järjestuse muutmisel",
+    "saved": "Järjestus salvestatud",
+    "saveError": "Viga järjestuse salvestamisel"
+  },
+  "columns": {
+    "selectAtLeastOne": "Vali vähemalt üks kuvatav veerg"
+  },
+  "link": {
+    "copied": "Link kopeeritud ({{count}} detaili, kehtib {{days}} päeva)"
+  },
+  "upload": {
+    "progress": "Laadimine...",
+    "connectionRestored": "Ühendus taastatud, proovin uuesti..."
+  },
+  "saveError": "Viga salvestamisel - värskenda lehte",
+  "fileUploadError": "Viga failide üleslaadimisel",
+  "sourceGroupLocked": "Lähtegrupp on lukustatud ({{user}})",
+  "download": "Laadi alla",
+  "delete": "Kustuta",
+  "edit": "Muuda",
+  "remove": "Eemalda",
+  "selectPhotos": "Vali fotod",
+  "selectFiles": "Vali failid",
+  "updateAll": "Uuenda kõik",
+  "loading": "Laadin...",
+  "keywordsPlaceholder": "märksõnad, komaga eraldatud",
+  "dragFieldsPlaceholder": "Lohista siia välju või kirjuta tekst...",
+  "guidExamplePlaceholder": "Näiteks:\\n3f2504e0-4f89-11d3-9a0c-0305e82c3301\\n..."
+}

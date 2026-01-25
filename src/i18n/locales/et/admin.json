@@ -1,1 +1,139 @@
-{}
+{
+  "title": "Administratsioon",
+  "tabs": {
+    "viewer": "Viewer funktsioonid",
+    "database": "Andmebaas",
+    "users": "Kasutajad",
+    "settings": "Seaded"
+  },
+  "viewer": {
+    "title": "Viewer funktsioonid",
+    "modelObjects": "Mudeli objektid",
+    "selectDetail": "Vali mudelist detail",
+    "selectOneDetail": "Vali üks detail",
+    "selectDetails": "Vali mudelist detailid",
+    "noObjectsFound": "Ühtegi objekti ei leitud",
+    "noAssembliesFound": "Ühtegi assembly-t ei leitud! Kontrolli, kas Assembly Selection on sees.",
+    "noCastUnitMarks": "Ühtegi Cast Unit Mark väärtust ei leitud!",
+    "noModelsLoaded": "Ühtegi mudelit pole laaditud!",
+    "loadingModelObjects": "Laadin mudeli objekte...",
+    "loadingData": "Laadin andmeid...",
+    "objectSelected": "Valitud: {{name}} (Assembly Selection VÄLJAS)",
+    "copiedToClipboard": "Kopeeritud lõikelauale!",
+    "boltSummaryCopied": "Poltide kokkuvõte kopeeritud!",
+    "noBoltsFound": "Polte ei leitud (või washer count = 0)",
+    "selectAndZoom": "Vali ja suumi",
+    "selectThisDetail": "Vali see detail mudelis",
+    "enterMark": "Sisesta mark (nt: S-101, B-22...)",
+    "enterGuids": "Sisesta GUID(id)...",
+    "guidsPlaceholder": "Sisesta GUID(id)...\\n\\nNäited:\\n3cUkl00wxCuAr0f8gkqJbz (IFC GUID)\\n3f2504e0-4f89-11d3-9a0c-0305e82c3301 (MS GUID)"
+  },
+  "database": {
+    "title": "Andmebaas",
+    "sendToDatabase": "Saada andmebaasi",
+    "deleteAllData": "Kustuta kõik andmed",
+    "confirmDeleteAll": "Kas oled kindel, et soovid KÕIK kirjed kustutada?",
+    "allDataDeleted": "Kõik tarnegraafiku andmed kustutatud!",
+    "orphanedItems": "Orvuks jäänud detailid",
+    "confirmDeleteOrphaned": "Kas kustutada {{count}} orvuks jäänud detaili?",
+    "orphanedDeleted": "{{count}} orvuks jäänud detaili kustutatud",
+    "deleteAll": "Kustuta kõik",
+    "noOrphanedItems": "Orvuks jäänud detaile pole",
+    "exportSuccess": "Eksport õnnestus: {{fileName}}",
+    "allData": "Kõik andmed"
+  },
+  "users": {
+    "title": "Kasutajad",
+    "teamLoadError": "Meeskonna laadimine ebaõnnestus",
+    "allTeamMembersInDb": "Kõik meeskonna liikmed on juba andmebaasis",
+    "teamSyncError": "Viga meeskonna sünkroonimisel: {{error}}",
+    "resourceUpdated": "Ressurss uuendatud",
+    "resourceUpdateFailed": "Ressurss uuendatud (paigalduste uuendamine ebaõnnestus)",
+    "permissions": "Õigused moodulite kaupa",
+    "saving": "Salvestan...",
+    "save": "Salvesta",
+    "updateName": "Uuenda nimi",
+    "add": "Lisa",
+    "edit": "Muuda",
+    "editName": "Muuda nime"
+  },
+  "settings": {
+    "title": "Seaded",
+    "teklaPropertySettings": "Tekla property seaded",
+    "resetToDefaults": "Lähtestatud vaikimisi seadetele",
+    "propertyMapped": "Määratud: {{setName}}.{{propName}}",
+    "views": {
+      "title": "Vaated",
+      "save": "Salvesta vaade",
+      "saving": "Salvestan...",
+      "resetting": "Lähtestamine...",
+      "updateWithCurrent": "Uuenda praeguse vaatega",
+      "editView": "Muuda vaadet",
+      "delete": "Kustuta"
+    },
+    "visibility": {
+      "title": "Nähtavus / Värvid"
+    },
+    "measurement": {
+      "title": "Mõõtmine"
+    },
+    "background": {
+      "title": "Taustavärv"
+    },
+    "moreColors": {
+      "title": "Rohkem värve"
+    },
+    "cameraMode": {
+      "title": "Kaamera režiimid"
+    },
+    "clipPlanes": {
+      "title": "Lõiketasandid"
+    },
+    "gantt": {
+      "open": "Ava Gantt Timeline"
+    }
+  },
+  "qrScanner": {
+    "notSupported": "QR skänner pole selles brauseris toetatud. Kasuta Chrome'i.",
+    "videoError": "Video ei käivitu. Kontrolli kaamera õigusi.",
+    "cameraAccessDenied": "Kaamera ligipääs keelatud. Luba kaamera kasutamine brauseri seadetes.",
+    "detected": "Detekt {{mark}}. Küsin GPS asukohta...",
+    "gpsNotSupported": "GPS pole toetatud selles seadmes",
+    "positionSaved": "Positsioon salvestatud: {{lat}}, {{lng}} (täpsus: {{accuracy}}m)",
+    "popupBlocked": "Popup blokeeritud. Sisesta koordinaadid käsitsi.",
+    "processingError": "Viga QR töötlemisel",
+    "coordinatesOutOfRange": "Koordinaadid vahemikust väljas",
+    "openGoogleMaps": "Ava Google Maps, tee \"long press\" oma asukohale ja kopeeri koordinaadid",
+    "resetError": "Viga lähtestamisel",
+    "findingReset": "Leidmine lähtestatud - saab uuesti skännida"
+  },
+  "guid": {
+    "enterAtLeastOne": "Sisesta vähemalt üks GUID!",
+    "enterAtLeastOneMs": "Sisesta vähemalt üks GUID (MS)",
+    "noValidMsFound": "Ühtegi kehtivat GUID (MS) ei leitud"
+  },
+  "popupBlocked": "Popup blocker võib blokeerida akna avamist. Luba popupid selle lehe jaoks.",
+  "error": "Viga",
+  "accessDenied": "Ligipääs keelatud",
+  "copy": "Kopeeri",
+  "linkInvalidOrExpired": "Link ei ole kehtiv või on aegunud",
+  "connectionError": "Ühenduse viga Trimble Connect'iga",
+  "loadingInspectionData": "Laadin inspektsiooni andmeid...",
+  "exportAll": "Ekspordi kõik",
+  "openInGoogleMaps": "Ava Google Maps'is",
+  "scriptCopied": "Script kopeeritud lõikelauale!",
+  "selectDetailInModel": "Vali detail mudelis",
+  "noPositionedDetails": "Positsioneeritud detaile pole...",
+  "loading": "Laadin...",
+  "yes": "Jah",
+  "no": "Ei",
+  "selectTwoObjects": "Vali kaks objekti!",
+  "selectAtLeastTwoObjects": "Vali vähemalt 2 objekti!",
+  "selectObjectFirst": "Vali esmalt objekt!",
+  "selectObjectsFirst": "Vali esmalt objektid!",
+  "allEdges": "Kõik 12 serva",
+  "selectFirstDetailFromModel": "Vali esmalt üks detail mudelist!",
+  "basePointSet": "Baaspunkt määratud:\\nX: {{x}}mm\\nY: {{y}}mm\\nZ: {{z}}mm",
+  "basePointCleared": "Baaspunkt tühjendatud",
+  "enterShapeCode": "Sisesta kujundi kood!"
+}

@@ -1,1 +1,85 @@
-{}
+{
+  "title": "Inspektsioon",
+  "status": {
+    "pending": "Ootel",
+    "inProgress": "Töös",
+    "completed": "Lõpetatud",
+    "approved": "Kinnitatud",
+    "rejected": "Tagasi lükatud",
+    "reviewed": "Üle vaadatud"
+  },
+  "plan": {
+    "title": "Inspektsiooni kava",
+    "empty": "Kava on tühi",
+    "category": "Kategooria",
+    "selectCategory": "Vali esmalt inspektsiooni kategooria",
+    "noTypesInCategory": "Sellel kategoorial pole inspektsiooni tüüpe",
+    "addNotes": "Lisa märkmeid kavasse...",
+    "deleteConfirm": "Kas kustutada {{count}} elementi kavast?",
+    "deleteResultsConfirm": "Kas kustutada {{count}} inspektsiooni tulemust?",
+    "selectAll": "Vali kõik"
+  },
+  "config": {
+    "title": "Inspektsiooni seadistamine",
+    "types": "Inspektsiooni tüübid",
+    "newType": "Uus inspektsiooni tüüp",
+    "editType": "Muuda tüüpi",
+    "deleteTypeConfirm": "Kas olete kindel? See kustutab ka kõik kategooriad ja kontrollpunktid.",
+    "deleteCategoryConfirm": "Kas olete kindel? See kustutab ka kõik kontrollpunktid.",
+    "deleteCheckpointConfirm": "Kas olete kindel?",
+    "basicInfo": "Põhiandmed",
+    "checkpointQuestion": "nt. Kas element on õigesti paigaldatud?",
+    "checkpointDescription": "Lühike selgitus kontrollpunkti kohta",
+    "checkpointGuide": "Kuidas kontrolli läbi viia? Mida jälgida?",
+    "value": "Väärtus",
+    "requiresPhoto": "Nõuab fotot",
+    "requiresComment": "Nõuab kommentaari",
+    "workflowSettings": "Töövoo seaded ja värvid",
+    "statusColors": "Inspektsioonide staatuse värvid (fikseeritud)",
+    "approvalWorkflow": "Kinnitamise töövoog",
+    "describeTypeGoal": "Kirjelda kontrollitüübi eesmärki...",
+    "describeTypeContent": "Kirjelda tüübi sisu...",
+    "exampleTypeName": "nt. Üldkontroll"
+  },
+  "list": {
+    "loadMore": "Lae juurde ({{count}} veel)",
+    "loading": "Laadin...",
+    "lowerHeight": "Alumine kõrgus",
+    "upperHeight": "Ülemine kõrgus",
+    "showDetails": "Näita detaile",
+    "selectAndZoomAll": "Märgista ja zoom kõik detailid",
+    "selectAndZoomProduct": "Märgista ja zoom kõik toote detailid",
+    "selectAndZoomDay": "Märgista ja zoom kõik päeva detailid",
+    "selectAndZoomMonth": "Märgista ja zoom kõik kuu detailid"
+  },
+  "gallery": {
+    "deleteError": "Foto kustutamine ebaõnnestus",
+    "image": "Pilt"
+  },
+  "builder": {
+    "describeGoal": "Kirjelda kontrollitüübi eesmärki...",
+    "exampleName": "nt. Üldkontroll",
+    "describeContent": "Kirjelda tüübi sisu...",
+    "questionText": "Mida kontrollitakse? Mis küsimus esitatakse inspektorile?",
+    "guideText": "Kuidas kontrolli läbi viia? Mida jälgida?",
+    "deleteTypeConfirm": "Kas oled kindel? See kustutab ka kõik seotud tüübid ja kontrollpunktid.",
+    "deleteCategoryConfirm": "Kas oled kindel? See kustutab ka kõik seotud kontrollpunktid."
+  },
+  "adminPanel": {
+    "confirmedCount": "Kinnitatud: {{success}}, Ebaõnnestunud: {{failure}}",
+    "redirectedCount": "Tagasi suunatud: {{success}}, Ebaõnnestunud: {{failure}}",
+    "rejectedCount": "Tagasi lükatud: {{success}}, Ebaõnnestunud: {{failure}}",
+    "assignedCount": "Määratud: {{success}}, Ebaõnnestunud: {{failure}}"
+  },
+  "bulkAction": {
+    "commentRequired": "Kommentaar on kohustuslik tagasi lükkamisel"
+  },
+  "actions": {
+    "edit": "Muuda",
+    "delete": "Kustuta",
+    "save": "Salvesta",
+    "saving": "Salvestan...",
+    "remove": "Eemalda",
+    "editComment": "Muuda kommentaari"
+  }
+}
