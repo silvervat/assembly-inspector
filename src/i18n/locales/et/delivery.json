@@ -191,12 +191,43 @@
   },
   "playback": {
     "speed": "Kiirus",
+    "speedLabel": "Kiirus:",
     "playing": "Esitamine",
-    "paused": "Peatatud"
+    "paused": "Peatatud",
+    "play": "Esita",
+    "pause": "Paus",
+    "resume": "Jätka",
+    "stop": "Lõpeta"
   },
   "viewMode": {
     "byDate": "Kuupäevade järgi",
     "byFactory": "Tehaste järgi",
     "openFullView": "Ava täisvaade eraldi aknas"
+  },
+  "toolbar": {
+    "pieces": "tk",
+    "vehicle": "veok",
+    "vehicles": "veokit",
+    "factories": "Tehased",
+    "importExport": "Import-Eksport",
+    "import": "Import",
+    "export": "Eksport",
+    "openAsTable": "Ava tabelina",
+    "refreshFromModel": "Värskenda mudelist",
+    "color": "Värvi",
+    "colorByVehicle": "Veokite kaupa",
+    "colorByDate": "Kuupäevade kaupa",
+    "colorByFactory": "Tehaste kaupa",
+    "colorWhite": "Värvi valgeks",
+    "playback": "Taasesitus",
+    "settings": "Seaded",
+    "sheetsSync": "Google Sheets sünk",
+    "sendToDb": "Saada andmebaasi"
+  },
+  "stats": {
+    "totalItems": "{{count}} tk",
+    "totalWeight": "{{weight}} kg",
+    "vehicleCount": "{{count}} veokit",
+    "vehicleCountSingular": "{{count}} veok"
   }
 }
