@@ -93,5 +93,16 @@
     "today": "Täna",
     "week": "Nädal",
     "month": "Kuu"
+  },
+  "menu": {
+    "actions": "Tegevused",
+    "resourceStats": "Ressursside statistika",
+    "refreshMarks": "Uuenda Object_xxx markid",
+    "markups": "Märgistused",
+    "markAllDays": "Märgi kõik päevad (P1-1, P1-2...)",
+    "deliveryDates": "Tarnekuupäevad (planeerimata)",
+    "withoutErp": "Ilma ERP-ideta (planeerimata)",
+    "vehicleTime": "Veoki nr & tarneaeg",
+    "removeMarkups": "Eemalda kõik markupid"
   }
 }
