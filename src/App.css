@@ -5422,6 +5422,111 @@ button.stat-toggle.off:hover {
   background: white;
 }
 
+.plan-list-item.item-selected {
+  background: #fef3c7 !important;
+  border-left: 3px solid #f59e0b;
+}
+
+/* Selection mode checkbox */
+.item-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 8px;
+}
+
+.item-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+/* Selection mode action buttons */
+.btn-edit-mode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  border-radius: var(--modus-radius-sm);
+  font-size: var(--modus-font-size-xs);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-edit-mode:hover {
+  background: #fde68a;
+  border-color: #f59e0b;
+}
+
+.btn-select-all,
+.btn-deselect-all {
+  padding: 6px 12px;
+  background: white;
+  color: var(--modus-text-primary);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  font-size: var(--modus-font-size-xs);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-select-all:hover,
+.btn-deselect-all:hover {
+  background: var(--modus-bg-secondary);
+}
+
+.btn-deselect-all:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-delete-selected {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #dc2626;
+  color: white;
+  border: 1px solid #b91c1c;
+  border-radius: var(--modus-radius-sm);
+  font-size: var(--modus-font-size-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-delete-selected:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.btn-delete-selected:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-cancel-mode {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: white;
+  color: var(--modus-text-secondary);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  font-size: var(--modus-font-size-xs);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-cancel-mode:hover {
+  background: var(--modus-bg-secondary);
+  color: var(--modus-text-primary);
+}
+
 .item-row {
   display: flex;
   align-items: center;
@@ -5541,9 +5646,16 @@ button.stat-toggle.off:hover {
   color: var(--modus-text-primary);
 }
 
+.btn-icon-small.btn-danger {
+  background: #fef2f2;
+  color: #ef4444;
+  border: 1px solid #fecaca;
+}
+
 .btn-icon-small.btn-danger:hover {
   background: #fee2e2;
   color: #dc2626;
+  border-color: #fca5a5;
 }
 
 /* Item Expanded Details */

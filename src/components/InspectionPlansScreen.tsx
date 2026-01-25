@@ -294,6 +294,13 @@ export default function InspectionPlansScreen({
                         </span>
                         <span
                           className="status-indicator"
+                          style={{ backgroundColor: INSPECTION_STATUS_COLORS.inProgress.hex }}
+                          title={INSPECTION_STATUS_COLORS.inProgress.label}
+                        >
+                          {stats.inProgressCount}
+                        </span>
+                        <span
+                          className="status-indicator"
                           style={{ backgroundColor: INSPECTION_STATUS_COLORS.completed.hex }}
                           title={INSPECTION_STATUS_COLORS.completed.label}
                         >

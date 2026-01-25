@@ -127,6 +127,10 @@ export default function InspectionPlanScreen({
   // Config screen state (for admin/moderator)
   const [showConfigScreen, setShowConfigScreen] = useState(false);
 
+  // Mass selection/delete state
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+
   // Ref for tracking last selection to avoid duplicate processing
   const lastSelectionRef = useRef<string>('');
   const isDetectingRef = useRef(false);
@@ -377,8 +381,12 @@ export default function InspectionPlanScreen({
       const guids = data.map(item => item.guid).filter(Boolean);
       const planItemIds = data.map(item => item.id);
 
-      // Fetch checkpoint results with photos and review status
-      const { data: checkpointResults, error: resultsError } = await supabase
+      // Fetch ALL checkpoint results for this project (avoid issues with special characters in IFC GUIDs)
+      // Then filter in JavaScript by plan_item_id or assembly_guid
+      const planItemIdSet = new Set(planItemIds);
+      const guidSet = new Set(guids.map(g => g.toLowerCase()));
+
+      const { data: allProjectResults, error: resultsError } = await supabase
         .from('inspection_results')
         .select(`
           id,
@@ -394,8 +402,14 @@ export default function InspectionPlanScreen({
           review_status,
           inspection_checkpoints(name)
         `)
-        .eq('project_id', projectId)
-        .or(`plan_item_id.in.(${planItemIds.join(',')}),assembly_guid.in.(${guids.join(',')})`);
+        .eq('project_id', projectId);
+
+      // Filter to only include results that match our plan items (by plan_item_id or assembly_guid)
+      const checkpointResults = (allProjectResults || []).filter(result => {
+        if (result.plan_item_id && planItemIdSet.has(result.plan_item_id)) return true;
+        if (result.assembly_guid && guidSet.has(result.assembly_guid.toLowerCase())) return true;
+        return false;
+      });
 
       // Fetch photos for results
       let resultPhotos: Record<string, any[]> = {};
@@ -752,6 +766,68 @@ export default function InspectionPlanScreen({
   // Toggle item expansion
   const toggleExpand = (itemId: string) => {
     setExpandedItemId(expandedItemId === itemId ? null : itemId);
+  };
+
+  // Mass selection helpers
+  const toggleItemSelection = (itemId: string) => {
+    setSelectedItemIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllFilteredItems = () => {
+    const filtered = filteredPlanItems();
+    setSelectedItemIds(new Set(filtered.map(item => item.id)));
+  };
+
+  const deselectAllItems = () => {
+    setSelectedItemIds(new Set());
+  };
+
+  // Mass delete selected items
+  const deleteSelectedItems = async () => {
+    if (selectedItemIds.size === 0) {
+      showMessage('⚠️ Valige kõigepealt elemendid kustutamiseks', 'warning');
+      return;
+    }
+
+    if (!confirm(`Kas kustutada ${selectedItemIds.size} elementi kavast? Seda tegevust ei saa tagasi võtta!`)) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const idsToDelete = Array.from(selectedItemIds);
+
+      const { error } = await supabase
+        .from('inspection_plan_items')
+        .delete()
+        .in('id', idsToDelete);
+
+      if (error) throw error;
+
+      showMessage(`✅ ${idsToDelete.length} elementi kustutatud kavast`, 'success');
+      setSelectedItemIds(new Set());
+      setSelectionMode(false);
+      fetchPlanItems();
+    } catch (error) {
+      console.error('Failed to delete selected items:', error);
+      showMessage('❌ Viga kustutamisel: ' + (error as Error).message, 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Exit selection mode
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedItemIds(new Set());
   };
 
   // Select completed items in model (items that have inspections)
@@ -1335,20 +1411,63 @@ export default function InspectionPlanScreen({
 
               {/* Selection Action Buttons */}
               <div className="plan-selection-actions">
-                <button
-                  className="btn-select-completed"
-                  onClick={selectCompletedItems}
-                >
-                  <FiCheckCircle size={16} />
-                  Vali tehtud ({filteredPlanItems().filter(i => (i.inspection_count || 0) > 0).length})
-                </button>
-                <button
-                  className="btn-select-uncompleted"
-                  onClick={selectUncompletedItems}
-                >
-                  <FiClock size={16} />
-                  Vali tegemata ({filteredPlanItems().filter(i => (i.inspection_count || 0) === 0).length})
-                </button>
+                {!selectionMode ? (
+                  <>
+                    <button
+                      className="btn-select-completed"
+                      onClick={selectCompletedItems}
+                    >
+                      <FiCheckCircle size={16} />
+                      Vali tehtud ({filteredPlanItems().filter(i => (i.inspection_count || 0) > 0).length})
+                    </button>
+                    <button
+                      className="btn-select-uncompleted"
+                      onClick={selectUncompletedItems}
+                    >
+                      <FiClock size={16} />
+                      Vali tegemata ({filteredPlanItems().filter(i => (i.inspection_count || 0) === 0).length})
+                    </button>
+                    <button
+                      className="btn-edit-mode"
+                      onClick={() => setSelectionMode(true)}
+                      title="Kustuta elemente"
+                    >
+                      <FiTrash2 size={16} />
+                      Muuda kava
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      className="btn-select-all"
+                      onClick={selectAllFilteredItems}
+                    >
+                      Vali kõik ({filteredPlanItems().length})
+                    </button>
+                    <button
+                      className="btn-deselect-all"
+                      onClick={deselectAllItems}
+                      disabled={selectedItemIds.size === 0}
+                    >
+                      Tühista valik
+                    </button>
+                    <button
+                      className="btn-delete-selected"
+                      onClick={deleteSelectedItems}
+                      disabled={selectedItemIds.size === 0 || isSaving}
+                    >
+                      <FiTrash2 size={16} />
+                      Kustuta ({selectedItemIds.size})
+                    </button>
+                    <button
+                      className="btn-cancel-mode"
+                      onClick={exitSelectionMode}
+                    >
+                      <FiX size={16} />
+                      Tühista
+                    </button>
+                  </>
+                )}
               </div>
 
               {/* Grouped hierarchical list */}
@@ -1427,9 +1546,23 @@ export default function InspectionPlanScreen({
                                       return (
                                         <div
                                           key={item.id}
-                                          className={`plan-list-item ${hasInspections ? 'item-done' : 'item-pending'}`}
+                                          className={`plan-list-item ${hasInspections ? 'item-done' : 'item-pending'} ${selectedItemIds.has(item.id) ? 'item-selected' : ''}`}
                                         >
-                                          <div className="item-row" onClick={() => toggleExpand(item.id)}>
+                                          <div
+                                            className="item-row"
+                                            onClick={() => selectionMode ? toggleItemSelection(item.id) : toggleExpand(item.id)}
+                                          >
+                                            {/* Checkbox for selection mode */}
+                                            {selectionMode && (
+                                              <div className="item-checkbox">
+                                                <input
+                                                  type="checkbox"
+                                                  checked={selectedItemIds.has(item.id)}
+                                                  onChange={() => toggleItemSelection(item.id)}
+                                                  onClick={(e) => e.stopPropagation()}
+                                                />
+                                              </div>
+                                            )}
                                             <div className="item-info">
                                               <span className="item-mark">
                                                 {item.assembly_mark || item.object_name || `Object #${item.object_runtime_id || '?'}`}
@@ -1458,20 +1591,24 @@ export default function InspectionPlanScreen({
                                                 {item.inspection_status === 'approved' && '✓'}
                                               </span>
                                             </div>
-                                            <div className="item-actions">
-                                              <button
-                                                className="btn-icon-small"
-                                                onClick={(e) => { e.stopPropagation(); zoomToItem(item); }}
-                                              >
-                                                <FiZoomIn size={14} />
-                                              </button>
-                                              <button
-                                                className="btn-icon-small btn-danger"
-                                                onClick={(e) => { e.stopPropagation(); deleteItem(item); }}
-                                              >
-                                                <FiTrash2 size={14} />
-                                              </button>
-                                            </div>
+                                            {!selectionMode && (
+                                              <div className="item-actions">
+                                                <button
+                                                  className="btn-icon-small"
+                                                  onClick={(e) => { e.stopPropagation(); zoomToItem(item); }}
+                                                  title="Vaata mudelis"
+                                                >
+                                                  <FiZoomIn size={14} />
+                                                </button>
+                                                <button
+                                                  className="btn-icon-small btn-danger"
+                                                  onClick={(e) => { e.stopPropagation(); deleteItem(item); }}
+                                                  title="Kustuta kavast"
+                                                >
+                                                  <FiTrash2 size={14} />
+                                                </button>
+                                              </div>
+                                            )}
                                           </div>
 
                                           {/* Expanded item details */}
