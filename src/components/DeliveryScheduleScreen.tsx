@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { WorkspaceAPI } from 'trimble-connect-workspace-api';
 import {
   supabase, TrimbleExUser, DeliveryFactory, DeliveryVehicle, DeliveryItem,
@@ -385,6 +386,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // ============================================
   // STATE
   // ============================================
+
+  // i18n translations
+  const { t } = useTranslation('delivery');
 
   // Property mappings for reading Tekla properties
   const { mappings: propertyMappings, isLoading: mappingsLoading } = useProjectPropertyMappings(projectId);
@@ -7979,7 +7983,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     <div className="delivery-schedule-screen">
       {/* Header with hamburger menu */}
       <PageHeader
-        title="Tarnegraafik"
+        title={t('title')}
         onBack={() => onBackToMenu?.()}
         onNavigate={handleHeaderNavigate}
         currentMode="delivery_schedule"
@@ -7992,14 +7996,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         <button
           className={`view-toggle-btn ${viewMode === 'dates' ? 'active' : ''}`}
           onClick={() => setViewMode('dates')}
-          title="Kuupäevade järgi"
+          title={t('viewMode.byDate')}
         >
           <FiCalendar />
         </button>
         <button
           className={`view-toggle-btn ${viewMode === 'factories' ? 'active' : ''}`}
           onClick={() => setViewMode('factories')}
-          title="Tehaste järgi"
+          title={t('viewMode.byFactory')}
         >
           <FiLayers />
         </button>
@@ -8008,7 +8012,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           <button
             className="view-toggle-btn popup-btn"
             onClick={openPopupWindow}
-            title="Ava täisvaade eraldi aknas"
+            title={t('viewMode.openFullView')}
           >
             <FiExternalLink />
           </button>
