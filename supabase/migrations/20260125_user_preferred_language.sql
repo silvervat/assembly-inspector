@@ -11,8 +11,3 @@ ALTER TABLE trimble_ex_users
 
 -- Lisa kommentaar
 COMMENT ON COLUMN trimble_ex_users.preferred_language IS 'Kasutaja eelistatud keel (et, en, ru, fi)';
-
--- Kopeeri väärtused vanast language veerust (kui olemas)
-UPDATE trimble_ex_users
-SET preferred_language = COALESCE(language, 'et')
-WHERE preferred_language IS NULL OR preferred_language = 'et';

@@ -191,12 +191,43 @@
   },
   "playback": {
     "speed": "Speed",
+    "speedLabel": "Speed:",
     "playing": "Playing",
-    "paused": "Paused"
+    "paused": "Paused",
+    "play": "Play",
+    "pause": "Pause",
+    "resume": "Resume",
+    "stop": "Stop"
   },
   "viewMode": {
     "byDate": "By date",
     "byFactory": "By factory",
     "openFullView": "Open full view in new window"
+  },
+  "toolbar": {
+    "pieces": "pcs",
+    "vehicle": "vehicle",
+    "vehicles": "vehicles",
+    "factories": "Factories",
+    "importExport": "Import-Export",
+    "import": "Import",
+    "export": "Export",
+    "openAsTable": "Open as table",
+    "refreshFromModel": "Refresh from model",
+    "color": "Color",
+    "colorByVehicle": "By vehicle",
+    "colorByDate": "By date",
+    "colorByFactory": "By factory",
+    "colorWhite": "Color white",
+    "playback": "Playback",
+    "settings": "Settings",
+    "sheetsSync": "Google Sheets sync",
+    "sendToDb": "Send to database"
+  },
+  "stats": {
+    "totalItems": "{{count}} pcs",
+    "totalWeight": "{{weight}} kg",
+    "vehicleCount": "{{count}} vehicles",
+    "vehicleCountSingular": "{{count}} vehicle"
   }
 }

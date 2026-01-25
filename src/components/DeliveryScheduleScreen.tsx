@@ -8023,11 +8023,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       <div className="delivery-toolbar-compact">
         {/* Stats on left */}
         <div className="toolbar-stats">
-          <span>{totalItems} tk</span>
+          <span>{totalItems} {t('toolbar.pieces')}</span>
           <span className="separator">•</span>
           <span>{formatWeight(totalWeight)?.kg || '0 kg'}</span>
           <span className="separator">•</span>
-          <span>{vehicles.length} {vehicles.length === 1 ? 'veok' : 'veokit'}</span>
+          <span>{vehicles.length} {vehicles.length === 1 ? t('toolbar.vehicle') : t('toolbar.vehicles')}</span>
         </div>
 
         {/* Icon menus on right */}
@@ -8037,7 +8037,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             <button
               className="icon-btn"
               onClick={() => setShowFactoryModal(true)}
-              title="Tehased"
+              title={t('toolbar.factories')}
             >
               <FiLayers size={18} />
             </button>
@@ -8049,16 +8049,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             onMouseEnter={() => setShowImportExportMenu(true)}
             onMouseLeave={() => setShowImportExportMenu(false)}
           >
-            <button className="icon-btn" title="Import-Eksport">
+            <button className="icon-btn" title={t('toolbar.importExport')}>
               <FiDownload size={18} />
             </button>
             {showImportExportMenu && (
               <div className="icon-dropdown">
                 <button onClick={() => { setShowImportExportMenu(false); setShowImportModal(true); }}>
-                  <FiUpload size={14} /> Import
+                  <FiUpload size={14} /> {t('toolbar.import')}
                 </button>
                 <button onClick={() => { setShowImportExportMenu(false); setShowExportModal(true); }}>
-                  <FiDownload size={14} /> Eksport
+                  <FiDownload size={14} /> {t('toolbar.export')}
                 </button>
                 <div className="dropdown-divider" />
                 <button onClick={() => {
@@ -8067,7 +8067,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   const url = `${baseUrl}?popup=spreadsheet&projectId=${projectId}`;
                   window.open(url, '_blank', 'width=1200,height=800,menubar=no,toolbar=no,location=no,status=no');
                 }}>
-                  <FiEdit2 size={14} /> Ava tabelina
+                  <FiEdit2 size={14} /> {t('toolbar.openAsTable')}
                 </button>
               </div>
             )}
@@ -8079,7 +8079,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               className={`icon-btn ${refreshing ? 'spinning' : ''}`}
               onClick={refreshFromModel}
               disabled={refreshing || items.length === 0}
-              title="Värskenda mudelist"
+              title={t('toolbar.refreshFromModel')}
             >
               <FiRefreshCw size={18} />
             </button>
@@ -8093,7 +8093,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           >
             <button
               className={`icon-btn ${colorMode !== 'none' ? 'active' : ''}`}
-              title="Värvi"
+              title={t('toolbar.color')}
               onClick={() => {
                 if (colorMode !== 'none') {
                   applyColorMode('none');
@@ -8108,14 +8108,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   className={colorMode === 'vehicle' ? 'active' : ''}
                   onClick={() => applyColorMode(colorMode === 'vehicle' ? 'none' : 'vehicle')}
                 >
-                  <FiTruck size={14} /> Veokite kaupa
+                  <FiTruck size={14} /> {t('toolbar.colorByVehicle')}
                   {colorMode === 'vehicle' && <FiCheck size={14} />}
                 </button>
                 <button
                   className={colorMode === 'date' ? 'active' : ''}
                   onClick={() => applyColorMode(colorMode === 'date' ? 'none' : 'date')}
                 >
-                  <FiCalendar size={14} /> Kuupäevade kaupa
+                  <FiCalendar size={14} /> {t('toolbar.colorByDate')}
                   {colorMode === 'date' && <FiCheck size={14} />}
                 </button>
               </div>
@@ -8130,7 +8130,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           >
             <button
               className={`icon-btn ${isPlaying ? 'active' : ''}`}
-              title="Esita"
+              title={t('playback.play')}
               onClick={() => {
                 if (!isPlaying) {
                   startPlayback();
@@ -8147,27 +8147,27 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               <div className="icon-dropdown">
                 {!isPlaying ? (
                   <button onClick={startPlayback}>
-                    <FiPlay size={14} /> Esita
+                    <FiPlay size={14} /> {t('playback.play')}
                   </button>
                 ) : (
                   <>
                     {isPaused ? (
                       <button onClick={resumePlayback}>
-                        <FiPlay size={14} /> Jätka
+                        <FiPlay size={14} /> {t('playback.resume')}
                       </button>
                     ) : (
                       <button onClick={pausePlayback}>
-                        <FiPause size={14} /> Paus
+                        <FiPause size={14} /> {t('playback.pause')}
                       </button>
                     )}
                     <button onClick={stopPlayback}>
-                      <FiSquare size={14} /> Lõpeta
+                      <FiSquare size={14} /> {t('playback.stop')}
                     </button>
                   </>
                 )}
                 <div className="dropdown-divider" />
                 <div className="speed-selector">
-                  <span>Kiirus:</span>
+                  <span>{t('playback.speedLabel')}</span>
                   <select
                     value={playbackSpeed}
                     onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
@@ -8186,7 +8186,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             <button
               className="icon-btn"
               onClick={() => setShowSettingsModal(true)}
-              title="Seaded"
+              title={t('toolbar.settings')}
             >
               <FiSettings size={18} />
             </button>
@@ -8200,7 +8200,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 setShowSheetsModal(true);
                 loadSheetsLogs();
               }}
-              title="Google Sheets sünkroonimine"
+              title={t('toolbar.sheetsSync')}
             >
               <FiExternalLink size={18} />
             </button>

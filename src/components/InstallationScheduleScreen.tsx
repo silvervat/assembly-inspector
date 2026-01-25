@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { WorkspaceAPI } from 'trimble-connect-workspace-api';
 import { supabase, ScheduleItem, TrimbleExUser, InstallMethods, InstallMethodType, ScheduleComment, ScheduleVersion, ScheduleLock } from '../supabase';
 import * as XLSX from 'xlsx-js-style';
@@ -198,6 +199,9 @@ const saveDefaultCounts = (defaults: Record<InstallMethodType, number>) => {
 };
 
 export default function InstallationScheduleScreen({ api, projectId, user, tcUserEmail, tcUserName, onBackToMenu, onNavigate, onColorModelWhite, onOpenPartDatabase }: Props) {
+  // i18n translations
+  const { t } = useTranslation('installation');
+
   // Property mappings for reading Tekla properties
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
 
@@ -6303,7 +6307,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     <div className="schedule-screen">
       {/* PageHeader with standard hamburger menu */}
       <PageHeader
-        title="Paigaldusgraafik"
+        title={t('title')}
         onBack={onBackToMenu}
         onNavigate={handleHeaderNavigate}
         currentMode="schedule"
@@ -6318,7 +6322,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           <button
             className="schedule-actions-btn"
             onClick={() => setShowHamburgerMenu(!showHamburgerMenu)}
-            title="Tegevused"
+            title={t('menu.actions')}
           >
             <FiMoreVertical size={18} />
           </button>
@@ -6334,7 +6338,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 }}
               >
                 <FiBarChart2 size={14} />
-                <span>Ressursside statistika</span>
+                <span>{t('menu.resourceStats')}</span>
               </div>
 
               {/* Uuenda assembly markid */}
@@ -6347,7 +6351,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   }}
                 >
                   <FiRefreshCw size={14} />
-                  <span>Uuenda Object_xxx markid</span>
+                  <span>{t('menu.refreshMarks')}</span>
                 </div>
               )}
 
@@ -6358,26 +6362,26 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
               >
                 <FiChevronDown size={14} className={`submenu-arrow ${showMarkupSubmenu ? 'rotated' : ''}`} />
                 <FiEdit3 size={14} />
-                <span>Märgistused</span>
+                <span>{t('menu.markups')}</span>
               </div>
 
               {showMarkupSubmenu && (
                 <div className="submenu-inline">
                   <button onClick={createMarkupsForAllDays}>
                     <FiTag size={14} />
-                    <span>Märgi kõik päevad (P1-1, P1-2...)</span>
+                    <span>{t('menu.markAllDays')}</span>
                   </button>
                   <button onClick={createDeliveryDateMarkups}>
                     <FiTruck size={14} />
-                    <span>Tarnekuupäevad (planeerimata)</span>
+                    <span>{t('menu.deliveryDates')}</span>
                   </button>
                   <button onClick={createDeliveryDateMarkupsNoERP}>
                     <FiPackage size={14} />
-                    <span>Ilma ERP-ideta (planeerimata)</span>
+                    <span>{t('menu.withoutErp')}</span>
                   </button>
                   <button onClick={createVehicleTimeMarkups}>
                     <FiTruck size={14} />
-                    <span>Veoki nr & tarneaeg</span>
+                    <span>{t('menu.vehicleTime')}</span>
                   </button>
                   <div className="submenu-divider" />
                   <button onClick={() => {
@@ -6386,7 +6390,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     removeAllMarkups();
                   }}>
                     <FiTrash2 size={14} />
-                    <span>Eemalda kõik markupid</span>
+                    <span>{t('menu.removeMarkups')}</span>
                   </button>
                 </div>
               )}

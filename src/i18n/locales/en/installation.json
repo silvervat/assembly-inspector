@@ -93,5 +93,16 @@
     "today": "Today",
     "week": "Week",
     "month": "Month"
+  },
+  "menu": {
+    "actions": "Actions",
+    "resourceStats": "Resource Statistics",
+    "refreshMarks": "Refresh Object_xxx marks",
+    "markups": "Markups",
+    "markAllDays": "Mark all days (P1-1, P1-2...)",
+    "deliveryDates": "Delivery dates (unplanned)",
+    "withoutErp": "Without ERP IDs (unplanned)",
+    "vehicleTime": "Vehicle no & delivery time",
+    "removeMarkups": "Remove all markups"
   }
 }
