@@ -6,7 +6,7 @@ import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser } from '../supabase';
 import { clearMappingsCache } from '../contexts/PropertyMappingsContext';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
-import { belgianLambert72ToWGS84, gpsDistance } from '../utils/coordinateUtils';
+import { belgianLambert72ToWGS84, wgs84ToBelgianLambert72, gpsDistance } from '../utils/coordinateUtils';
 import * as XLSX from 'xlsx-js-style';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
@@ -3848,9 +3848,16 @@ export default function AdminScreen({
     }
 
     try {
-      setMessage('Otsin detaili mudelis...');
+      setMessage('Teisendan GPS koordinaate...');
 
-      // First, find the detail in the model to get its position
+      // Convert GPS (WGS84) to Belgian Lambert 72 (model coordinates)
+      const modelCoords = wgs84ToBelgianLambert72(position.latitude, position.longitude);
+
+      // Get Z coordinate from the detail in model if possible
+      let zCoord = 0; // Default ground level
+      let foundItem: { modelId: string; runtimeId: number } | undefined;
+
+      // Try to find the detail to get its Z coordinate and for later coloring
       const { data: modelObj } = await supabase
         .from('trimble_model_objects')
         .select('guid_ifc')
@@ -3859,44 +3866,29 @@ export default function AdminScreen({
         .limit(1)
         .maybeSingle();
 
-      const guidsToSearch = modelObj?.guid_ifc
-        ? [modelObj.guid_ifc, position.guid]
-        : [position.guid];
+      if (modelObj?.guid_ifc) {
+        const guidsToSearch = [modelObj.guid_ifc, position.guid];
+        const foundMap = await findObjectsInLoadedModels(api, guidsToSearch);
+        foundItem = foundMap.values().next().value;
 
-      const foundMap = await findObjectsInLoadedModels(api, guidsToSearch);
-      if (foundMap.size === 0) {
-        setMessage('Detaili ei leitud mudelis. Avan Google Maps...');
-        window.open(`https://www.google.com/maps?q=${position.latitude},${position.longitude}`, '_blank');
-        return;
+        if (foundItem) {
+          const boundsArray = await api.viewer.getObjectBoundingBoxes(
+            foundItem.modelId,
+            [foundItem.runtimeId]
+          );
+          const bbox = boundsArray?.[0]?.boundingBox;
+          if (bbox?.min) {
+            zCoord = bbox.min.z; // Use bottom of object
+          }
+        }
       }
 
-      const foundItem = foundMap.values().next().value;
-      if (!foundItem) {
-        setMessage('Detaili ei leitud');
-        return;
-      }
+      // Convert to mm for markup (Trimble markup uses mm)
+      const centerX = modelCoords.x * 1000;
+      const centerY = modelCoords.y * 1000;
+      const centerZ = zCoord * 1000;
 
-      setMessage('Küsin detaili asukohta...');
-
-      // Get the object's bounding box to find its center position
-      const boundsArray = await api.viewer.getObjectBoundingBoxes(
-        foundItem.modelId,
-        [foundItem.runtimeId]
-      );
-
-      const bbox = boundsArray?.[0]?.boundingBox;
-      if (!bbox || !bbox.min || !bbox.max) {
-        setMessage('Detaili asukohta ei saanud määrata');
-        return;
-      }
-
-      // Calculate center of the bounding box
-      // Note: Trimble API returns coordinates in meters, need to convert to mm for markup
-      const centerX = ((bbox.min.x + bbox.max.x) / 2) * 1000; // meters to mm
-      const centerY = ((bbox.min.y + bbox.max.y) / 2) * 1000;
-      const centerZ = bbox.min.z * 1000; // Use bottom of object for ground level
-
-      setMessage('Joonistan 10m ringi...');
+      setMessage(`Joonistan ringi GPS asukohta (${position.latitude.toFixed(4)}, ${position.longitude.toFixed(4)})...`);
 
       // Draw a 10m radius red circle using markup API
       const markupApi = (api as any).markup;
@@ -3950,18 +3942,20 @@ export default function AdminScreen({
         ));
       }
 
-      // Color the detail orange and zoom to it
-      const orange = { r: 255, g: 165, b: 0, a: 255 };
-      await api.viewer.setObjectState(
-        { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
-        { color: orange }
-      );
+      // Color the detail orange and zoom to it (if found in model)
+      if (foundItem) {
+        const orange = { r: 255, g: 165, b: 0, a: 255 };
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
+          { color: orange }
+        );
 
-      // Zoom to show the circle
-      await api.viewer.setCamera(
-        { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
-        { animationTime: 500 }
-      );
+        // Zoom to show the circle
+        await api.viewer.setCamera(
+          { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
+          { animationTime: 500 }
+        );
+      }
 
       setMessage(`✅ 10m ring joonistatud! GPS: ${position.latitude!.toFixed(6)}, ${position.longitude!.toFixed(6)}`);
 
