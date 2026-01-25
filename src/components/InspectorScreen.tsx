@@ -598,14 +598,9 @@ export default function InspectorScreen({
         setMessage('⚠️ Poltide inspektsiooniks märgistada poldikomplekt');
         return;
       }
-    } else {
-      // Tavalises režiimis kontrollime assemblyMark'i
-      if (!obj.assemblyMark) {
-        setCanInspect(false);
-        // Warning banner already handles this case
-        return;
-      }
     }
+    // Note: assemblyMark is no longer required - objects without mark can still be inspected
+    // using GUID or objectName as identifier
 
     try {
       // Check for existing inspection
@@ -1099,7 +1094,7 @@ export default function InspectorScreen({
     if (!canInspect || selectedObjects.length !== 1) return;
 
     const obj = selectedObjects[0];
-    if (!obj.assemblyMark) return;
+    // Note: assemblyMark is no longer required - use GUID or objectName as fallback
 
     setInspecting(true);
     const allPhotoUrls: string[] = [];
@@ -1210,7 +1205,10 @@ export default function InspectorScreen({
       setMessage('💾 Salvestan...');
 
       // Poltide režiimis kasuta boltName'i, muidu assemblyMark'i
-      const markToSave = inspectionMode === 'poldid' ? obj.boltName : obj.assemblyMark;
+      // Fallback: use productName, objectName, or GUID if no mark
+      const markToSave = inspectionMode === 'poldid'
+        ? obj.boltName
+        : (obj.assemblyMark || obj.productName || obj.objectName || obj.guidIfc?.substring(0, 12) || 'Unknown');
       const inspectorName = user.name || tcUserEmail || 'Unknown';
 
       const inspection: Partial<Inspection> = {
