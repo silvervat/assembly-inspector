@@ -15,6 +15,7 @@ import ToolsScreen from './components/ToolsScreen';
 import DeliveryShareGallery from './components/DeliveryShareGallery';
 import QRActivationPage from './components/QRActivationPage';
 import DeliverySpreadsheetEditor from './components/DeliverySpreadsheetEditor';
+import PositionerPopupPage from './components/PositionerPopupPage';
 import CranePlannerScreen from './components/CranePlannerScreen';
 import CraneLibraryScreen from './components/CraneLibraryScreen';
 import KeyboardShortcutsScreen from './components/KeyboardShortcutsScreen';
@@ -34,7 +35,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.964';
+export const APP_VERSION = '3.0.965';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -57,7 +58,10 @@ interface SelectedInspectionType {
 const popupType = new URLSearchParams(window.location.search).get('popup');
 const isPopupMode = popupType === 'delivery';
 const isSpreadsheetMode = popupType === 'spreadsheet';
+const isPositionerMode = popupType === 'positioner';
 const popupProjectId = new URLSearchParams(window.location.search).get('projectId') || '';
+const popupGuid = new URLSearchParams(window.location.search).get('guid') || '';
+const popupMark = new URLSearchParams(window.location.search).get('mark') || '';
 
 // Check if this is a share gallery page
 // Path can be: /share/token OR /assembly-inspector/share/token (with base path)
@@ -2610,6 +2614,17 @@ export default function App() {
           onClose={() => window.close()}
         />
       </div>
+    );
+  }
+
+  // Positioner popup mode - standalone GPS positioning window
+  if (isPositionerMode && popupProjectId) {
+    return (
+      <PositionerPopupPage
+        projectId={popupProjectId}
+        initialGuid={popupGuid}
+        initialMark={popupMark}
+      />
     );
   }
 

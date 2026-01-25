@@ -3738,12 +3738,26 @@ export default function AdminScreen({
         },
         (gpsError) => {
           console.error('GPS error:', gpsError);
-          // GPS failed - likely Trimble iframe restriction. Show manual input form.
           addDebugLog(`GPS viga: ${gpsError.message}`);
-          setPendingQrCode(qrCode);
-          setManualLat('');
-          setManualLng('');
-          setMessage(`GPS ei tööta Trimble iframe'is. Sisesta koordinaadid käsitsi või ava Google Maps`);
+
+          // Open positioner in new window (outside iframe, GPS works there)
+          const baseUrl = window.location.origin + (import.meta.env.BASE_URL || '/');
+          const positionerUrl = `${baseUrl}?popup=positioner&projectId=${encodeURIComponent(projectId || '')}&guid=${encodeURIComponent(qrCode.guid)}&mark=${encodeURIComponent(qrCode.assembly_mark || '')}`;
+
+          addDebugLog('Opening positioner popup...');
+          const popup = window.open(positionerUrl, 'positioner', 'width=420,height=700,scrollbars=yes');
+
+          if (popup) {
+            setMessage('Avatakse positsioneerija eraldi aknas...');
+          } else {
+            // Popup blocked - fallback to manual input
+            addDebugLog('Popup blocked, showing manual input');
+            setPendingQrCode(qrCode);
+            setManualLat('');
+            setManualLng('');
+            setMessage('Popup blokeeritud. Sisesta koordinaadid käsitsi.');
+          }
+
           setPositionCapturing(false);
         },
         {
@@ -17866,15 +17880,30 @@ document.body.appendChild(div);`;
           {/* Scanner section */}
           <div style={{ marginBottom: '16px' }}>
             {!scannerActive ? (
-              <button
-                className="btn-primary"
-                onClick={startScanner}
-                disabled={positionCapturing}
-                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-              >
-                <FiCamera size={16} />
-                <span>Skänni QR koodi</span>
-              </button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  className="btn-primary"
+                  onClick={startScanner}
+                  disabled={positionCapturing}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <FiCamera size={16} />
+                  <span>Skänni siin</span>
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={() => {
+                    const baseUrl = window.location.origin + (import.meta.env.BASE_URL || '/');
+                    const positionerUrl = `${baseUrl}?popup=positioner&projectId=${encodeURIComponent(projectId || '')}`;
+                    window.open(positionerUrl, 'positioner', 'width=420,height=700,scrollbars=yes');
+                  }}
+                  disabled={positionCapturing}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#22c55e' }}
+                >
+                  <FiExternalLink size={16} />
+                  <span>Ava eraldi aknas</span>
+                </button>
+              </div>
             ) : (
               <div style={{
                 position: 'relative',
