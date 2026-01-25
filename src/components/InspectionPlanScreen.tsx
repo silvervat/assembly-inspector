@@ -6,6 +6,7 @@ import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
 import { InspectionHistory } from './InspectionHistory';
 import InspectionConfigScreen from './InspectionConfigScreen';
+import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 
 // Checkpoint result data (from inspection_results table)
 interface CheckpointResultData {
@@ -83,6 +84,9 @@ export default function InspectionPlanScreen({
   onColorModelWhite,
   onOpenPartDatabase
 }: InspectionPlanScreenProps) {
+  // Property mappings for correct Tekla property reading
+  const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
+
   // View state
   const [viewMode, setViewMode] = useState<ViewMode>('add');
   const [assemblyMode, setAssemblyMode] = useState<AssemblyMode>('on');
@@ -151,6 +155,13 @@ export default function InspectionPlanScreen({
     }
   }, [selectedTypeId]);
 
+  // Auto-color model when type is selected (in add mode)
+  useEffect(() => {
+    if (viewMode === 'add' && selectedTypeId && planItems.length > 0) {
+      colorModelByPlanStatus(selectedTypeId);
+    }
+  }, [viewMode, selectedTypeId, planItems]);
+
   // Update assembly selection mode in Trimble
   useEffect(() => {
     const updateAssemblySelection = async () => {
@@ -216,10 +227,15 @@ export default function InspectionPlanScreen({
               let productName = '';
 
               if (objProps?.properties) {
+                // Get property mapping settings (with defaults)
+                const assemblyMarkSet = propertyMappings?.assembly_mark_set || 'Tekla Assembly';
+                const assemblyMarkProp = propertyMappings?.assembly_mark_prop || 'Cast_unit_Mark';
+
                 for (const pset of objProps.properties) {
                   const psetAny = pset as any;
                   const psetName = psetAny.name || '';
                   const psetNameLower = psetName.toLowerCase();
+                  const psetNameNormalized = psetName.replace(/\s+/g, '').toLowerCase();
 
                   for (const prop of psetAny.properties || []) {
                     const propName = (prop.name || '').toLowerCase();
@@ -240,20 +256,34 @@ export default function InspectionPlanScreen({
                     if (propName === 'name' && !objectName) objectName = propValue;
                   }
 
-                  if (psetName === 'Tekla Assembly') {
+                  // Check for assembly mark using mapped property set/property
+                  const assemblyMarkSetNorm = assemblyMarkSet.replace(/\s+/g, '').toLowerCase();
+                  if (psetNameNormalized === assemblyMarkSetNorm || psetName === assemblyMarkSet) {
                     for (const prop of psetAny.properties || []) {
-                      if (prop.name === 'Cast_unit_Mark') assemblyMark = String(prop.value || '');
+                      if (prop.name === assemblyMarkProp) {
+                        assemblyMark = String(prop.value || '');
+                      }
                     }
                   }
 
+                  // Check for product name in Product property set
+                  if (psetNameLower === 'product') {
+                    for (const prop of psetAny.properties || []) {
+                      if (prop.name === 'Name' && !productName) {
+                        productName = String(prop.value || '');
+                      }
+                    }
+                    // Also check direct Name property on pset
+                    if (psetAny.Name && !productName) {
+                      productName = String(psetAny.Name || '');
+                    }
+                  }
+
+                  // Fallback: Tekla Common for object name
                   if (psetName === 'Tekla Common') {
                     for (const prop of psetAny.properties || []) {
                       if (prop.name === 'Name' && !objectName) objectName = String(prop.value || '');
                     }
-                  }
-
-                  if (psetNameLower === 'product' && psetAny.Name) {
-                    productName = String(psetAny.Name || '');
                   }
                 }
               }
@@ -582,6 +612,13 @@ export default function InspectionPlanScreen({
 
       showMessage(`✅ ${items.length} objekti lisatud kavasse!`, 'success');
 
+      // Color newly added items blue (planned)
+      const newItems = objectsToSave.map(obj => ({
+        model_id: obj.modelId,
+        object_runtime_id: obj.runtimeId
+      }));
+      await colorNewItems(newItems);
+
       // Refresh data
       fetchPlanItems();
       setSelectedObjects([]);
@@ -760,6 +797,110 @@ export default function InspectionPlanScreen({
     } catch (error) {
       console.error('Failed to update comment:', error);
       showMessage('❌ Viga kommentaari uuendamisel', 'error');
+    }
+  };
+
+  // Color model based on plan items status
+  const colorModelByPlanStatus = async (typeId?: string) => {
+    try {
+      // Get items to color - either for selected type or all items
+      const itemsToColor = typeId
+        ? planItems.filter(item => item.inspection_type_id === typeId)
+        : planItems;
+
+      if (itemsToColor.length === 0) {
+        // No items - just reset model to white
+        await api.viewer.setObjectState(undefined, { color: INSPECTION_STATUS_COLORS.background });
+        return;
+      }
+
+      // Group items by status
+      const statusGroups: Record<string, { model_id: string; object_runtime_id: number }[]> = {
+        planned: [],
+        inProgress: [],
+        completed: [],
+        rejected: [],
+        approved: []
+      };
+
+      for (const item of itemsToColor) {
+        if (!item.model_id || !item.object_runtime_id) continue;
+
+        const status = item.inspection_status || 'planned';
+        if (statusGroups[status]) {
+          statusGroups[status].push({
+            model_id: item.model_id,
+            object_runtime_id: item.object_runtime_id
+          });
+        }
+      }
+
+      // First, set all objects to white (background)
+      await api.viewer.setObjectState(undefined, { color: INSPECTION_STATUS_COLORS.background });
+
+      // Then color each status group
+      for (const [status, items] of Object.entries(statusGroups)) {
+        if (items.length === 0) continue;
+
+        const color = INSPECTION_STATUS_COLORS[status as keyof typeof INSPECTION_STATUS_COLORS];
+        if (!color) continue;
+
+        // Group by model
+        const byModel: Record<string, number[]> = {};
+        for (const item of items) {
+          if (!byModel[item.model_id]) byModel[item.model_id] = [];
+          byModel[item.model_id].push(item.object_runtime_id);
+        }
+
+        const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+          modelId,
+          objectRuntimeIds: runtimeIds
+        }));
+
+        await api.viewer.setObjectState(
+          { modelObjectIds },
+          { color: { r: color.r, g: color.g, b: color.b, a: color.a } }
+        );
+      }
+
+      console.log('🎨 Model colored by plan status:', {
+        planned: statusGroups.planned.length,
+        inProgress: statusGroups.inProgress.length,
+        completed: statusGroups.completed.length,
+        rejected: statusGroups.rejected.length,
+        approved: statusGroups.approved.length
+      });
+    } catch (error) {
+      console.error('Failed to color model by plan status:', error);
+    }
+  };
+
+  // Color newly added items immediately
+  const colorNewItems = async (items: { model_id: string; object_runtime_id: number }[]) => {
+    if (items.length === 0) return;
+
+    try {
+      const byModel: Record<string, number[]> = {};
+      for (const item of items) {
+        if (!item.model_id || !item.object_runtime_id) continue;
+        if (!byModel[item.model_id]) byModel[item.model_id] = [];
+        byModel[item.model_id].push(item.object_runtime_id);
+      }
+
+      const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+        modelId,
+        objectRuntimeIds: runtimeIds
+      }));
+
+      // Color new items with "planned" (blue) color
+      await api.viewer.setObjectState(
+        { modelObjectIds },
+        { color: INSPECTION_STATUS_COLORS.planned }
+      );
+
+      console.log('🎨 Colored', items.length, 'new items blue');
+    } catch (error) {
+      console.error('Failed to color new items:', error);
     }
   };
 
@@ -1294,6 +1435,9 @@ export default function InspectionPlanScreen({
                     <span className="selected-name">
                       {obj.assemblyMark || obj.objectName || `Object ${idx + 1}`}
                     </span>
+                    {obj.productName && (
+                      <span className="selected-product">{obj.productName}</span>
+                    )}
                     <span className="selected-type">{obj.objectType}</span>
                     {duplicates.find(d => d.guid === obj.guid) && (
                       <span className="duplicate-badge">⚠️ Juba kavas</span>

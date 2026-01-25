@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
-import { supabase, TrimbleExUser, Inspection, InspectionPlanItem, InspectionTypeRef, InspectionCategory, InspectionCheckpoint, InspectionResult } from '../supabase';
+import { supabase, TrimbleExUser, Inspection, InspectionPlanItem, InspectionTypeRef, InspectionCategory, InspectionCheckpoint, InspectionResult, INSPECTION_STATUS_COLORS } from '../supabase';
 import { InspectionMode } from './MainMenu';
 import { FiArrowLeft, FiClipboard, FiAlertCircle, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { useEos2Navigation } from '../hooks/useEos2Navigation';
@@ -291,7 +291,7 @@ export default function InspectorScreen({
     }
   }, [assignedPlan]);
 
-  // Auto-color model on page load to show todo items (inspection_type mode only)
+  // Auto-color model on page load based on plan item status (inspection_type mode only)
   useEffect(() => {
     if (inspectionMode !== 'inspection_type' || !inspectionTypeId) return;
 
@@ -299,10 +299,10 @@ export default function InspectorScreen({
       try {
         console.log('🎨 Auto-coloring model for inspection type:', inspectionTypeId);
 
-        // Fetch all plan items for this inspection type
+        // Fetch all plan items for this inspection type with their status
         const { data: planItems, error } = await supabase
           .from('inspection_plan_items')
-          .select('id, guid, guid_ifc, model_id, object_runtime_id')
+          .select('id, guid, guid_ifc, model_id, object_runtime_id, inspection_status')
           .eq('project_id', projectId)
           .eq('inspection_type_id', inspectionTypeId);
 
@@ -311,77 +311,73 @@ export default function InspectorScreen({
           return;
         }
 
-        // Get all inspection results for this project
-        const { data: results } = await supabase
-          .from('inspection_results')
-          .select('plan_item_id, assembly_guid')
-          .eq('project_id', projectId);
+        // Group items by status
+        const statusGroups: Record<string, { model_id: string; object_runtime_id: number }[]> = {
+          planned: [],
+          inProgress: [],
+          completed: [],
+          rejected: [],
+          approved: []
+        };
 
-        // Create sets of inspected items
-        const inspectedPlanIds = new Set<string>();
-        const inspectedGuids = new Set<string>();
-
-        if (results) {
-          for (const r of results) {
-            if (r.plan_item_id) inspectedPlanIds.add(r.plan_item_id);
-            if (r.assembly_guid) inspectedGuids.add(r.assembly_guid.toLowerCase());
-          }
-        }
-
-        // Separate into done and todo items
-        const doneItems: { model_id: string; object_runtime_id: number }[] = [];
-        const todoItems: { model_id: string; object_runtime_id: number }[] = [];
+        let completedCount = 0;
 
         for (const item of planItems) {
           if (!item.model_id || !item.object_runtime_id) continue;
 
-          const isInspected = inspectedPlanIds.has(item.id) ||
-            (item.guid && inspectedGuids.has(item.guid.toLowerCase())) ||
-            (item.guid_ifc && inspectedGuids.has(item.guid_ifc.toLowerCase()));
+          const status = item.inspection_status || 'planned';
+          if (statusGroups[status]) {
+            statusGroups[status].push({
+              model_id: item.model_id,
+              object_runtime_id: item.object_runtime_id
+            });
+          }
 
-          if (isInspected) {
-            doneItems.push({ model_id: item.model_id, object_runtime_id: item.object_runtime_id });
-          } else {
-            todoItems.push({ model_id: item.model_id, object_runtime_id: item.object_runtime_id });
+          // Count completed (completed + approved)
+          if (status === 'completed' || status === 'approved') {
+            completedCount++;
           }
         }
 
         // Update stats
-        setInspectionCount(doneItems.length);
+        setInspectionCount(completedCount);
         setTotalPlanItems(planItems.length);
 
-        // Color all objects light gray first
-        await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
+        // Color all objects white (background) first
+        await api.viewer.setObjectState(undefined, { color: INSPECTION_STATUS_COLORS.background });
 
-        // Color done items green
-        if (doneItems.length > 0) {
-          const byModelDone: Record<string, number[]> = {};
-          for (const item of doneItems) {
-            if (!byModelDone[item.model_id]) byModelDone[item.model_id] = [];
-            byModelDone[item.model_id].push(item.object_runtime_id);
+        // Color each status group with their respective colors
+        for (const [status, items] of Object.entries(statusGroups)) {
+          if (items.length === 0) continue;
+
+          const color = INSPECTION_STATUS_COLORS[status as keyof typeof INSPECTION_STATUS_COLORS];
+          if (!color) continue;
+
+          // Group by model
+          const byModel: Record<string, number[]> = {};
+          for (const item of items) {
+            if (!byModel[item.model_id]) byModel[item.model_id] = [];
+            byModel[item.model_id].push(item.object_runtime_id);
           }
-          const modelObjectIdsDone = Object.entries(byModelDone).map(([modelId, runtimeIds]) => ({
+
+          const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
             modelId,
             objectRuntimeIds: runtimeIds
           }));
-          await api.viewer.setObjectState({ modelObjectIds: modelObjectIdsDone }, { color: { r: 34, g: 197, b: 94, a: 255 } });
+
+          await api.viewer.setObjectState(
+            { modelObjectIds },
+            { color: { r: color.r, g: color.g, b: color.b, a: color.a } }
+          );
         }
 
-        // Color todo items orange
-        if (todoItems.length > 0) {
-          const byModelTodo: Record<string, number[]> = {};
-          for (const item of todoItems) {
-            if (!byModelTodo[item.model_id]) byModelTodo[item.model_id] = [];
-            byModelTodo[item.model_id].push(item.object_runtime_id);
-          }
-          const modelObjectIdsTodo = Object.entries(byModelTodo).map(([modelId, runtimeIds]) => ({
-            modelId,
-            objectRuntimeIds: runtimeIds
-          }));
-          await api.viewer.setObjectState({ modelObjectIds: modelObjectIdsTodo }, { color: { r: 249, g: 115, b: 22, a: 255 } });
-        }
-
-        console.log(`✅ Auto-colored model: ${doneItems.length} done (green), ${todoItems.length} todo (orange)`);
+        console.log('🎨 Auto-colored model by status:', {
+          planned: statusGroups.planned.length,
+          inProgress: statusGroups.inProgress.length,
+          completed: statusGroups.completed.length,
+          rejected: statusGroups.rejected.length,
+          approved: statusGroups.approved.length
+        });
       } catch (e) {
         console.error('Failed to auto-color model:', e);
       }
