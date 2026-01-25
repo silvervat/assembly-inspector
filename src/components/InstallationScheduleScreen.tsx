@@ -622,11 +622,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setScheduleItems(allItems);
     } catch (e) {
       console.error('Error loading schedule:', e);
-      setMessage('Viga graafiku laadimisel');
+      setMessage(t('messages.loadError'));
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, t]);
 
   // Initialize versions on mount
   useEffect(() => {
@@ -742,7 +742,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         }
       }
 
-      setMessage(`Versioon "${name}" loodud`);
+      setMessage(t('messages.versionCreated', { name }));
       setShowVersionModal(false);
       setNewVersionName('');
       setNewVersionDescription('');
@@ -752,7 +752,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       await switchVersion(newVersion.id);
     } catch (e) {
       console.error('Error creating version:', e);
-      setMessage('Viga versiooni loomisel');
+      setMessage(t('messages.versionCreateError'));
     }
   };
 
@@ -776,7 +776,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       if (error) throw error;
 
-      setMessage(`Versioon uuendatud`);
+      setMessage(t('messages.versionUpdated'));
       setShowVersionModal(false);
       setEditingVersion(null);
       setNewVersionName('');
@@ -784,7 +784,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       await loadVersions();
     } catch (e) {
       console.error('Error updating version:', e);
-      setMessage('Viga versiooni uuendamisel');
+      setMessage(t('messages.versionUpdateError'));
     }
   };
 
@@ -792,7 +792,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const deleteVersion = async () => {
     if (!editingVersion) return;
     if (deleteConfirmInput !== editingVersion.name) {
-      setMessage('Versiooni nimi ei klapi!');
+      setMessage(t('messages.versionNameMismatch'));
       return;
     }
 
@@ -813,7 +813,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       if (versionError) throw versionError;
 
-      setMessage(`Versioon "${editingVersion.name}" kustutatud`);
+      setMessage(t('messages.versionDeleted', { name: editingVersion.name }));
       setShowVersionModal(false);
       setShowDeleteConfirm(false);
       setDeleteConfirmInput('');
@@ -832,7 +832,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       await loadVersions();
     } catch (e) {
       console.error('Error deleting version:', e);
-      setMessage('Viga versiooni kustutamisel');
+      setMessage(t('messages.versionDeleteError'));
     }
   };
 
