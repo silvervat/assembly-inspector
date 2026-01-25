@@ -1387,7 +1387,7 @@ export default function OrganizerScreen({
       setActivityLogPage(page);
     } catch (e) {
       console.error('Error loading activity logs:', e);
-      showToast('Viga tegevuste laadimisel');
+      showToast(t('organizer:toast.actionsLoadError'));
     } finally {
       setActivityLogsLoading(false);
     }
@@ -1400,7 +1400,7 @@ export default function OrganizerScreen({
     try {
       const foundObjects = await findObjectsInLoadedModels(api, guids);
       if (foundObjects.size === 0) {
-        showToast('Detaile ei leitud mudelist');
+        showToast(t('organizer:toast.detailsNotFoundInModel'));
         return;
       }
 
@@ -1416,10 +1416,10 @@ export default function OrganizerScreen({
       }
 
       await api.viewer.setSelection({ modelObjectIds: selection }, 'set');
-      showToast(`${foundObjects.size} detaili valitud`);
+      showToast(t('organizer:toast.detailsSelected', { count: foundObjects.size }));
     } catch (e) {
       console.error('Error selecting items:', e);
-      showToast('Viga detailide valimisel');
+      showToast(t('organizer:toast.detailsSelectError'));
     }
   }, [api, showToast]);
 
@@ -1512,7 +1512,7 @@ export default function OrganizerScreen({
       }
     } catch (e) {
       console.error('Error loading group info:', e);
-      showToast('Viga grupi info laadimisel');
+      showToast(t('organizer:toast.groupInfoLoadError'));
     } finally {
       setGroupInfoActivitiesLoading(false);
     }
@@ -1972,7 +1972,7 @@ export default function OrganizerScreen({
       }
     } catch (e) {
       console.error('Error uploading required field photos:', e);
-      showToast('Pildi üleslaadimine ebaõnnestus');
+      showToast(t('organizer:toast.photoUploadError'));
     } finally {
       setRequiredFieldUploading(null);
     }
@@ -2051,12 +2051,12 @@ export default function OrganizerScreen({
     };
     if (checkLocked(item.group_id)) {
       const lockedGroup = groups.find(g => g.is_locked && (g.id === item.group_id || g.id === itemGroup?.parent_id));
-      showToast(`🔒 Grupp on lukustatud (${lockedGroup?.locked_by || 'tundmatu'})`);
+      showToast(t('organizer:toast.lockedItems', { type: t('organizer:group.locked'), user: lockedGroup?.locked_by || 'unknown' }));
       return;
     }
 
     setUploadingFieldId(field.id);
-    setUploadProgress('Laadimine...');
+    setUploadProgress(t('organizer:upload.progress'));
 
     try {
       const maxFiles = field.options?.maxFiles || 5;
@@ -2064,7 +2064,7 @@ export default function OrganizerScreen({
       const filesToUpload = Array.from(files).slice(0, maxFiles - currentUrls.length);
 
       if (filesToUpload.length === 0) {
-        showToast(`Maksimaalselt ${maxFiles} faili lubatud`);
+        showToast(t('organizer:toast.maxFilesAllowed', { max: maxFiles }));
         setUploadingFieldId(null);
         setUploadProgress('');
         setUploadProgressData(null);
@@ -2154,9 +2154,9 @@ export default function OrganizerScreen({
           addedAt: new Date()
         }));
         setPendingUploads(prev => [...prev, ...pendingItems]);
-        showToast(`${newUrls.length} faili laetud, ${failedFiles.length} ootel`);
+        showToast(t('organizer:toast.filesLoadedPending', { loaded: newUrls.length, pending: failedFiles.length }));
       } else if (newUrls.length > 0) {
-        showToast(`${newUrls.length} fail(i) üles laetud`);
+        showToast(t('organizer:toast.filesLoaded', { count: newUrls.length }));
       }
 
       // Log activity for successful uploads
@@ -2176,7 +2176,7 @@ export default function OrganizerScreen({
       }
     } catch (e) {
       console.error('File upload error:', e);
-      showToast('Faili üleslaadimine ebaõnnestus');
+      showToast(t('organizer:toast.fileUploadError'));
     } finally {
       setUploadingFieldId(null);
       setUploadProgress('');
@@ -2221,7 +2221,7 @@ export default function OrganizerScreen({
           }
 
           setPendingUploads(prev => prev.filter(p => p.id !== pending.id));
-          showToast('Taustal laeti fail üles');
+          showToast(t('organizer:toast.fileUploadedInBackground'));
           refreshData();
         } else {
           // Failed - mark as failed
@@ -2239,7 +2239,7 @@ export default function OrganizerScreen({
   useEffect(() => {
     const handleOnline = () => {
       if (pendingUploads.some(p => p.status === 'failed')) {
-        showToast('Ühendus taastatud, proovin uuesti...');
+        showToast(t('organizer:upload.connectionRestored'));
         processPendingUploads();
       }
     };
@@ -2385,11 +2385,11 @@ export default function OrganizerScreen({
     if (checkLocked(item.group_id)) {
       const itemGroup = groups.find(g => g.id === item.group_id);
       const lockedGroup = groups.find(g => g.is_locked && (g.id === item.group_id || g.id === itemGroup?.parent_id));
-      showToast(`🔒 Grupp on lukustatud (${lockedGroup?.locked_by || 'tundmatu'})`);
+      showToast(t('organizer:toast.lockedItems', { type: t('organizer:group.locked'), user: lockedGroup?.locked_by || 'unknown' }));
       return;
     }
 
-    const confirmed = window.confirm('Kas oled kindel, et soovid selle pildi kustutada?');
+    const confirmed = window.confirm(t('common:confirm.delete'));
     if (!confirmed) return;
 
     try {
@@ -2413,7 +2413,7 @@ export default function OrganizerScreen({
       const updatedProps = { ...item.custom_properties, [lightboxFieldId]: newUrls.join(',') };
       await supabase.from('organizer_group_items').update({ custom_properties: updatedProps }).eq('id', lightboxItemId);
 
-      showToast('Pilt kustutatud');
+      showToast(t('organizer:toast.photoDeleted'));
 
       // Log activity
       const itemGroup = groups.find(g => g.id === item.group_id);
@@ -2443,7 +2443,7 @@ export default function OrganizerScreen({
       refreshData();
     } catch (e) {
       console.error('Error deleting photo:', e);
-      showToast('Pildi kustutamine ebaõnnestus');
+      showToast(t('organizer:toast.photoDeleteError'));
     }
   }, [lightboxPhoto, lightboxItemId, lightboxFieldId, lightboxIndex, groups, groupItems, closeLightbox, refreshData, showToast, logActivity]);
 
@@ -2474,9 +2474,9 @@ export default function OrganizerScreen({
     try {
       const maskedUrl = getMaskedPhotoUrl(lightboxPhoto);
       await navigator.clipboard.writeText(maskedUrl);
-      showToast('URL kopeeritud lõikelauale');
+      showToast(t('organizer:toast.urlCopied'));
     } catch {
-      showToast('URL-i kopeerimine ebaõnnestus');
+      showToast(t('organizer:toast.urlCopyError'));
     }
   }, [lightboxPhoto, getMaskedPhotoUrl, showToast]);
 
@@ -2627,7 +2627,7 @@ export default function OrganizerScreen({
         lastRefreshTime = Date.now();
         // Only show notification if change was made by someone else (not current user)
         if (changeAuthor && changeAuthor !== tcUserEmail) {
-          showToast(`📡 ${changeAuthor} uuendas andmeid`);
+          showToast(t('organizer:toast.dataUpdatedBy', { author: changeAuthor }));
         }
         refreshData();
       }
@@ -2874,13 +2874,13 @@ export default function OrganizerScreen({
 
   const createGroup = async () => {
     if (!formName.trim()) {
-      showToast('Grupi nimi on kohustuslik');
+      showToast(t('organizer:toast.groupNameRequired'));
       return;
     }
 
     // Validate display properties when assembly selection is off
     if (!formAssemblySelectionOn && formDisplayProperties.length === 0) {
-      showToast('Vali vähemalt üks kuvatav veerg');
+      showToast(t('organizer:columns.selectAtLeastOne'));
       return;
     }
 
@@ -2895,7 +2895,7 @@ export default function OrganizerScreen({
         if (parent) {
           level = parent.level + 1;
           if (level > 2) {
-            showToast('Maksimaalselt 3 taset on lubatud');
+            showToast(t('organizer:toast.maxLevelsAllowed', { max: 3 }));
             setSaving(false);
             return;
           }
@@ -2978,7 +2978,7 @@ export default function OrganizerScreen({
       // Capture items to add before resetting form
       const itemsToAdd = [...addItemsAfterGroupCreate];
 
-      showToast('Grupp loodud');
+      showToast(t('organizer:toast.groupCreated'));
       logActivity({
         action_type: 'create_group',
         group_id: fullGroup.id,
@@ -3017,17 +3017,17 @@ export default function OrganizerScreen({
               setSelectedObjects(itemsToAdd);
               await addSelectedToGroupInternal(fullGroup.id);
               setSelectedObjects(prevSelectedObjects);
-              showToast(`${itemsToAdd.length} detaili lisatud gruppi`);
+              showToast(t('organizer:toast.itemsAddedToGroup', { count: itemsToAdd.length }));
             } catch (e) {
               console.error('Error adding items to new group:', e);
-              showToast('Viga detailide lisamisel');
+              showToast(t('organizer:toast.itemsAddError'));
             }
           }, 100);
         }
       }
     } catch (e) {
       console.error('Error creating group:', e);
-      showToast('Viga grupi loomisel');
+      showToast(t('organizer:toast.groupCreateError'));
     } finally {
       setSaving(false);
     }
@@ -3038,7 +3038,7 @@ export default function OrganizerScreen({
 
     // Validate display properties when assembly selection is off
     if (!formAssemblySelectionOn && formDisplayProperties.length === 0) {
-      showToast('Vali vähemalt üks kuvatav veerg');
+      showToast(t('organizer:columns.selectAtLeastOne'));
       return;
     }
 
@@ -3114,7 +3114,7 @@ export default function OrganizerScreen({
         return buildGroupTree(allGroups, groupItems);
       });
 
-      showToast('Grupp uuendatud');
+      showToast(t('organizer:toast.groupUpdated'));
       resetGroupForm();
       setShowGroupForm(false);
       setEditingGroup(null);
@@ -3144,7 +3144,7 @@ export default function OrganizerScreen({
       }
     } catch (e) {
       console.error('Error updating group:', e);
-      showToast('Viga grupi uuendamisel');
+      showToast(t('organizer:toast.groupUpdateError'));
     } finally {
       setSaving(false);
     }
@@ -3224,7 +3224,7 @@ export default function OrganizerScreen({
       }
     } catch (e) {
       console.error('Error updating group color:', e);
-      showToast('Viga värvi uuendamisel');
+      showToast(t('organizer:toast.colorUpdateError'));
     }
   };
 
@@ -3312,7 +3312,7 @@ export default function OrganizerScreen({
       // Push to undo stack
       pushUndo({ type: 'clone_group', groupId: fullGroup.id });
 
-      showToast(`Grupp kloonitud: ${newName}`);
+      showToast(t('organizer:toast.groupCloned', { name: newName }));
 
       // Expand parent if it's a subgroup
       if (group.parent_id) {
@@ -3320,7 +3320,7 @@ export default function OrganizerScreen({
       }
     } catch (e) {
       console.error('Error cloning group:', e);
-      showToast('Viga grupi kloonimisel');
+      showToast(t('organizer:toast.groupCloneError'));
     } finally {
       setSaving(false);
     }
@@ -3456,7 +3456,7 @@ export default function OrganizerScreen({
 
       setBatchProgress(null);
 
-      showToast(`Grupp ja ${allItemsToDelete.length} detaili kustutatud`);
+      showToast(t('organizer:toast.groupAndItemsDeleted', { count: allItemsToDelete.length }));
       logActivity({
         action_type: 'delete_group',
         group_id: group.id,
@@ -3483,7 +3483,7 @@ export default function OrganizerScreen({
       }
     } catch (e) {
       console.error('Error deleting group:', e);
-      showToast('Viga grupi kustutamisel');
+      showToast(t('organizer:toast.groupDeleteError'));
       setBatchProgress(null);
     } finally {
       setSaving(false);
@@ -3582,7 +3582,7 @@ export default function OrganizerScreen({
     // Check max depth (level 2 max)
     const parentLevel = parentGroup.level;
     if (parentLevel >= 2) {
-      showToast('Maksimaalselt 3 taset on lubatud');
+      showToast(t('organizer:toast.maxLevelsAllowed', { max: 3 }));
       return;
     }
 
@@ -3667,10 +3667,10 @@ export default function OrganizerScreen({
       setExpandedGroups(prev => new Set([...prev, parentId]));
 
       pushUndo({ type: 'create_group', groupId: fullGroup.id });
-      showToast(`Alamgrupp "${newName}" loodud`);
+      showToast(t('organizer:toast.subgroupCreated', { name: newName }));
     } catch (err) {
       console.error('Failed to create instant subgroup:', err);
-      showToast('Alamgrupi loomine ebaõnnestus');
+      showToast(t('organizer:toast.subgroupCreateError'));
     }
   };
 
@@ -3681,7 +3681,7 @@ export default function OrganizerScreen({
   const addCustomField = async () => {
     const firstSelectedGroupId = selectedGroupIds.size > 0 ? [...selectedGroupIds][0] : null;
     if (!firstSelectedGroupId || !fieldName.trim()) {
-      showToast('Välja nimi on kohustuslik');
+      showToast(t('organizer:toast.fieldNameRequired'));
       return;
     }
 
@@ -3692,7 +3692,7 @@ export default function OrganizerScreen({
     // Check if group is locked
     if (isGroupLocked(rootGroup.id)) {
       const lockInfo = getGroupLockInfo(rootGroup.id);
-      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      showToast(t('organizer:toast.lockedItems', { type: t('organizer:group.locked'), user: lockInfo?.locked_by || 'unknown' }));
       return;
     }
 
@@ -3720,7 +3720,7 @@ export default function OrganizerScreen({
 
       if (error) throw error;
 
-      showToast('Väli lisatud');
+      showToast(t('organizer:toast.fieldAdded'));
 
       // Log activity
       logActivity({
@@ -3741,7 +3741,7 @@ export default function OrganizerScreen({
       }
     } catch (e) {
       console.error('Error adding field:', e);
-      showToast('Viga välja lisamisel');
+      showToast(t('organizer:toast.fieldAddError'));
     } finally {
       setSaving(false);
     }
@@ -3758,7 +3758,7 @@ export default function OrganizerScreen({
     // Check if group is locked
     if (isGroupLocked(rootGroup.id)) {
       const lockInfo = getGroupLockInfo(rootGroup.id);
-      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      showToast(t('organizer:toast.lockedItems', { type: t('organizer:group.locked'), user: lockInfo?.locked_by || 'unknown' }));
       return;
     }
 
@@ -3777,7 +3777,7 @@ export default function OrganizerScreen({
 
       if (error) throw error;
 
-      showToast('Väli uuendatud');
+      showToast(t('organizer:toast.fieldUpdated'));
       resetFieldForm();
       setShowFieldForm(false);
       setEditingField(null);
@@ -3788,7 +3788,7 @@ export default function OrganizerScreen({
       }
     } catch (e) {
       console.error('Error updating field:', e);
-      showToast('Viga välja uuendamisel');
+      showToast(t('organizer:toast.fieldUpdateError'));
     } finally {
       setSaving(false);
     }
@@ -3806,7 +3806,7 @@ export default function OrganizerScreen({
   // Add/update/delete custom fields during group creation (uses formCustomFields state)
   const addFormCustomField = () => {
     if (!fieldName.trim()) {
-      showToast('Välja nimi on kohustuslik');
+      showToast(t('organizer:toast.fieldNameRequired'));
       return;
     }
     const newField: CustomFieldDefinition = {
@@ -3824,7 +3824,7 @@ export default function OrganizerScreen({
     setFormCustomFields(prev => [...prev, newField]);
     resetFieldForm();
     setShowFieldForm(false);
-    showToast('Väli lisatud');
+    showToast(t('organizer:toast.fieldAdded'));
   };
 
   const updateFormCustomField = () => {
@@ -3837,13 +3837,13 @@ export default function OrganizerScreen({
     resetFieldForm();
     setShowFieldForm(false);
     setEditingField(null);
-    showToast('Väli uuendatud');
+    showToast(t('organizer:toast.fieldUpdated'));
   };
 
   const deleteFormCustomField = (fieldId: string) => {
-    if (!confirm('Kas oled kindel, et soovid selle välja kustutada?')) return;
+    if (!confirm(t('organizer:field.deleteConfirm'))) return;
     setFormCustomFields(prev => prev.filter(f => f.id !== fieldId));
-    showToast('Väli kustutatud');
+    showToast(t('organizer:toast.fieldDeleted'));
   };
 
   const deleteCustomField = async (fieldId: string, groupId: string) => {
@@ -3854,7 +3854,7 @@ export default function OrganizerScreen({
     // Check if group is locked
     if (isGroupLocked(rootGroup.id)) {
       const lockInfo = getGroupLockInfo(rootGroup.id);
-      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      showToast(t('organizer:toast.lockedItems', { type: t('organizer:group.locked'), user: lockInfo?.locked_by || 'unknown' }));
       return;
     }
 
@@ -3862,11 +3862,7 @@ export default function OrganizerScreen({
     const fieldToDelete = (rootGroup.custom_fields || []).find(f => f.id === fieldId);
     const isFileField = fieldToDelete && (fieldToDelete.type === 'photo' || fieldToDelete.type === 'attachment');
 
-    const confirmMessage = isFileField
-      ? 'Kas oled kindel, et soovid selle välja kustutada? See kustutab ka kõik selle väljaga seotud failid.'
-      : 'Kas oled kindel, et soovid selle välja kustutada?';
-
-    if (!confirm(confirmMessage)) return;
+    if (!confirm(t('organizer:field.deleteConfirm'))) return;
 
     setSaving(true);
     try {
@@ -3947,7 +3943,7 @@ export default function OrganizerScreen({
 
       if (error) throw error;
 
-      showToast(isFileField ? 'Väli ja seotud failid kustutatud' : 'Väli kustutatud');
+      showToast(isFileField ? t('organizer:toast.fieldAndFilesDeleted') : t('organizer:toast.fieldDeleted'));
 
       // Log activity
       logActivity({
@@ -3966,7 +3962,7 @@ export default function OrganizerScreen({
       }
     } catch (e) {
       console.error('Error deleting field:', e);
-      showToast('Viga välja kustutamisel');
+      showToast(t('organizer:toast.fieldDeleteError'));
     } finally {
       setSaving(false);
     }
@@ -3980,7 +3976,7 @@ export default function OrganizerScreen({
     // Check if group is locked
     if (isGroupLocked(rootGroup.id)) {
       const lockInfo = getGroupLockInfo(rootGroup.id);
-      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      showToast(t('organizer:toast.lockedItems', { type: t('organizer:group.locked'), user: lockInfo?.locked_by || 'unknown' }));
       return;
     }
 
@@ -4004,7 +4000,7 @@ export default function OrganizerScreen({
       await loadData();
     } catch (e) {
       console.error('Error reordering fields:', e);
-      showToast('Viga väljade järjestamisel');
+      showToast(t('organizer:toast.fieldOrderError'));
     }
   };
 
@@ -4065,14 +4061,14 @@ export default function OrganizerScreen({
     // Check if group is locked
     if (isGroupLocked(targetGroupId)) {
       const lockInfo = getGroupLockInfo(targetGroupId);
-      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      showToast(t('organizer:toast.lockedItems', { type: t('organizer:group.locked'), user: lockInfo?.locked_by || 'unknown' }));
       return;
     }
 
     // Check if user has permission to add items
     const permissions = getUserPermissions(targetGroupId, tcUserEmail);
     if (!permissions.can_add) {
-      showToast('Sul pole õigust sellesse gruppi detaile lisada');
+      showToast(t('organizer:toast.noPermissionAdd'));
       return;
     }
 
@@ -4106,7 +4102,7 @@ export default function OrganizerScreen({
     }
 
     if (objectsToAdd.length === 0) {
-      showToast('Kõik valitud detailid on juba selles grupis');
+      showToast(t('organizer:group.allItemsAlreadyInGroup'));
       return;
     }
 
@@ -4268,10 +4264,8 @@ export default function OrganizerScreen({
       // Update cache so items persist after navigation
       setCachedData(groups, updatedItemsMap, newTree);
 
-      const message = skippedCount > 0
-        ? `${items.length} detaili lisatud (${skippedCount} jäeti vahele - juba olemas)`
-        : `${items.length} detaili lisatud`;
-      showToast(message);
+      const skippedMsg = skippedCount > 0 ? ` (${skippedCount} ${t('common:actions.skipped')})` : '';
+      showToast(t('organizer:toast.itemsAddedToGroup', { count: items.length }) + skippedMsg);
       setExpandedGroups(prev => new Set([...prev, targetGroupId]));
 
       // Log activity
@@ -4314,7 +4308,7 @@ export default function OrganizerScreen({
       }
     } catch (e) {
       console.error('Error adding items to group:', e);
-      showToast('Viga detailide lisamisel');
+      showToast(t('organizer:toast.itemsAddError'));
       setBatchProgress(null);
     } finally {
       setSaving(false);
@@ -4349,7 +4343,7 @@ export default function OrganizerScreen({
     const items = groupItems.get(groupId) || [];
     if (items.length === 0) return;
 
-    showToast('Laen veergude andmeid mudelist...');
+    showToast(t('organizer:toast.loadingColumnData'));
 
     try {
       // Find objects in loaded models
@@ -4430,13 +4424,13 @@ export default function OrganizerScreen({
 
         // Reload data to show updated values
         await loadData();
-        showToast(`${updates.length} detaili andmed uuendatud`);
+        showToast(t('organizer:toast.itemsDataUpdated', { count: updates.length }));
       } else {
-        showToast('Veergude andmeid ei leitud mudelist');
+        showToast(t('organizer:toast.columnDataNotFound'));
       }
     } catch (err) {
       console.error('Error refreshing display properties:', err);
-      showToast('Viga andmete lugemisel mudelist');
+      showToast(t('organizer:toast.modelDataError'));
     }
   };
 
@@ -4447,7 +4441,7 @@ export default function OrganizerScreen({
     const firstItem = Array.from(groupItems.values()).flat().find(i => itemIds.includes(i.id));
     if (firstItem && isGroupLocked(firstItem.group_id)) {
       const lockInfo = getGroupLockInfo(firstItem.group_id);
-      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      showToast(t('organizer:toast.lockedItems', { type: t('organizer:group.locked'), user: lockInfo?.locked_by || 'unknown' }));
       return;
     }
 
@@ -4461,13 +4455,13 @@ export default function OrganizerScreen({
       if (!permissions.can_delete_all) {
         // User can only delete their own items
         if (!permissions.can_delete_own) {
-          showToast('Sul pole õigust detaile kustutada');
+          showToast(t('organizer:group.noPermissionDelete'));
           return;
         }
         // Check if all items were added by the current user
         const otherUsersItems = itemsToDelete.filter(item => item!.added_by !== tcUserEmail);
         if (otherUsersItems.length > 0) {
-          showToast(`Sul pole õigust teiste lisatud detaile kustutada (${otherUsersItems.length} detaili)`);
+          showToast(t('organizer:group.noPermissionDeleteOthers', { count: otherUsersItems.length }));
           return;
         }
       }
@@ -4533,7 +4527,7 @@ export default function OrganizerScreen({
       // Rebuild tree with updated items
       setGroupTree(buildGroupTree(groups, newGroupItems));
 
-      showToast(`${itemIds.length} detaili eemaldatud`);
+      showToast(t('organizer:toast.itemsRemoved', { count: itemIds.length }));
       setSelectedItemIds(new Set());
 
       // Log activity
@@ -4581,7 +4575,7 @@ export default function OrganizerScreen({
       }
     } catch (e) {
       console.error('Error removing items:', e);
-      showToast('Viga detailide eemaldamisel');
+      showToast(t('organizer:toast.itemsRemoveError'));
     } finally {
       setSaving(false);
       setBatchProgress(null);
@@ -4595,7 +4589,7 @@ export default function OrganizerScreen({
     // Check if group is locked
     if (isGroupLocked(item.group_id)) {
       const lockInfo = getGroupLockInfo(item.group_id);
-      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      showToast(t('organizer:toast.lockedItems', { type: t('organizer:group.locked'), user: lockInfo?.locked_by || 'unknown' }));
       return;
     }
 
@@ -4642,7 +4636,7 @@ export default function OrganizerScreen({
 
       if (updateError) {
         console.error('Error saving custom field:', updateError);
-        showToast('Viga välja salvestamisel');
+        showToast(t('organizer:field.saveError'));
         // Revert optimistic update on error
         setGroupItems(prev => {
           const newMap = new Map(prev);
@@ -4673,7 +4667,7 @@ export default function OrganizerScreen({
       });
     } catch (e) {
       console.error('Error updating field:', e);
-      showToast('Viga välja uuendamisel');
+      showToast(t('organizer:field.updateError'));
     }
   };
 
@@ -4683,7 +4677,7 @@ export default function OrganizerScreen({
     const hasValues = Object.values(bulkFieldValues).some(v => v !== '');
     const hasFiles = Object.values(bulkUploadFiles).some(files => files && files.length > 0);
     if (!hasValues && !hasFiles) {
-      showToast('Sisesta vähemalt üks väärtus või vali failid');
+      showToast(t('organizer:field.enterValue'));
       return;
     }
 
@@ -4697,7 +4691,9 @@ export default function OrganizerScreen({
     }
     if (lockedGroupIds.size > 0) {
       const lockInfo = getGroupLockInfo([...lockedGroupIds][0]);
-      showToast(`🔒 ${lockedGroupIds.size > 1 ? 'Mõned valitud detailid on' : 'Grupp on'} lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      showToast(lockedGroupIds.size > 1
+        ? t('organizer:toast.lockedItemsMultiple', { user: lockInfo?.locked_by || 'unknown' })
+        : t('organizer:toast.lockedItems', { type: t('organizer:group.locked'), user: lockInfo?.locked_by || 'unknown' }));
       return;
     }
 
@@ -4711,7 +4707,7 @@ export default function OrganizerScreen({
     }).length;
 
     if (existingCount > 0 && hasValues) {
-      if (!confirm(`${existingCount} detailil on juba väärtused. Kas kirjutad üle?`)) return;
+      if (!confirm(t('organizer:item.existingValuesOverwrite', { count: existingCount }))) return;
     }
 
     setSaving(true);
@@ -4807,9 +4803,9 @@ export default function OrganizerScreen({
 
       const uploadCount = Object.values(bulkUploadFiles).reduce((sum, files) => sum + (files?.length || 0), 0);
       if (uploadCount > 0) {
-        showToast(`${selectedItemIds.size} detaili uuendatud, ${uploadCount} faili laetud üles`);
+        showToast(t('organizer:item.updateCount', { count: selectedItemIds.size, uploadCount }));
       } else {
-        showToast(`${selectedItemIds.size} detaili uuendatud`);
+        showToast(t('organizer:toast.itemsDataUpdated', { count: selectedItemIds.size }));
       }
 
       // Database update in background
@@ -4850,12 +4846,12 @@ export default function OrganizerScreen({
           }
         } catch (e) {
           console.error('Error bulk updating in background:', e);
-          showToast('Viga salvestamisel - värskenda lehte');
+          showToast(t('organizer:saveError'));
         }
       })();
     } catch (e) {
       console.error('Error in bulk update:', e);
-      showToast('Viga failide üleslaadimisel');
+      showToast(t('organizer:fileUploadError'));
       setBulkUploadProgress(null);
     } finally {
       setSaving(false);
@@ -4869,14 +4865,14 @@ export default function OrganizerScreen({
     const firstItem = Array.from(groupItems.values()).flat().find(i => itemIds.includes(i.id));
     if (firstItem && isGroupLocked(firstItem.group_id)) {
       const lockInfo = getGroupLockInfo(firstItem.group_id);
-      showToast(`🔒 Lähtegrupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      showToast(t('organizer:sourceGroupLocked', { user: lockInfo?.locked_by || 'unknown' }));
       return;
     }
 
     // Check if target group is locked
     if (isGroupLocked(targetGroupId)) {
       const lockInfo = getGroupLockInfo(targetGroupId);
-      showToast(`🔒 Sihtgrupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      showToast(t('organizer:toast.lockedItems', { type: t('organizer:group.locked'), user: lockInfo?.locked_by || 'unknown' }));
       return;
     }
 
@@ -4927,7 +4923,7 @@ export default function OrganizerScreen({
       const { error } = await supabase.from('organizer_group_items').update({ group_id: targetGroupId }).in('id', itemIds);
       if (error) throw error;
 
-      showToast(`${itemIds.length} detaili liigutatud`);
+      showToast(t('organizer:toast.itemsMoved', { count: itemIds.length }));
 
       // Auto-recolor if coloring mode is active (items may have new group color)
       if (colorByGroup) {
@@ -4935,7 +4931,7 @@ export default function OrganizerScreen({
       }
     } catch (e) {
       console.error('Error moving items:', e);
-      showToast('Viga detailide liigutamisel');
+      showToast(t('organizer:toast.itemsMoveError'));
       // Rollback on error
       setGroupItems(previousGroupItems);
     } finally {
@@ -5148,8 +5144,8 @@ export default function OrganizerScreen({
     if (groups.length === 0) return;
 
     setColoringInProgress(true);
-    const modeLabel = targetGroupId ? 'gruppi' : (colorMode === 'parents-only' ? 'peagruppide järgi' : 'kõiki gruppe');
-    showToast(`Värvin ${modeLabel}... Loen andmebaasist...`);
+    const modeLabel = targetGroupId ? t('organizer:group.new') : (colorMode === 'parents-only' ? 'parents' : 'all');
+    showToast(t('organizer:color.coloringProgress', { mode: modeLabel }));
 
     try {
       // Step 1: Fetch ALL objects from Supabase with pagination
@@ -5167,7 +5163,7 @@ export default function OrganizerScreen({
 
         if (error) {
           console.error('Supabase error:', error);
-          showToast('Viga andmebaasi lugemisel');
+          showToast(t('organizer:toast.databaseReadError'));
           return;
         }
 
@@ -5177,14 +5173,14 @@ export default function OrganizerScreen({
           if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
         }
         offset += data.length;
-        showToast(`Värvin... Loetud ${allGuids.length} objekti`);
+        showToast(t('organizer:color.readObjects', { count: allGuids.length }));
         if (data.length < PAGE_SIZE) break;
       }
 
       console.log(`Total GUIDs fetched for coloring: ${allGuids.length}`);
 
       // Step 2: Do ONE lookup for ALL GUIDs to get runtime IDs
-      showToast('Värvin... Otsin mudelitest...');
+      showToast(t('organizer:color.searchingModels'));
       const foundObjects = await findObjectsInLoadedModels(api, allGuids);
       console.log(`Found ${foundObjects.size} objects in loaded models`);
 
@@ -5200,7 +5196,7 @@ export default function OrganizerScreen({
       if (targetGroupId && coloredSingleGroupId && targetGroupId !== coloredSingleGroupId) {
         const previousGroup = groups.find(g => g.id === coloredSingleGroupId);
         if (previousGroup && previousGroup.assembly_selection_on === false) {
-          showToast('Lähtestan eelmise grupi värve...');
+          showToast(t('organizer:color.resetPreviousGroup'));
 
           // Get all GUIDs from the previous non-assembly group and its children
           const prevSubtreeIds = getGroupSubtreeIds(coloredSingleGroupId);
@@ -5351,7 +5347,7 @@ export default function OrganizerScreen({
               { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
             );
             coloredCount += batch.length;
-            showToast(`Värvin gruppe... ${coloredCount}/${totalToColor}`);
+            showToast(t('organizer:color.coloringGroups', { current: coloredCount, total: totalToColor }));
           }
         }
       }
@@ -5362,7 +5358,7 @@ export default function OrganizerScreen({
       let subElementColoredCount = 0;
 
       if (nonAssemblyGroups.length > 0) {
-        showToast('Värvin alamdetaile...');
+        showToast(t('organizer:color.coloringSubDetails'));
 
         // Collect all GUIDs from non-assembly groups that weren't already found
         const subElementGuidsToColor: { guid: string; color: GroupColor }[] = [];
@@ -5450,11 +5446,11 @@ export default function OrganizerScreen({
       setColorByGroup(true);
       // Track if single group or all groups were colored
       setColoredSingleGroupId(targetGroupId || null);
-      const subInfo = subElementColoredCount > 0 ? `, Alamdetailid=${subElementColoredCount}` : '';
-      showToast(`✓ Värvitud! Valged=${whiteCount}, Grupeeritud=${coloredCount}${subInfo}`);
+      const subInfo = subElementColoredCount > 0 ? `, Sub=${subElementColoredCount}` : '';
+      showToast(t('organizer:color.done', { white: whiteCount, colored: coloredCount, subInfo }));
     } catch (e) {
       console.error('Error coloring model:', e);
-      showToast('Viga värvimisel');
+      showToast(t('organizer:color.error'));
     } finally {
       setColoringInProgress(false);
     }
@@ -5466,7 +5462,7 @@ export default function OrganizerScreen({
       await api.viewer.setObjectState(undefined, { color: 'reset' });
       setColorByGroup(false);
       setColoredSingleGroupId(null);
-      showToast('Värvid lähtestatud');
+      showToast(t('organizer:color.reset'));
     } catch (e) {
       console.error('Error resetting colors:', e);
     } finally {
@@ -5754,19 +5750,19 @@ export default function OrganizerScreen({
 
         processedCount++;
         if (processedCount % 20 === 0) {
-          showToast(`Töötlen... ${processedCount}/${itemsWithGroup.length}`);
+          showToast(t('organizer:markup.processing', { current: processedCount, total: itemsWithGroup.length }));
         }
       }
 
       if (markupsToCreate.length === 0) {
-        showToast('Ei leidnud detaile mudelis');
+        showToast(t('organizer:markup.notFoundInModel'));
         setSaving(false);
         return;
       }
 
       // Apply auto-stagger heights if enabled and multiple markups
       if (markupSettings.autoStaggerHeight && markupsToCreate.length > 1) {
-        showToast('Arvutan automaatseid kõrgusi...');
+        showToast(t('organizer:heights.calculating'));
 
         // Sort by X position for consistent staggering
         const indexed = markupsToCreate.map((m, idx) => ({ m, idx, x: m.start.positionX, y: m.start.positionY }));
@@ -5813,7 +5809,7 @@ export default function OrganizerScreen({
       }
 
       // Create markups in batches
-      showToast(`Loon ${markupsToCreate.length} markupit...`);
+      showToast(t('organizer:markup.creating', { count: markupsToCreate.length }));
       setMarkupProgress({ current: 0, total: markupsToCreate.length, action: 'adding' });
 
       const createdIds: number[] = [];
@@ -5845,10 +5841,10 @@ export default function OrganizerScreen({
       setShowMarkupModal(false);
       setMarkupGroupId(null);
       setHasMarkups(true);
-      showToast(`✓ ${createdIds.length} markupit loodud`);
+      showToast(`✓ ${t('organizer:markup.markupsCreated', { count: createdIds.length })}`);
     } catch (e) {
       console.error('Error adding markups:', e);
-      showToast('Viga markupite loomisel');
+      showToast(t('organizer:markup.markupsCreateError'));
     } finally {
       setSaving(false);
       setMarkupProgress(null);
@@ -5870,7 +5866,7 @@ export default function OrganizerScreen({
     try {
       const allMarkups = await (api.markup as any)?.getTextMarkups?.();
       if (!allMarkups || allMarkups.length === 0) {
-        showToast('Markupe pole');
+        showToast(t('organizer:markup.noMarkups'));
         setHasMarkups(false);
         setSaving(false);
         return;
@@ -5878,7 +5874,7 @@ export default function OrganizerScreen({
 
       const allIds = allMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
       if (allIds.length === 0) {
-        showToast('Markupe pole');
+        showToast(t('organizer:markup.noMarkups'));
         setSaving(false);
         return;
       }
@@ -5898,10 +5894,10 @@ export default function OrganizerScreen({
 
       setMarkupProgress(null);
       setHasMarkups(false);
-      showToast(`✓ ${allIds.length} markupit eemaldatud`);
+      showToast(`✓ ${t('organizer:markup.markupsRemoved', { count: allIds.length })}`);
     } catch (e) {
       console.error('Error removing markups:', e);
-      showToast('Viga markupite eemaldamisel');
+      showToast(t('organizer:markup.markupsRemoveError'));
     } finally {
       setSaving(false);
       setMarkupProgress(null);
@@ -5925,7 +5921,7 @@ export default function OrganizerScreen({
       const guids = selectedItems.map(item => item.guid_ifc).filter(Boolean) as string[];
 
       if (guids.length === 0) {
-        showToast('Valitud detailidel pole GUID-e');
+        showToast(t('organizer:markup.noGuids'));
         return;
       }
 
@@ -5935,7 +5931,7 @@ export default function OrganizerScreen({
         { r: 59, g: 130, b: 246 }; // Default blue if no color
 
       // First, reset all colors to white
-      showToast(`Värvin ${guids.length} valitud detaili...`);
+      showToast(t('organizer:color.coloringSelected', { count: guids.length }));
 
       // Find all objects in model and color them white first
       const allModelGuids = Array.from(groupItems.values()).flat().map(i => i.guid_ifc).filter(Boolean) as string[];
@@ -5956,10 +5952,10 @@ export default function OrganizerScreen({
 
       // Then color selected items
       await colorItemsDirectly(guids, groupColor);
-      showToast(`✓ ${guids.length} detaili värvitud`);
+      showToast(`✓ ${t('organizer:color.selectedColored', { count: guids.length })}`);
     } catch (e) {
       console.error('Error coloring selected items:', e);
-      showToast('Viga värvimise');
+      showToast(t('organizer:markup.coloringError'));
     } finally {
       setSaving(false);
     }
@@ -5977,11 +5973,11 @@ export default function OrganizerScreen({
       const selectedItems = allItems.filter(item => selectedItemIds.has(item.id));
 
       if (selectedItems.length === 0) {
-        showToast('Valitud detaile ei leitud');
+        showToast(t('organizer:markup.selectedNotFound'));
         return;
       }
 
-      showToast(`Loon markupeid ${selectedItems.length} detailile...`);
+      showToast(t('organizer:markup.creatingMarkups', { count: selectedItems.length }));
 
       // Get root parent for custom fields
       const rootParent = getRootParent(selectedGroup.id);
@@ -5992,7 +5988,7 @@ export default function OrganizerScreen({
       const foundObjects = await findObjectsInLoadedModels(api, guids);
 
       if (foundObjects.size === 0) {
-        showToast('Detaile ei leitud mudelist');
+        showToast(t('organizer:markup.detailsNotFoundInModel'));
         setSaving(false);
         return;
       }
@@ -6034,7 +6030,7 @@ export default function OrganizerScreen({
       }
 
       if (markupsToCreate.length === 0) {
-        showToast('Markupe ei saanud luua');
+        showToast(t('organizer:markup.cannotCreateMarkups'));
         setSaving(false);
         return;
       }
@@ -6069,10 +6065,10 @@ export default function OrganizerScreen({
 
       setMarkupProgress(null);
       setHasMarkups(true);
-      showToast(`✓ ${createdIds.length} markupit loodud`);
+      showToast(`✓ ${t('organizer:markup.markupsCreated', { count: createdIds.length })}`);
     } catch (e) {
       console.error('Error adding markups to selected items:', e);
-      showToast('Viga markupite loomisel');
+      showToast(t('organizer:markup.markupsCreateError'));
     } finally {
       setSaving(false);
       setMarkupProgress(null);
@@ -6162,7 +6158,7 @@ export default function OrganizerScreen({
       .filter(v => v.length > 0);
 
     if (rawValues.length === 0) {
-      showToast('Sisend on tühi');
+      showToast(t('organizer:item.emptyInput'));
       return;
     }
 
@@ -6374,7 +6370,7 @@ export default function OrganizerScreen({
 
       if (matchedObjects.length === 0) {
         const formatMsg = isMsGuidInput ? 'GUID_MS→IFC' : isIfcGuidInput ? 'IFC GUID' : 'Assembly Mark';
-        showToast(`Ühtegi sobivat elementi ei leitud (${formatMsg})`);
+        showToast(t('organizer:item.noMatchingElements', { format: formatMsg }));
         setShowImportModal(false);
         return;
       }
@@ -6389,7 +6385,7 @@ export default function OrganizerScreen({
       );
 
       if (objectsToAdd.length === 0) {
-        showToast('Kõik leitud elemendid on juba grupis');
+        showToast(t('organizer:item.allAlreadyInGroup'));
         setShowImportModal(false);
         return;
       }
@@ -6451,7 +6447,7 @@ export default function OrganizerScreen({
       await refreshData();
     } catch (e) {
       console.error('Error importing items:', e);
-      showToast('Viga importimisel');
+      showToast(t('organizer:toast.importError'));
     } finally {
       setSaving(false);
       setImportProgress(null);
@@ -6486,12 +6482,12 @@ export default function OrganizerScreen({
 
       if (error) throw error;
 
-      showToast(newLockState ? '🔒 Grupp lukustatud' : '🔓 Grupp avatud');
+      showToast(newLockState ? t('organizer:toast.groupLocked') : t('organizer:toast.groupUnlocked'));
       setGroupMenuId(null);
       await refreshData();
     } catch (e) {
       console.error('Error toggling group lock:', e);
-      showToast('Viga lukustamisel');
+      showToast(t('organizer:toast.lockError'));
     } finally {
       setSaving(false);
     }
@@ -6631,7 +6627,7 @@ export default function OrganizerScreen({
       );
 
       if (allItems.length === 0) {
-        showToast('Valitud detailid pole selles grupis');
+        showToast(t('organizer:toast.selectedNotInGroup'));
         return;
       }
     }
@@ -6897,10 +6893,10 @@ export default function OrganizerScreen({
 
     try {
       await navigator.clipboard.writeText(tsvContent);
-      showToast(`${allItems.length} rida kopeeritud`);
+      showToast(t('organizer:toast.rowsCopied', { count: allItems.length }));
     } catch (e) {
       console.error('Clipboard error:', e);
-      showToast('Viga kopeerimisel');
+      showToast(t('organizer:toast.copyError'));
     }
     setGroupMenuId(null);
   };
@@ -6913,7 +6909,7 @@ export default function OrganizerScreen({
     // Collect all items from this group and subgroups
     const allItems = collectAllGroupItems(groupId);
     if (allItems.length === 0) {
-      showToast('Grupis pole detaile');
+      showToast(t('organizer:toast.noItemsInGroup'));
       setGroupMenuId(null);
       return;
     }
@@ -6924,7 +6920,7 @@ export default function OrganizerScreen({
       .filter((g): g is string => !!g);
 
     if (guids.length === 0) {
-      showToast('Detailidel puuduvad GUID-id');
+      showToast(t('organizer:toast.itemsNoGuids'));
       setGroupMenuId(null);
       return;
     }
@@ -6954,7 +6950,7 @@ export default function OrganizerScreen({
     }
 
     if (!modelId) {
-      showToast('Mudelit ei leitud');
+      showToast(t('organizer:toast.modelNotFound'));
       setGroupMenuId(null);
       return;
     }
@@ -6992,7 +6988,7 @@ export default function OrganizerScreen({
 
       if (insertError || !zoomTarget) {
         console.error('Error creating zoom target:', insertError);
-        showToast('Viga lingi loomisel');
+        showToast(t('organizer:toast.linkCreateError'));
         return;
       }
 
@@ -7001,10 +6997,10 @@ export default function OrganizerScreen({
       const zoomUrl = `${baseUrl}?zoom=${zoomTarget.id}`;
 
       await navigator.clipboard.writeText(zoomUrl);
-      showToast(`Link kopeeritud (${guids.length} detaili, kehtib ${selectedExpiry} päeva)`);
+      showToast(t('organizer:link.copied', { count: guids.length, days: selectedExpiry }));
     } catch (e) {
       console.error('Clipboard error:', e);
-      showToast('Viga lingi kopeerimisel');
+      showToast(t('organizer:toast.linkCopyError'));
     }
 
     setShowLinkExpiryModal(false);
@@ -7149,7 +7145,7 @@ export default function OrganizerScreen({
     XLSX.utils.book_append_sheet(wb, wsInstructions, 'Juhend');
 
     XLSX.writeFile(wb, `${group.name.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ]/g, '_')}_import_template.xlsx`);
-    showToast('Template alla laetud');
+    showToast(t('organizer:toast.templateDownloaded'));
     setGroupMenuId(null);
   };
 
@@ -7189,7 +7185,7 @@ export default function OrganizerScreen({
       });
     } catch (err) {
       console.error('Error reading Excel file:', err);
-      showToast('Viga faili lugemisel');
+      showToast(t('organizer:toast.fileReadError'));
       setExcelImportFile(null);
       setExcelImportPreview(null);
     }
@@ -7204,7 +7200,7 @@ export default function OrganizerScreen({
     // Check if group is locked
     if (isGroupLocked(excelImportGroupId)) {
       const lockInfo = getGroupLockInfo(excelImportGroupId);
-      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      showToast(t('organizer:toast.lockedItems', { type: t('organizer:group.locked'), user: lockInfo?.locked_by || 'unknown' }));
       setShowExcelImportModal(false);
       return;
     }
@@ -7219,7 +7215,7 @@ export default function OrganizerScreen({
       const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet);
 
       if (rows.length === 0) {
-        showToast('Excel fail on tühi');
+        showToast(t('organizer:excel.fileEmpty'));
         setSaving(false);
         return;
       }
@@ -7247,7 +7243,7 @@ export default function OrganizerScreen({
         }
 
         if (missingColumns.length > 0) {
-          showToast(`Kohustuslikud veerud puuduvad: ${missingColumns.join(', ')}`);
+          showToast(t('organizer:toast.missingColumns', { columns: missingColumns.join(', ') }));
           setSaving(false);
           return;
         }
@@ -7266,7 +7262,7 @@ export default function OrganizerScreen({
 
         if (rowsWithMissingValues > 0) {
           const fieldNames = requiredFields.map(f => f.name).join(', ');
-          showToast(`Hoiatus: ${rowsWithMissingValues} rida puuduvate kohustuslike väärtustega (${fieldNames})`);
+          showToast(t('organizer:excel.missingRequiredValues', { count: rowsWithMissingValues, fields: fieldNames }));
           // Continue with import - just a warning
         }
       }
@@ -7289,7 +7285,7 @@ export default function OrganizerScreen({
       }
 
       if (guidToRow.size === 0) {
-        showToast('GUID veergu ei leitud või kõik read on tühjad');
+        showToast(t('organizer:excel.guidColumnNotFound'));
         setSaving(false);
         return;
       }
@@ -7300,13 +7296,13 @@ export default function OrganizerScreen({
 
       if (isNonAssemblyGroup) {
         // For non-assembly groups: find GUIDs directly in loaded models
-        showToast('Otsin objekte mudelist...');
+        showToast(t('organizer:toast.searchingObjectsInModel'));
         const foundInModel = await findObjectsInLoadedModels(api, guidsToSearch);
         foundByGuid = new Map();
 
         if (foundInModel.size > 0 && displayProps.length > 0) {
           // Fetch display property values from the model
-          showToast('Laen property väärtusi mudelist...');
+          showToast(t('organizer:excel.loadingPropertyValues'));
 
           // Group by model for efficient API calls
           const objByModel = new Map<string, { guid: string; runtimeId: number }[]>();
@@ -7523,14 +7519,14 @@ export default function OrganizerScreen({
       }
 
       const notFoundCount = guidToRow.size - (totalAdded + totalSkipped);
-      let message = `${totalAdded} elementi imporditud`;
-      if (totalSkipped > 0) message += `, ${totalSkipped} juba olemas`;
+      let message = t('organizer:toast.itemsImported', { count: totalAdded });
+      if (totalSkipped > 0) message += `, ${t('organizer:toast.alreadyExists', { count: totalSkipped })}`;
       if (notFoundCount > 0) {
         message += isNonAssemblyGroup
-          ? `, ${notFoundCount} ei leitud mudelist`
-          : `, ${notFoundCount} ei leitud andmebaasist`;
+          ? `, ${t('organizer:toast.notFoundInModel', { count: notFoundCount })}`
+          : `, ${t('organizer:toast.notFoundInDatabase', { count: notFoundCount })}`;
       }
-      if (newSubgroupNames.size > 0) message += `, ${newSubgroupNames.size} alamgruppi loodud`;
+      if (newSubgroupNames.size > 0) message += `, ${t('organizer:toast.subgroupsCreated', { count: newSubgroupNames.size })}`;
 
       showToast(message);
       await refreshData();
@@ -7538,7 +7534,7 @@ export default function OrganizerScreen({
 
     } catch (err) {
       console.error('Error importing from Excel:', err);
-      showToast('Viga importimisel');
+      showToast(t('organizer:toast.importError'));
     } finally {
       setSaving(false);
     }
@@ -7551,7 +7547,7 @@ export default function OrganizerScreen({
   // Export all groups to Excel file
   const exportAllGroups = async () => {
     setGroupsExportImportMode('export');
-    setGroupsImportProgress({ phase: 'Kogun gruppide andmeid...', current: 0, total: groups.length, percent: 0 });
+    setGroupsImportProgress({ phase: t('organizer:export.collectingGroupData'), current: 0, total: groups.length, percent: 0 });
 
     try {
       await new Promise(resolve => setTimeout(resolve, 10)); // Allow UI to update
@@ -7640,7 +7636,7 @@ export default function OrganizerScreen({
         if (i % 50 === 0) {
           const percent = Math.round((i / sortedGroups.length) * 30);
           setGroupsImportProgress({
-            phase: `Töötlen gruppe... (${i}/${sortedGroups.length})`,
+            phase: t('organizer:export.processingGroups', { current: i, total: sortedGroups.length }),
             current: i,
             total: sortedGroups.length,
             percent
@@ -7654,7 +7650,7 @@ export default function OrganizerScreen({
       XLSX.utils.book_append_sheet(wb, wsGroups, 'Grupid');
 
       // ============ DETAILID SHEET ============
-      setGroupsImportProgress({ phase: 'Töötlen detaile...', current: 0, total: 100, percent: 35 });
+      setGroupsImportProgress({ phase: t('organizer:export.processingItems'), current: 0, total: 100, percent: 35 });
       await new Promise(resolve => setTimeout(resolve, 0));
 
       // Collect all unique custom fields from all groups
@@ -7850,11 +7846,11 @@ export default function OrganizerScreen({
 
       setGroupsImportProgress(null);
       setShowGroupsExportImportModal(false);
-      showToast(`Eksporditud ${sortedGroups.length} gruppi ja ${totalItems} elementi`);
+      showToast(t('organizer:toast.exportedGroupsAndItems', { groups: sortedGroups.length, items: totalItems }));
 
     } catch (err) {
       console.error('Error exporting groups:', err);
-      showToast('Viga eksportimisel');
+      showToast(t('organizer:toast.exportError'));
       setGroupsImportProgress(null);
     }
   };
@@ -7946,7 +7942,7 @@ export default function OrganizerScreen({
     XLSX.utils.book_append_sheet(wb, wsGuide, 'Juhend');
 
     XLSX.writeFile(wb, 'detailid_import_mall.xlsx');
-    showToast('Mall alla laetud');
+    showToast(t('organizer:toast.templateDownloaded'));
   };
 
   // Validate and preview import file (Excel)
@@ -8408,7 +8404,7 @@ export default function OrganizerScreen({
       setItemSortDir('asc');
     } catch (err) {
       console.error('Error reordering items:', err);
-      showToast('Viga järjestuse muutmisel');
+      showToast(t('organizer:order.error'));
     }
 
     setDraggedItems([]);
@@ -8440,10 +8436,10 @@ export default function OrganizerScreen({
       setItemSortField('sort_order');
       setItemSortDir('asc');
 
-      showToast('Järjestus salvestatud');
+      showToast(t('organizer:order.saved'));
     } catch (err) {
       console.error('Error applying sort order:', err);
-      showToast('Viga järjestuse salvestamisel');
+      showToast(t('organizer:order.saveError'));
     } finally {
       setSaving(false);
     }
@@ -8522,25 +8518,25 @@ export default function OrganizerScreen({
 
     // Validation: Can't move to itself
     if (groupId === newParentId) {
-      showToast('Gruppi ei saa iseenda sisse lohistada');
+      showToast(t('organizer:toast.cannotDropIntoSelf'));
       return;
     }
 
     // Validation: Check if group is locked
     if (isGroupLocked(groupId)) {
-      showToast('🔒 Lukustatud gruppi ei saa liigutada');
+      showToast(t('organizer:toast.lockedGroupCannotMove'));
       return;
     }
 
     // Validation: Check if target parent is locked
     if (newParentId && isGroupLocked(newParentId)) {
-      showToast('🔒 Ei saa lohistada lukustatud gruppi');
+      showToast(t('organizer:toast.cannotDropIntoLocked'));
       return;
     }
 
     // Validation: Can't move a group into its own descendant (circular reference)
     if (newParentId && isAncestorOf(groupId, newParentId)) {
-      showToast('Gruppi ei saa liigutada enda alamgruppi');
+      showToast(t('organizer:toast.cannotMoveToOwnSubgroup'));
       return;
     }
 
@@ -8550,12 +8546,12 @@ export default function OrganizerScreen({
       const subtreeDepth = getSubtreeDepth(groupId);
       // If target parent is at level 2, can't add children
       if (targetParentLevel >= 2) {
-        showToast('Maksimaalne grupi sügavus on 3 taset');
+        showToast(t('organizer:group.maxDepth'));
         return;
       }
       // Check if moving the group with its subtree would exceed max level
       if (targetParentLevel + 1 + subtreeDepth > 2) {
-        showToast('Liigutamine ületaks maksimaalse sügavuse (3 taset)');
+        showToast(t('organizer:group.moveExceedsDepth'));
         return;
       }
     }
@@ -8600,11 +8596,11 @@ export default function OrganizerScreen({
       };
       await updateDescendantLevels(groupId, newLevel);
 
-      showToast(newParentId ? 'Grupp liigutatud alamgrupiks' : 'Grupp liigutatud tipptasemele');
+      showToast(newParentId ? t('organizer:toast.groupMovedToSubgroup') : t('organizer:toast.groupMovedToTop'));
       await refreshData();
     } catch (e) {
       console.error('Error moving group:', e);
-      showToast('Viga grupi liigutamisel');
+      showToast(t('organizer:toast.groupMoveError'));
     } finally {
       setSaving(false);
     }
@@ -8615,7 +8611,7 @@ export default function OrganizerScreen({
     // Check if group is locked
     if (isGroupLocked(group.id)) {
       e.preventDefault();
-      showToast('🔒 Lukustatud gruppi ei saa lohistada');
+      showToast(t('organizer:toast.lockedGroupCannotMove'));
       return;
     }
 

@@ -1,0 +1,58 @@
+{
+  "title": "Tools",
+  "presets": {
+    "nameRequired": "Enter preset name",
+    "saved": "Preset saved",
+    "saveError": "Error saving",
+    "deleted": "Preset deleted",
+    "loaded": "Preset \"{{name}}\" loaded"
+  },
+  "data": {
+    "deliveryReadError": "Error reading delivery data",
+    "installationReadError": "Error reading installation data",
+    "readError": "Error reading data",
+    "databaseReadError": "Error reading from database"
+  },
+  "color": {
+    "noObjectsInCategory": "No objects in this category",
+    "objectsNotFoundInModels": "Objects not found in loaded models",
+    "coloringError": "Error coloring"
+  },
+  "model": {
+    "selectFromModel": "Select items from model!",
+    "selectedNoInfo": "Selected objects have no info"
+  },
+  "markup": {
+    "notCreated": "Markups not created (template empty or properties missing)",
+    "boltsNotFound": "Bolts not found (or washer count = 0)",
+    "fastenersNotFound": "Fasteners with washer count = 0 not found",
+    "noMarkups": "No markups",
+    "stepsRemoved": "Steps removed",
+    "tooManyObjects": "Too many objects ({{count}}). Max {{max}} at once!",
+    "tooManyMarkups": "Too many markups ({{count}}). Max {{max}} at once!",
+    "created": "{{count}} markups created",
+    "createError": "Error creating markups",
+    "fastenersCreated": "{{count}} fastener markups created",
+    "removed": "{{count}} markups removed",
+    "removeError": "Error removing markups"
+  },
+  "image": {
+    "copiedToClipboard": "Image copied to clipboard",
+    "openedInNewWindow": "Image opened in new window",
+    "copyFailed": "Failed to copy image",
+    "downloaded": "Image downloaded",
+    "downloadFailed": "Failed to download image"
+  },
+  "results": {
+    "cleared": "Results cleared"
+  },
+  "export": {
+    "error": "Error exporting"
+  },
+  "scan": {
+    "foundBolts": "{{count}} different bolts found",
+    "foundBoltsExportOnly": "{{count}} different bolts found (table >10 - export only)",
+    "error": "Error scanning",
+    "rowsCopied": "{{count}} rows copied"
+  }
+}

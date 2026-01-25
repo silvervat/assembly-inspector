@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import * as XLSX from 'xlsx-js-style';
 import html2canvas from 'html2canvas';
@@ -127,6 +128,7 @@ export default function ToolsScreen({
   onColorModelWhite,
   initialExpandedSection
 }: ToolsScreenProps) {
+  const { t } = useTranslation(['tools', 'common']);
   const [boltLoading, setBoltLoading] = useState(false);
   const [removeLoading, setRemoveLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
@@ -276,13 +278,13 @@ export default function ToolsScreen({
       line2Template: prev.line2Template + 1,
       line3Template: prev.line3Template + 1
     }));
-    showToast(`Eelseadistus "${preset.name}" laetud`, 'success');
-  }, [showToast]);
+    showToast(t('tools:presets.loaded', { name: preset.name }), 'success');
+  }, [showToast, t]);
 
   // Save current settings as a new preset
   const saveNewPreset = useCallback(async () => {
     if (!newPresetName.trim()) {
-      showToast('Sisesta eelseadistuse nimi', 'error');
+      showToast(t('tools:presets.nameRequired'), 'error');
       return;
     }
     setPresetLoading(true);
@@ -310,7 +312,7 @@ export default function ToolsScreen({
 
       if (error) {
         console.error('Error saving preset:', error);
-        showToast('Viga salvestamisel', 'error');
+        showToast(t('tools:presets.saveError'), 'error');
         return;
       }
 
@@ -319,10 +321,10 @@ export default function ToolsScreen({
       setPresetSaveModalOpen(false);
       setNewPresetName('');
       setNewPresetShared(false);
-      showToast('Eelseadistus salvestatud', 'success');
+      showToast(t('tools:presets.saved'), 'success');
     } catch (e) {
       console.error('Error saving preset:', e);
-      showToast('Viga salvestamisel', 'error');
+      showToast(t('tools:presets.saveError'), 'error');
     } finally {
       setPresetLoading(false);
     }
@@ -372,7 +374,7 @@ export default function ToolsScreen({
 
       setMarkeerijPresets(prev => prev.filter(p => p.id !== presetId));
       if (selectedPresetId === presetId) setSelectedPresetId(null);
-      showToast('Eelseadistus kustutatud', 'success');
+      showToast(t('tools:presets.deleted'), 'success');
     } catch (e) {
       console.error('Error deleting preset:', e);
     }
@@ -398,7 +400,7 @@ export default function ToolsScreen({
 
       if (deliveryError) {
         console.error('Error fetching delivery items:', deliveryError);
-        showToast('Viga tarneandmete lugemisel', 'error');
+        showToast(t('tools:data.deliveryReadError'), 'error');
         setMarkerLoading(false);
         return;
       }
@@ -412,7 +414,7 @@ export default function ToolsScreen({
 
       if (installError) {
         console.error('Error fetching installation items:', installError);
-        showToast('Viga paigaldusandmete lugemisel', 'error');
+        showToast(t('tools:data.installationReadError'), 'error');
         setMarkerLoading(false);
         return;
       }
@@ -469,11 +471,11 @@ export default function ToolsScreen({
 
     } catch (e) {
       console.error('Error loading marker data:', e);
-      showToast('Viga andmete lugemisel', 'error');
+      showToast(t('tools:data.readError'), 'error');
     } finally {
       setMarkerLoading(false);
     }
-  }, [_projectId, showToast]);
+  }, [_projectId, showToast, t]);
 
   // Load marker data when section is expanded
   useEffect(() => {
@@ -1077,7 +1079,7 @@ export default function ToolsScreen({
   const colorByCategory = useCallback(async (categoryId: string) => {
     const category = markerCategories.find(c => c.id === categoryId);
     if (!category || category.guids.length === 0) {
-      showToast('Selles kategoorias pole objekte', 'error');
+      showToast(t('tools:color.noObjectsInCategory'), 'error');
       return;
     }
 
@@ -1103,7 +1105,7 @@ export default function ToolsScreen({
 
         if (error) {
           console.error('Supabase error:', error);
-          showToast('Viga andmebaasi lugemisel', 'error');
+          showToast(t('tools:data.databaseReadError'), 'error');
           setBatchProgress(null);
           setColoringCategory(null);
           return;
@@ -1127,7 +1129,7 @@ export default function ToolsScreen({
 
       if (allFoundObjects.size === 0) {
         setBatchProgress(null);
-        showToast('Objekte ei leitud laetud mudelitest', 'error');
+        showToast(t('tools:color.objectsNotFoundInModels'), 'error');
         setColoringCategory(null);
         return;
       }
@@ -1202,16 +1204,16 @@ export default function ToolsScreen({
       await selectObjectsByGuid(api, category.guids);
 
       setBatchProgress(null);
-      showToast(`${totalToColor} objekti värvitud ja valitud`, 'success');
+      showToast(t('common:tools.objectsColoredSelected', { count: totalToColor }), 'success');
 
     } catch (e) {
       console.error('Error coloring category:', e);
       setBatchProgress(null);
-      showToast('Viga värvimisel', 'error');
+      showToast(t('tools:color.coloringError'), 'error');
     } finally {
       setColoringCategory(null);
     }
-  }, [api, _projectId, markerCategories, markerColors, showToast]);
+  }, [api, _projectId, markerCategories, markerColors, showToast, t]);
 
   // Handle color change for a category
   const handleMarkerColorChange = (categoryId: string, hexColor: string) => {
@@ -1439,7 +1441,7 @@ export default function ToolsScreen({
     try {
       const selected = await api.viewer.getSelection();
       if (!selected || selected.length === 0) {
-        showToast('Vali mudelist detailid!', 'error');
+        showToast(t('tools:model.selectFromModel'), 'error');
         setBatchProgress(null);
         setMarkeerijLoading(false);
         return;
@@ -1454,7 +1456,7 @@ export default function ToolsScreen({
       }
 
       if (!modelId || allRuntimeIds.length === 0) {
-        showToast('Valitud objektidel puudub info', 'error');
+        showToast(t('tools:model.selectedNoInfo'), 'error');
         setBatchProgress(null);
         setMarkeerijLoading(false);
         return;
@@ -1462,7 +1464,7 @@ export default function ToolsScreen({
 
       // Check batch limit
       if (allRuntimeIds.length > MAX_MARKUPS_PER_BATCH) {
-        showToast(`Liiga palju objekte (${allRuntimeIds.length}). Max ${MAX_MARKUPS_PER_BATCH} korraga!`, 'error');
+        showToast(t('tools:markup.tooManyObjects', { count: allRuntimeIds.length, max: MAX_MARKUPS_PER_BATCH }), 'error');
         setBatchProgress(null);
         setMarkeerijLoading(false);
         return;
@@ -1644,7 +1646,7 @@ export default function ToolsScreen({
       }
 
       if (markupsToCreate.length === 0) {
-        showToast('Markupe ei loodud (template tühi või propertid puuduvad)', 'error');
+        showToast(t('tools:markup.notCreated'), 'error');
         setBatchProgress(null);
         setMarkeerijLoading(false);
         return;
@@ -1718,11 +1720,11 @@ export default function ToolsScreen({
       }
 
       setBatchProgress(null);
-      showToast(`${createdCount || markupsToCreate.length} markupit loodud`, 'success');
+      showToast(t('tools:markup.created', { count: createdCount || markupsToCreate.length }), 'success');
     } catch (e: any) {
       console.error('Markeerija error:', e);
       setBatchProgress(null);
-      showToast(e.message || 'Viga markupite loomisel', 'error');
+      showToast(e.message || t('tools:markup.createError'), 'error');
     } finally {
       setMarkeerijLoading(false);
     }
@@ -1735,7 +1737,7 @@ export default function ToolsScreen({
       // Get ALL selected objects
       const selected = await api.viewer.getSelection();
       if (!selected || selected.length === 0) {
-        showToast('Vali mudelist detailid!', 'error');
+        showToast(t('tools:model.selectFromModel'), 'error');
         setBoltLoading(false);
         return;
       }
@@ -1751,7 +1753,7 @@ export default function ToolsScreen({
       }
 
       if (!modelId || allRuntimeIds.length === 0) {
-        showToast('Valitud objektidel puudub info', 'error');
+        showToast(t('tools:model.selectedNoInfo'), 'error');
         setBoltLoading(false);
         return;
       }
@@ -1833,7 +1835,7 @@ export default function ToolsScreen({
 
       if (markupsToCreate.length === 0) {
         setBatchProgress(null);
-        showToast('Polte ei leitud (või washer count = 0)', 'error');
+        showToast(t('tools:markup.boltsNotFound'), 'error');
         setBoltLoading(false);
         return;
       }
@@ -1841,7 +1843,7 @@ export default function ToolsScreen({
       // Check batch limit
       if (markupsToCreate.length > MAX_MARKUPS_PER_BATCH) {
         setBatchProgress(null);
-        showToast(`Liiga palju markupe (${markupsToCreate.length}). Max ${MAX_MARKUPS_PER_BATCH} korraga!`, 'error');
+        showToast(t('tools:markup.tooManyMarkups', { count: markupsToCreate.length, max: MAX_MARKUPS_PER_BATCH }), 'error');
         setBoltLoading(false);
         return;
       }
@@ -1885,11 +1887,11 @@ export default function ToolsScreen({
 
       setBatchProgress(null);
       console.log('🏷️ Markups created successfully');
-      showToast(`${createdIds.length} markupit loodud`, 'success');
+      showToast(t('tools:markup.created', { count: createdIds.length }), 'success');
     } catch (e: any) {
       console.error('Markup error:', e);
       setBatchProgress(null);
-      showToast(e.message || 'Viga markupite lisamisel', 'error');
+      showToast(e.message || t('tools:markup.createError'), 'error');
     } finally {
       setBoltLoading(false);
     }
@@ -1901,7 +1903,7 @@ export default function ToolsScreen({
     try {
       const selected = await api.viewer.getSelection();
       if (!selected || selected.length === 0) {
-        showToast('Vali mudelist detailid!', 'error');
+        showToast(t('tools:model.selectFromModel'), 'error');
         setKinnitustarvikudLoading(false);
         return;
       }
@@ -1916,7 +1918,7 @@ export default function ToolsScreen({
       }
 
       if (!modelId || allRuntimeIds.length === 0) {
-        showToast('Valitud objektidel puudub info', 'error');
+        showToast(t('tools:model.selectedNoInfo'), 'error');
         setKinnitustarvikudLoading(false);
         return;
       }
@@ -1994,14 +1996,14 @@ export default function ToolsScreen({
 
       if (markupsToCreate.length === 0) {
         setBatchProgress(null);
-        showToast('Kinnitustarvikuid washer count = 0 ei leitud', 'success');
+        showToast(t('tools:markup.fastenersNotFound'), 'success');
         setKinnitustarvikudLoading(false);
         return;
       }
 
       if (markupsToCreate.length > MAX_MARKUPS_PER_BATCH) {
         setBatchProgress(null);
-        showToast(`Liiga palju markupe (${markupsToCreate.length}). Max ${MAX_MARKUPS_PER_BATCH} korraga!`, 'error');
+        showToast(t('tools:markup.tooManyMarkups', { count: markupsToCreate.length, max: MAX_MARKUPS_PER_BATCH }), 'error');
         setKinnitustarvikudLoading(false);
         return;
       }
@@ -2031,11 +2033,11 @@ export default function ToolsScreen({
       }
 
       setBatchProgress(null);
-      showToast(`Loodud ${markupsToCreate.length} kinnitustarviku markupit`, 'success');
+      showToast(t('tools:markup.fastenersCreated', { count: markupsToCreate.length }), 'success');
     } catch (e: any) {
       console.error('Kinnitustarvikud markup error:', e);
       setBatchProgress(null);
-      showToast(e.message || 'Viga markupite lisamisel', 'error');
+      showToast(e.message || t('tools:markup.createError'), 'error');
     } finally {
       setKinnitustarvikudLoading(false);
     }
@@ -2047,19 +2049,19 @@ export default function ToolsScreen({
     try {
       const allMarkups = await api.markup?.getTextMarkups?.();
       if (!allMarkups || allMarkups.length === 0) {
-        showToast('Markupe pole', 'success');
+        showToast(t('tools:markup.noMarkups'), 'success');
         return;
       }
       const allIds = allMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
       if (allIds.length === 0) {
-        showToast('Markupe pole', 'success');
+        showToast(t('tools:markup.noMarkups'), 'success');
         return;
       }
       await api.markup?.removeMarkups?.(allIds);
-      showToast(`${allIds.length} markupit eemaldatud`, 'success');
+      showToast(t('tools:markup.removed', { count: allIds.length }), 'success');
     } catch (e: any) {
       console.error('Remove markups error:', e);
-      showToast(e.message || 'Viga markupite eemaldamisel', 'error');
+      showToast(e.message || t('tools:markup.removeError'), 'error');
     } finally {
       setRemoveLoading(false);
     }
@@ -2074,7 +2076,7 @@ export default function ToolsScreen({
 
       const selected = await api.viewer.getSelection();
       if (!selected || selected.length === 0) {
-        showToast('Vali mudelist detailid!', 'error');
+        showToast(t('tools:model.selectFromModel'), 'error');
         return;
       }
 
@@ -2086,7 +2088,7 @@ export default function ToolsScreen({
       }
 
       if (!modelId || allRuntimeIds.length === 0) {
-        showToast('Valitud objektidel puudub info', 'error');
+        showToast(t('tools:model.selectedNoInfo'), 'error');
         return;
       }
 
@@ -2257,10 +2259,10 @@ export default function ToolsScreen({
       const fileName = `${projectName}_poldid_${new Date().toISOString().slice(0, 10)}.xlsx`;
       XLSX.writeFile(wb, fileName);
 
-      showToast(`${exportRows.length} rida eksporditud${boltSummary.length > 0 ? ' + kokkuvõte' : ''}`, 'success');
+      showToast(t('common:tools.rowsExported', { count: exportRows.length }), 'success');
     } catch (e: any) {
       console.error('Export error:', e);
-      showToast(e.message || 'Viga eksportimisel', 'error');
+      showToast(e.message || t('tools:export.error'), 'error');
     } finally {
       setExportLoading(false);
     }
@@ -2273,7 +2275,7 @@ export default function ToolsScreen({
     try {
       const selected = await api.viewer.getSelection();
       if (!selected || selected.length === 0) {
-        showToast('Vali mudelist detailid!', 'error');
+        showToast(t('tools:model.selectFromModel'), 'error');
         return;
       }
 
@@ -2285,7 +2287,7 @@ export default function ToolsScreen({
       }
 
       if (!modelId || allRuntimeIds.length === 0) {
-        showToast('Valitud objektidel puudub info', 'error');
+        showToast(t('tools:model.selectedNoInfo'), 'error');
         return;
       }
 
@@ -2377,16 +2379,16 @@ export default function ToolsScreen({
 
       setBoltSummary(sortedSummary);
       if (sortedSummary.length === 0) {
-        showToast('Polte ei leitud (või washer count = 0)', 'error');
+        showToast(t('tools:markup.boltsNotFound'), 'error');
       } else if (sortedSummary.length > MAX_TABLE_DISPLAY_ROWS) {
-        showToast(`${sortedSummary.length} erinevat polti leitud (tabel >10 - ainult eksport)`, 'success');
+        showToast(t('tools:scan.foundBoltsExportOnly', { count: sortedSummary.length }), 'success');
       } else {
-        showToast(`${sortedSummary.length} erinevat polti leitud`, 'success');
+        showToast(t('tools:scan.foundBolts', { count: sortedSummary.length }), 'success');
       }
     } catch (e: any) {
       console.error('Scan error:', e);
       setBatchProgress(null);
-      showToast(e.message || 'Viga skanneerimisel', 'error');
+      showToast(e.message || t('tools:scan.error'), 'error');
     } finally {
       setScanLoading(false);
     }
@@ -2406,7 +2408,7 @@ export default function ToolsScreen({
     }
 
     await navigator.clipboard.writeText(text);
-    showToast(`${boltSummary.length} rida kopeeritud`, 'success');
+    showToast(t('tools:scan.rowsCopied', { count: boltSummary.length }), 'success');
   };
 
   // Calculate required width based on data content
@@ -2520,18 +2522,18 @@ export default function ToolsScreen({
             await navigator.clipboard.write([
               new ClipboardItem({ 'image/png': blob })
             ]);
-            showToast('Pilt kopeeritud lõikelauale', 'success');
+            showToast(t('tools:image.copiedToClipboard'), 'success');
           } catch {
             // Fallback: open in new window
             const url = URL.createObjectURL(blob);
             window.open(url, '_blank');
-            showToast('Pilt avatud uues aknas', 'success');
+            showToast(t('tools:image.openedInNewWindow'), 'success');
           }
         }
       }, 'image/png');
     } catch (e) {
       console.error('Error copying as image:', e);
-      showToast('Pildi kopeerimine ebaõnnestus', 'error');
+      showToast(t('tools:image.copyFailed'), 'error');
     }
   };
 
@@ -2549,17 +2551,17 @@ export default function ToolsScreen({
       link.download = `poldid_${new Date().toISOString().slice(0, 10)}.png`;
       link.href = dataUrl;
       link.click();
-      showToast('Pilt allalaaditud', 'success');
+      showToast(t('tools:image.downloaded'), 'success');
     } catch (e) {
       console.error('Error downloading image:', e);
-      showToast('Pildi allalaadimine ebaõnnestus', 'error');
+      showToast(t('tools:image.downloadFailed'), 'error');
     }
   };
 
   // Clear bolt summary results
   const handleClearResults = () => {
     setBoltSummary([]);
-    showToast('Tulemused tühjendatud', 'success');
+    showToast(t('tools:results.cleared'), 'success');
   };
 
   // Check if table display is allowed (max 10 rows)
@@ -4097,7 +4099,7 @@ export default function ToolsScreen({
                       setStepsMarkups(new Map());
                       setStepsCounter(0);
                       setStepsPrevSelection(new Set());
-                      showToast('Sammud eemaldatud', 'success');
+                      showToast(t('tools:markup.stepsRemoved'), 'success');
                     }}
                     style={{
                       display: 'flex',
