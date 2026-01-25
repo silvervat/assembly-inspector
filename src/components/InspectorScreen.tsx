@@ -132,8 +132,10 @@ export default function InspectorScreen({
     return titles[mode] || mode;
   };
 
-  // Poltide režiimis ei nõua assembly selection'i
-  const requiresAssemblySelection = inspectionMode !== 'poldid';
+  // Assembly selection nõue sõltub kontrollkavast JA režiimist
+  // Kui kontrollkava ütleb assembly_selection_mode = false, siis ei nõua
+  // Poltide režiim samuti ei nõua assembly selection'i
+  const [requiresAssemblySelection, setRequiresAssemblySelection] = useState(inspectionMode !== 'poldid');
   const [selectedObjects, setSelectedObjects] = useState<SelectedObject[]>([]);
   const [canInspect, setCanInspect] = useState(false);
   const [inspecting, setInspecting] = useState(false);
@@ -307,13 +309,17 @@ export default function InspectorScreen({
       // Lock the assembly mode so user can't change it during inspection
       setAssemblyModeLocked(true);
       setLockedAssemblyMode(targetMode);
-      console.log(`🔒 Assembly mode locked to: ${targetMode ? 'ON' : 'OFF'}`);
+      // Kui kontrollkava ütleb assembly OFF, siis ei nõua assembly selection'i
+      setRequiresAssemblySelection(targetMode);
+      console.log(`🔒 Assembly mode locked to: ${targetMode ? 'ON' : 'OFF'}, requiresAssemblySelection: ${targetMode}`);
     } else {
       // No plan assigned - unlock assembly mode
       setAssemblyModeLocked(false);
       setLockedAssemblyMode(null);
+      // Reset to default logic based on inspection mode
+      setRequiresAssemblySelection(inspectionMode !== 'poldid');
     }
-  }, [assignedPlan]);
+  }, [assignedPlan, inspectionMode]);
 
   // Poll to enforce locked assembly mode - re-apply if user changes it in Trimble UI
   useEffect(() => {
