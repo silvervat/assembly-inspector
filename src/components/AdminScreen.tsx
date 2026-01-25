@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink, FiUsers, FiEdit2, FiPlus, FiSave, FiCamera, FiVideo, FiTruck, FiAlertTriangle, FiBox, FiTarget, FiRotateCcw } from 'react-icons/fi';
+import { FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink, FiUsers, FiEdit2, FiPlus, FiSave, FiCamera, FiVideo, FiTruck, FiAlertTriangle, FiBox, FiTarget, FiRotateCcw, FiMapPin } from 'react-icons/fi';
 import { BsQrCode } from 'react-icons/bs';
 import QRCode from 'qrcode';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser } from '../supabase';
 import { clearMappingsCache } from '../contexts/PropertyMappingsContext';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
+import { belgianLambert72ToWGS84, gpsDistance } from '../utils/coordinateUtils';
 import * as XLSX from 'xlsx-js-style';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
@@ -471,6 +472,12 @@ export default function AdminScreen({
     positioned_at: string | null;
     positioned_by_name: string | null;
     markup_id: string | null;
+    // Calculated from model coordinates
+    model_x?: number;
+    model_y?: number;
+    model_z?: number;
+    calculated_lat?: number;
+    calculated_lng?: number;
   }
   const [positions, setPositions] = useState<DetailPosition[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(false);
@@ -3460,14 +3467,63 @@ export default function AdminScreen({
         .order('positioned_at', { ascending: false });
 
       if (error) throw error;
-      setPositions(data || []);
+
+      // Enrich positions with model coordinates and calculated GPS
+      const enrichedPositions: DetailPosition[] = [];
+      for (const pos of (data || [])) {
+        const enriched: DetailPosition = { ...pos };
+
+        // Try to get model coordinates for this object
+        try {
+          // Find original GUID from model objects
+          const { data: modelObj } = await supabase
+            .from('trimble_model_objects')
+            .select('guid_ifc')
+            .eq('trimble_project_id', projectId)
+            .ilike('guid_ifc', pos.guid)
+            .limit(1)
+            .maybeSingle();
+
+          const guidsToSearch = modelObj?.guid_ifc
+            ? [modelObj.guid_ifc, pos.guid]
+            : [pos.guid];
+
+          const foundMap = await findObjectsInLoadedModels(api, guidsToSearch);
+          const foundItem = foundMap.get(pos.guid.toLowerCase()) ||
+                           (modelObj?.guid_ifc ? foundMap.get(modelObj.guid_ifc.toLowerCase()) : undefined);
+
+          if (foundItem) {
+            // Get bounding box to find object position
+            const boundsArray = await api.viewer.getObjectBoundingBoxes(foundItem.modelId, [foundItem.runtimeId]);
+            const bbox = boundsArray?.[0]?.boundingBox;
+
+            if (bbox) {
+              // Model coordinates (center of bounding box) - Trimble uses meters
+              enriched.model_x = (bbox.min.x + bbox.max.x) / 2;
+              enriched.model_y = (bbox.min.y + bbox.max.y) / 2;
+              enriched.model_z = (bbox.min.z + bbox.max.z) / 2;
+
+              // Convert Belgian Lambert 72 to WGS84
+              const gps = belgianLambert72ToWGS84(enriched.model_x, enriched.model_y);
+              enriched.calculated_lat = gps.latitude;
+              enriched.calculated_lng = gps.longitude;
+            }
+          }
+        } catch (e) {
+          console.warn(`Could not get model coords for ${pos.guid}:`, e);
+        }
+
+        enrichedPositions.push(enriched);
+      }
+
+      setPositions(enrichedPositions);
     } catch (e: any) {
       console.error('Error loading positions:', e);
       setMessage(`Viga positsioonide laadimisel: ${e.message}`);
     } finally {
       setPositionsLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, api]);
 
   // Start QR scanner
   const startScanner = useCallback(async () => {
@@ -18068,22 +18124,77 @@ document.body.appendChild(div);`;
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: '600', fontSize: '14px', color: '#1f2937' }}>
                         {pos.assembly_mark || pos.guid?.substring(0, 12) + '...'}
                       </div>
+
+                      {/* Calculated GPS from model */}
+                      {pos.calculated_lat && pos.calculated_lng ? (
+                        <div style={{ fontSize: '11px', color: '#6366f1', marginTop: '4px' }}>
+                          <FiMapPin size={10} style={{ display: 'inline', marginRight: '4px' }} />
+                          Mudel: {pos.calculated_lat.toFixed(6)}, {pos.calculated_lng.toFixed(6)}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '11px', color: '#d1d5db', marginTop: '4px' }}>
+                          Mudeli koordinaate ei leitud
+                        </div>
+                      )}
+
+                      {/* Actual GPS from positioning */}
                       {pos.latitude && pos.longitude ? (
-                        <div style={{ fontSize: '12px', color: '#22c55e', marginTop: '4px' }}>
-                          📍 {pos.latitude.toFixed(6)}, {pos.longitude.toFixed(6)}
+                        <div style={{ fontSize: '11px', color: '#22c55e', marginTop: '2px' }}>
+                          📍 Plats: {pos.latitude.toFixed(6)}, {pos.longitude.toFixed(6)}
                           {pos.accuracy && <span style={{ color: '#6b7280' }}> (±{pos.accuracy.toFixed(0)}m)</span>}
                         </div>
                       ) : (
-                        <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px' }}>
-                          GPS puudub
+                        <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '2px' }}>
+                          Platsi GPS puudub
                         </div>
                       )}
+
+                      {/* Distance comparison */}
+                      {pos.calculated_lat && pos.calculated_lng && pos.latitude && pos.longitude && (
+                        <div style={{
+                          fontSize: '11px',
+                          marginTop: '4px',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          background: (() => {
+                            const dist = gpsDistance(
+                              { latitude: pos.calculated_lat!, longitude: pos.calculated_lng! },
+                              { latitude: pos.latitude!, longitude: pos.longitude! }
+                            );
+                            if (dist < 5) return '#dcfce7'; // Green - very close
+                            if (dist < 20) return '#fef9c3'; // Yellow - okay
+                            return '#fee2e2'; // Red - far
+                          })(),
+                          color: (() => {
+                            const dist = gpsDistance(
+                              { latitude: pos.calculated_lat!, longitude: pos.calculated_lng! },
+                              { latitude: pos.latitude!, longitude: pos.longitude! }
+                            );
+                            if (dist < 5) return '#15803d';
+                            if (dist < 20) return '#a16207';
+                            return '#dc2626';
+                          })()
+                        }}>
+                          Erinevus: {gpsDistance(
+                            { latitude: pos.calculated_lat!, longitude: pos.calculated_lng! },
+                            { latitude: pos.latitude!, longitude: pos.longitude! }
+                          ).toFixed(1)}m
+                          {gpsDistance(
+                            { latitude: pos.calculated_lat!, longitude: pos.calculated_lng! },
+                            { latitude: pos.latitude!, longitude: pos.longitude! }
+                          ) < 5 ? ' ✓' : gpsDistance(
+                            { latitude: pos.calculated_lat!, longitude: pos.calculated_lng! },
+                            { latitude: pos.latitude!, longitude: pos.longitude! }
+                          ) > 20 ? ' ⚠️' : ''}
+                        </div>
+                      )}
+
                       {pos.positioned_at && (
-                        <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '2px' }}>
+                        <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '4px' }}>
                           {new Date(pos.positioned_at).toLocaleString('et-EE')}
                           {pos.positioned_by_name && ` • ${pos.positioned_by_name}`}
                         </div>
