@@ -1157,10 +1157,10 @@ export default function InspectionPlanScreen({
 
     for (const item of filtered) {
       const typeId = item.inspection_type_id || 'unknown';
-      const typeName = item.inspection_type?.name || 'Tüüp määramata';
+      const typeName = item.inspection_type?.name || 'Kategooria määramata';
       const typeColor = item.inspection_type?.color;
       const categoryId = item.category_id || 'unknown';
-      const categoryName = item.category?.name || 'Kategooria määramata';
+      const categoryName = item.category?.name || 'Tüüp määramata';
 
       if (!typeMap.has(typeId)) {
         typeMap.set(typeId, {
@@ -1391,7 +1391,7 @@ export default function InspectionPlanScreen({
 
           {/* Inspection Type Select */}
           <div className="plan-type-select">
-            <label>Inspektsiooni tüüp: *</label>
+            <label>Inspektsiooni kategooria: *</label>
             <div className="type-grid">
               {inspectionTypes.map(type => (
                 <button
@@ -1414,21 +1414,21 @@ export default function InspectionPlanScreen({
 
           {/* Category Select - REQUIRED */}
           <div className="plan-category-select">
-            <label>Kategooria: *</label>
+            <label>Inspektsiooni tüüp: *</label>
             {filteredCategories.length > 0 ? (
               <select
                 value={selectedCategoryId}
                 onChange={(e) => setSelectedCategoryId(e.target.value)}
                 className={`category-dropdown ${!selectedCategoryId ? 'required-empty' : ''}`}
               >
-                <option value="">-- Vali kategooria --</option>
+                <option value="">-- Vali inspektsiooni tüüp --</option>
                 {filteredCategories.map(cat => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
             ) : (
               <div className="category-hint">
-                {selectedTypeId ? '⚠️ Sellel tüübil pole kategooriaid' : 'Vali esmalt inspektsiooni tüüp'}
+                {selectedTypeId ? '⚠️ Sellel kategoorial pole inspektsiooni tüüpe' : 'Vali esmalt inspektsiooni kategooria'}
               </div>
             )}
           </div>

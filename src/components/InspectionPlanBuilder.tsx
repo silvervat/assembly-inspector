@@ -207,14 +207,14 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
           .from('inspection_types')
           .insert(typeData);
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Tüüp loodud!' });
+        setMessage({ type: 'success', text: 'Kategooria loodud!' });
       } else {
         const { error } = await supabase
           .from('inspection_types')
           .update(typeData)
           .eq('id', editingType.id);
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Tüüp uuendatud!' });
+        setMessage({ type: 'success', text: 'Kategooria uuendatud!' });
       }
 
       await loadData();
@@ -229,7 +229,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
   };
 
   const deleteType = async (typeId: string) => {
-    if (!confirm('Kas oled kindel? See kustutab ka kõik seotud kategooriad ja kontrollpunktid.')) {
+    if (!confirm('Kas oled kindel? See kustutab ka kõik seotud tüübid ja kontrollpunktid.')) {
       return;
     }
 
@@ -239,7 +239,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
         .delete()
         .eq('id', typeId);
       if (error) throw error;
-      setMessage({ type: 'success', text: 'Tüüp kustutatud' });
+      setMessage({ type: 'success', text: 'Kategooria kustutatud' });
       await loadData();
     } catch (e) {
       console.error('Error deleting type:', e);
@@ -300,14 +300,14 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
           .from('inspection_categories')
           .insert(categoryData);
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Kategooria loodud!' });
+        setMessage({ type: 'success', text: 'Tüüp loodud!' });
       } else {
         const { error } = await supabase
           .from('inspection_categories')
           .update(categoryData)
           .eq('id', editingCategory.id);
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Kategooria uuendatud!' });
+        setMessage({ type: 'success', text: 'Tüüp uuendatud!' });
       }
 
       await loadData();
@@ -332,7 +332,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
         .delete()
         .eq('id', categoryId);
       if (error) throw error;
-      setMessage({ type: 'success', text: 'Kategooria kustutatud' });
+      setMessage({ type: 'success', text: 'Tüüp kustutatud' });
       await loadData();
     } catch (e) {
       console.error('Error deleting category:', e);
@@ -559,7 +559,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
       <div className="builder-header">
         <div className="header-left">
           <h1>Kontrollkavade haldus</h1>
-          <span className="subtitle">Tüübid, kategooriad ja kontrollpunktid</span>
+          <span className="subtitle">Kategooriad, tüübid ja kontrollpunktid</span>
         </div>
         <div className="header-right">
           <button className="close-btn" onClick={onClose}>
@@ -584,7 +584,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
             <button
               className="add-btn"
               onClick={() => openTypeEditor()}
-              title="Lisa uus tüüp"
+              title="Lisa uus kategooria"
             >
               <FiPlus size={16} />
             </button>
@@ -686,7 +686,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                       className="add-category-btn"
                       onClick={() => openCategoryEditor(type.id)}
                     >
-                      <FiPlus size={12} /> Lisa kategooria
+                      <FiPlus size={12} /> Lisa tüüp
                     </button>
                   </div>
                 )}
@@ -695,9 +695,9 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
 
             {types.filter(t => t.is_active).length === 0 && (
               <div className="empty-tree">
-                <p>Kontrollikavu tüüpe pole veel loodud.</p>
+                <p>Kontrollikava kategooriaid pole veel loodud.</p>
                 <button onClick={() => openTypeEditor()}>
-                  <FiPlus size={16} /> Loo esimene tüüp
+                  <FiPlus size={16} /> Loo esimene kategooria
                 </button>
               </div>
             )}
@@ -710,7 +710,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
             <div className="editor-placeholder">
               <FiSettings size={48} />
               <h3>Vali element muutmiseks</h3>
-              <p>Vali vasakult puust tüüp, kategooria või kontrollpunkt, et seda muuta.</p>
+              <p>Vali vasakult puust kategooria, tüüp või kontrollpunkt, et seda muuta.</p>
             </div>
           )}
 
@@ -718,7 +718,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
           {editMode === 'type' && editingType && (
             <div className="editor-panel">
               <div className="editor-header">
-                <h2>{editingType.isNew ? 'Uus kontrollitüüp' : 'Muuda kontrollitüüpi'}</h2>
+                <h2>{editingType.isNew ? 'Uus inspektsiooni kategooria' : 'Muuda kategooriat'}</h2>
               </div>
 
               <div className="editor-form">
@@ -808,7 +808,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
           {editMode === 'category' && editingCategory && (
             <div className="editor-panel">
               <div className="editor-header">
-                <h2>{editingCategory.isNew ? 'Uus kategooria' : 'Muuda kategooriat'}</h2>
+                <h2>{editingCategory.isNew ? 'Uus inspektsiooni tüüp' : 'Muuda tüüpi'}</h2>
               </div>
 
               <div className="editor-form">
@@ -838,7 +838,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                   <textarea
                     value={editingCategory.description || ''}
                     onChange={(e) => setEditingCategory({ ...editingCategory, description: e.target.value })}
-                    placeholder="Kirjelda kategooria sisu..."
+                    placeholder="Kirjelda tüübi sisu..."
                     rows={2}
                   />
                 </div>
@@ -865,9 +865,9 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                       checked={editingCategory.is_required ?? false}
                       onChange={(e) => setEditingCategory({ ...editingCategory, is_required: e.target.checked })}
                     />
-                    Kohustuslik kategooria
+                    Kohustuslik tüüp
                   </label>
-                  <span className="help-text">Kõik selle kategooria kontrollpunktid tuleb läbida</span>
+                  <span className="help-text">Kõik selle tüübi kontrollpunktid tuleb läbida</span>
                 </div>
 
                 <div className="form-row checkbox-row">

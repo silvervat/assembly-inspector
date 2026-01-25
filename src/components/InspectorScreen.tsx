@@ -2630,7 +2630,7 @@ export default function InspectorScreen({
           <div className="plan-card-content">
             {assignedPlan.inspection_type && (
               <div className="plan-card-row">
-                <span className="plan-card-label">Tüüp:</span>
+                <span className="plan-card-label">Kategooria:</span>
                 <span className="plan-card-value type-value">
                   {assignedPlan.inspection_type.name}
                 </span>
@@ -2638,7 +2638,7 @@ export default function InspectorScreen({
             )}
             {assignedPlan.category && (
               <div className="plan-card-row">
-                <span className="plan-card-label">Kategooria:</span>
+                <span className="plan-card-label">Tüüp:</span>
                 <span className="plan-card-value">{assignedPlan.category.name}</span>
               </div>
             )}

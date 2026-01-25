@@ -17891,36 +17891,40 @@ button.stat-toggle.off:hover {
   gap: 4px;
 }
 
-/* Checkpoints List */
+/* Checkpoints List - Compact */
 .checkpoints-list {
-  padding: 8px;
+  padding: 4px;
 }
 
 .checkpoint-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: 8px;
+  padding: 6px 8px;
   background: white;
   border: 1px solid var(--modus-border);
-  border-radius: 6px;
-  margin-bottom: 8px;
+  border-radius: 4px;
+  margin-bottom: 4px;
 }
 
 .checkpoint-card:last-child {
   margin-bottom: 0;
 }
 
+.checkpoint-card:hover {
+  background: var(--modus-bg-secondary);
+}
+
 .checkpoint-order {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--modus-primary-selected);
   color: var(--modus-primary);
   border-radius: 50%;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
   flex-shrink: 0;
 }
@@ -17928,7 +17932,7 @@ button.stat-toggle.off:hover {
 .checkpoint-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex: 1;
   min-width: 0;
 }
@@ -17936,54 +17940,71 @@ button.stat-toggle.off:hover {
 .checkpoint-info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
 }
 
 .checkpoint-name {
-  display: block;
   font-weight: 500;
+  font-size: 12px;
   color: var(--modus-text-primary);
-  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
 }
 
 .checkpoint-path {
-  display: block;
-  font-size: 11px;
+  font-size: 10px;
   color: var(--modus-text-tertiary);
-  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
 }
 
 .checkpoint-badges {
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
+  gap: 3px;
+  flex-wrap: nowrap;
 }
 
 .checkpoint-responses {
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
+  gap: 2px;
+  flex-wrap: nowrap;
 }
 
 .response-badge {
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 9px;
   color: white;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .checkpoint-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
 }
 
-/* Badges */
+.checkpoint-actions .btn-icon {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+}
+
+/* Badges - Compact */
 .badge {
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-size: 10px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 9px;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .badge.system {
