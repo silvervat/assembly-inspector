@@ -180,6 +180,11 @@ export interface InspectionPlanItem {
   object_name?: string;
   object_type?: string;
   product_name?: string;
+  // Asukoha andmed
+  cast_unit_bottom_elevation?: string;
+  cast_unit_top_elevation?: string;
+  cast_unit_position_code?: string;
+  parent_assembly_mark?: string;
   // Inspektsiooni seaded
   inspection_type_id?: string;
   category_id?: string;
