@@ -1,1 +1,97 @@
-{}
+{
+  "title": "Paigaldusgraafik",
+  "weekdays": {
+    "sunday": "Pühapäev",
+    "monday": "Esmaspäev",
+    "tuesday": "Teisipäev",
+    "wednesday": "Kolmapäev",
+    "thursday": "Neljapäev",
+    "friday": "Reede",
+    "saturday": "Laupäev"
+  },
+  "weekdaysShort": {
+    "sun": "Püh",
+    "mon": "Esm",
+    "tue": "Tei",
+    "wed": "Kol",
+    "thu": "Nel",
+    "fri": "Ree",
+    "sat": "Lau"
+  },
+  "months": {
+    "january": "Jaanuar",
+    "february": "Veebruar",
+    "march": "Märts",
+    "april": "Aprill",
+    "may": "Mai",
+    "june": "Juuni",
+    "july": "Juuli",
+    "august": "August",
+    "september": "September",
+    "october": "Oktoober",
+    "november": "November",
+    "december": "Detsember"
+  },
+  "resources": {
+    "crane": "Kraana",
+    "forklift": "Teleskooplaadur",
+    "manual": "Käsitsi",
+    "poomtostuk": "Korvtõstuk",
+    "kaartostuk": "Käärtõstuk",
+    "troppija": "Troppija",
+    "monteerija": "Monteerija",
+    "keevitaja": "Keevitaja",
+    "count": "Arv",
+    "days": "Päevad",
+    "resource": "Ressurss"
+  },
+  "columns": {
+    "nr": "Nr",
+    "date": "Kuupäev",
+    "day": "Päev",
+    "product": "Toode",
+    "deliveryDate": "Tarnekuupäev",
+    "crane": "Kraana",
+    "forklift": "Telesk.",
+    "poomtostuk": "Korvtõstuk",
+    "kaartostuk": "Käärtõstuk",
+    "troppija": "Troppija",
+    "monteerija": "Monteerija",
+    "keevitaja": "Keevitaja",
+    "manual": "Käsitsi",
+    "createdAt": "Sisestatud",
+    "comments": "Kommentaarid",
+    "items": "Detaile",
+    "cumulative": "Kumulatiivne"
+  },
+  "actions": {
+    "addItem": "Lisa element",
+    "removeItem": "Eemalda",
+    "moveItem": "Liiguta",
+    "colorByDate": "Värvi kuupäeva järgi",
+    "exportExcel": "Ekspordi Excel",
+    "importExcel": "Impordi Excel",
+    "settings": "Seaded",
+    "refresh": "Värskenda",
+    "selectInModel": "Vali mudelis",
+    "zoomTo": "Suumi"
+  },
+  "messages": {
+    "loading": "Laadimine...",
+    "saving": "Salvestamine...",
+    "saved": "Salvestatud",
+    "error": "Viga",
+    "noData": "Andmeid pole",
+    "itemsAdded": "{{count}} elementi lisatud",
+    "itemsRemoved": "{{count}} elementi eemaldatud"
+  },
+  "excel": {
+    "sheetName": "Graafik",
+    "schedule": "Graafik"
+  },
+  "calendar": {
+    "today": "Täna",
+    "week": "Nädal",
+    "month": "Kuu"
+  }
+}
