@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, Preassembly, InstallMethods, InstallMethodType, InstallationMonthLock, WorkRecordType } from '../supabase';
 import { FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare, FiLock, FiUnlock, FiMoreVertical, FiDownload, FiPackage, FiTool, FiAlertTriangle, FiAlertCircle, FiCamera, FiUpload, FiImage, FiBookmark } from 'react-icons/fi';
@@ -390,6 +391,8 @@ export default function InstallationsScreen({
   onColorModelWhite,
   onOpenPartDatabase
 }: InstallationsScreenProps) {
+  const { t } = useTranslation(['common', 'installation']);
+
   // Property mappings for this project
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
 
@@ -809,10 +812,10 @@ export default function InstallationsScreen({
     try {
       await (api.viewer as any).setSettings?.({ assemblySelection: true });
       setAssemblySelectionEnabled(true);
-      setMessage('Assembly Selection sisse lülitatud');
+      setMessage(t('installation:screen.assemblySelectionEnabled'));
     } catch (e) {
       console.error('Failed to enable assembly selection:', e);
-      setMessage('Viga assembly selection sisse lülitamisel');
+      setMessage(t('installation:screen.assemblySelectionError'));
     }
   };
 
@@ -1757,7 +1760,7 @@ export default function InstallationsScreen({
   // Lock a month (admin only)
   const lockMonth = async (monthKey: string) => {
     if (user.role !== 'admin') {
-      setMessage('Ainult administraatorid saavad kuud lukustada');
+      setMessage(t('installation:screen.onlyAdminsCanLockMonth'));
       return;
     }
 
@@ -1777,10 +1780,10 @@ export default function InstallationsScreen({
       if (error) throw error;
 
       setMonthLocks(prev => new Map(prev).set(monthKey, data));
-      setMessage(`🔒 Kuu ${getMonthLabel(monthKey + '-01')} on lukustatud`);
+      setMessage(t('installation:screen.dayLocked', { day: getMonthLabel(monthKey + '-01') }));
     } catch (e) {
       console.error('Error locking month:', e);
-      setMessage('Viga kuu lukustamisel');
+      setMessage(t('installation:screen.errorLockingMonth'));
     }
     setMonthMenuOpen(null);
   };
@@ -1788,7 +1791,7 @@ export default function InstallationsScreen({
   // Unlock a month (admin only)
   const unlockMonth = async (monthKey: string) => {
     if (user.role !== 'admin') {
-      setMessage('Ainult administraatorid saavad kuud avada');
+      setMessage(t('installation:screen.onlyAdminsCanUnlockMonth'));
       return;
     }
 
@@ -1830,10 +1833,10 @@ export default function InstallationsScreen({
         return newMap;
       });
 
-      setMessage(`🔓 Kuu ${getMonthLabel(monthKey + '-01')} on avatud (kõik päevade lukud eemaldatud)`);
+      setMessage(t('installation:screen.monthUnlocked', { month: getMonthLabel(monthKey + '-01') }));
     } catch (e) {
       console.error('Error unlocking month:', e);
-      setMessage('Viga kuu avamisel');
+      setMessage(t('installation:screen.errorUnlockingMonth'));
     }
     setMonthMenuOpen(null);
   };
@@ -1853,13 +1856,13 @@ export default function InstallationsScreen({
   // Lock a day
   const lockDay = async (dayKey: string) => {
     if (user.role !== 'admin') {
-      setMessage('Ainult administraatorid saavad päeva lukustada');
+      setMessage(t('installation:screen.onlyAdminsCanLockDay'));
       return;
     }
 
     const monthKey = dayKey.substring(0, 7);
     if (monthLocks.has(monthKey)) {
-      setMessage('Kuu on juba lukus');
+      setMessage(t('installation:screen.monthAlreadyLocked'));
       return;
     }
 
@@ -1877,10 +1880,10 @@ export default function InstallationsScreen({
       if (error) throw error;
 
       setDayLocks(prev => new Map(prev).set(dayKey, true));
-      setMessage(`🔒 Päev ${dayKey} on lukustatud`);
+      setMessage(t('installation:screen.dayLocked', { day: dayKey }));
     } catch (e) {
       console.error('Error locking day:', e);
-      setMessage('Viga päeva lukustamisel');
+      setMessage(t('installation:screen.errorLockingDay'));
     }
     setDayMenuOpen(null);
   };
@@ -1888,7 +1891,7 @@ export default function InstallationsScreen({
   // Unlock a day
   const unlockDay = async (dayKey: string) => {
     if (user.role !== 'admin') {
-      setMessage('Ainult administraatorid saavad päeva avada');
+      setMessage(t('installation:screen.onlyAdminsCanUnlockDay'));
       return;
     }
 
@@ -1907,10 +1910,10 @@ export default function InstallationsScreen({
         newMap.delete(dayKey);
         return newMap;
       });
-      setMessage(`🔓 Päev ${dayKey} on avatud`);
+      setMessage(t('installation:screen.dayUnlocked', { day: dayKey }));
     } catch (e) {
       console.error('Error unlocking day:', e);
-      setMessage('Viga päeva avamisel');
+      setMessage(t('installation:screen.errorUnlockingDay'));
     }
     setDayMenuOpen(null);
   };
@@ -1920,7 +1923,7 @@ export default function InstallationsScreen({
     if (!editDayModalDate || !editDayModalType) return;
 
     if (isDayLocked(editDayModalDate)) {
-      setMessage('See päev on lukustatud');
+      setMessage(t('installation:screen.dayIsLocked'));
       setSavingEditDay(false);
       return;
     }
@@ -1953,7 +1956,7 @@ export default function InstallationsScreen({
       // Upload photos if any
       let photoUrls: string[] = [];
       if (editDayPhotos.length > 0) {
-        setMessage('Laadin üles pilte...');
+        setMessage(t('installation:screen.uploadingPhotos'));
         const dateStr = editDayModalDate.replace(/-/g, '');
         photoUrls = await uploadPhotos(editDayPhotos, `paigaldus_bulk_${dateStr}_${projectId}`);
       }
@@ -2001,7 +2004,7 @@ export default function InstallationsScreen({
 
       if (error) throw error;
 
-      setMessage(`✓ Uuendatud ${editDayModalItemCount} detaili`);
+      setMessage(t('installation:screen.updatedDetails', { count: editDayModalItemCount }));
 
       // Reload data
       if (editDayModalType === 'installation') {
@@ -2023,7 +2026,7 @@ export default function InstallationsScreen({
       setEditDayPhotos([]);
     } catch (e) {
       console.error('Error updating day:', e);
-      setMessage('Viga päeva muutmisel');
+      setMessage(t('installation:screen.errorChangingDay'));
     } finally {
       setSavingEditDay(false);
     }
@@ -2121,7 +2124,7 @@ export default function InstallationsScreen({
     // Download
     const fileName = `Paigaldused_${month.monthLabel.replace(' ', '_')}.xlsx`;
     XLSX.writeFile(wb, fileName);
-    setMessage(`✓ Eksporditud: ${fileName}`);
+    setMessage(t('installation:screen.exported', { fileName }));
     setMonthMenuOpen(null);
   };
 
@@ -2814,7 +2817,7 @@ export default function InstallationsScreen({
       }
 
       if (uninstalledGuids.length === 0) {
-        setMessage('Kõik preassembly detailid on juba paigaldatud');
+        setMessage(t('installation:screen.allPreassemblyInstalled'));
         setColoringInProgress(false);
         return;
       }
@@ -2892,7 +2895,7 @@ export default function InstallationsScreen({
       }
 
       const total = Object.values(preassemblyByModel).reduce((sum, arr) => sum + arr.length, 0);
-      setMessage(`Värvitud ${total} paigaldamata preassembly detaili`);
+      setMessage(t('installation:screen.coloredPreassemblyDetails', { count: total }));
 
     } catch (e) {
       console.error('[PREASSEMBLY] Error coloring uninstalled:', e);
@@ -2911,12 +2914,12 @@ export default function InstallationsScreen({
     });
 
     if (uninstalled.length === 0) {
-      setMessage('Kõik selle kuu preassembly detailid on juba paigaldatud');
+      setMessage(t('installation:screen.allMonthPreassemblyInstalled'));
       return;
     }
 
     await selectPreassemblies(uninstalled);
-    setMessage(`Valitud ${uninstalled.length} paigaldamata detaili`);
+    setMessage(t('installation:screen.selectedUninstalledDetails', { count: uninstalled.length }));
   };
 
   // Toggle color by day - colors installations/preassemblies by day with unique colors
@@ -2947,7 +2950,7 @@ export default function InstallationsScreen({
     }
 
     setColoringInProgress(true);
-    setMessage('Värvin päevade järgi...');
+    setMessage(t('installation:screen.coloringByDays'));
 
     try {
       // For preassembly mode, color preassemblies; for installation mode, color installations
@@ -3019,16 +3022,16 @@ export default function InstallationsScreen({
             { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
           );
           coloredCount += runtimeIds.length;
-          setMessage(`Värvin päevad... ${coloredCount}/${guids.length}`);
+          setMessage(t('installation:screen.coloringDaysProgress', { colored: coloredCount, total: guids.length }));
         }
       }
 
       console.log(`[DAY] DONE! Total colored: ${coloredCount}`);
       setColorByDay(true);
-      setMessage(`✓ Värvitud ${coloredCount} detaili päevade järgi`);
+      setMessage(t('installation:screen.coloredByDays', { count: coloredCount }));
     } catch (e) {
       console.error('Error coloring by day:', e);
-      setMessage('Viga värvimisel');
+      setMessage(t('installation:screen.coloringError'));
     } finally {
       setColoringInProgress(false);
     }
@@ -3062,7 +3065,7 @@ export default function InstallationsScreen({
     }
 
     setColoringInProgress(true);
-    setMessage('Värvin kuude järgi...');
+    setMessage(t('installation:screen.coloringByMonths'));
 
     try {
       // For preassembly mode, color preassemblies; for installation mode, color installations
@@ -3127,15 +3130,15 @@ export default function InstallationsScreen({
             { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
           );
           coloredCount += runtimeIds.length;
-          setMessage(`Värvin kuud... ${coloredCount}/${guids.length}`);
+          setMessage(t('installation:screen.coloringMonthsProgress', { colored: coloredCount, total: guids.length }));
         }
       }
 
       setColorByMonth(true);
-      setMessage(`✓ Värvitud ${coloredCount} detaili kuude järgi`);
+      setMessage(t('installation:screen.coloredByMonths', { count: coloredCount }));
     } catch (e) {
       console.error('Error coloring by month:', e);
-      setMessage('Viga värvimisel');
+      setMessage(t('installation:screen.coloringError'));
     } finally {
       setColoringInProgress(false);
     }
@@ -3261,19 +3264,19 @@ export default function InstallationsScreen({
   const saveInstallation = async () => {
     // Check assembly selection first
     if (!assemblySelectionEnabled) {
-      setMessage('Assembly Selection peab olema sisse lülitatud!');
+      setMessage(t('installation:screen.assemblySelectionRequired'));
       return;
     }
 
     // Allow saving if either selectedObjects OR tempList has items
     if (selectedObjects.length === 0 && tempList.size === 0) {
-      setMessage('Vali esmalt detail(id) mudelilt või lisa detaile ajutisse nimekirja');
+      setMessage(t('installation:screen.selectDetailsFirst'));
       return;
     }
 
     // Validate monteerijad (mandatory)
     if (monteerijad.length === 0) {
-      setMessage('Lisa vähemalt üks monteerija!');
+      setMessage(t('installation:screen.addAtLeastOneMonteerija'));
       return;
     }
 
@@ -3281,7 +3284,7 @@ export default function InstallationsScreen({
     const monthKey = getMonthKey(installDate);
     if (isMonthLocked(monthKey) && user.role !== 'admin') {
       const lockInfo = getMonthLockInfo(monthKey);
-      setMessage(`🔒 Kuu ${monthKey} on lukustatud (${lockInfo?.locked_by_name || lockInfo?.locked_by || 'administraatori poolt'})`);
+      setMessage(t('installation:screen.monthLockedBy', { month: monthKey, by: lockInfo?.locked_by_name || lockInfo?.locked_by || t('installation:screen.lockedByAdmin') }));
       return;
     }
 
@@ -3331,7 +3334,7 @@ export default function InstallationsScreen({
 
     // Check if there's ANYTHING to save (from selection OR tempList)
     if (newObjects.length === 0 && tempListGuidsToAdd.length === 0) {
-      setMessage('Kõik valitud detailid on juba paigaldatud');
+      setMessage(t('installation:screen.allSelectedAlreadyInstalled'));
       return;
     }
 
@@ -3385,7 +3388,7 @@ export default function InstallationsScreen({
       // Upload photos if any
       let photoUrls: string[] = [];
       if (formPhotos.length > 0) {
-        setMessage('Laadin üles pilte...');
+        setMessage(t('installation:screen.uploadingPhotos'));
         const dateStr = installDate.split('T')[0].replace(/-/g, '');
         photoUrls = await uploadPhotos(formPhotos, `paigaldus_${dateStr}_${projectId}`);
       }
@@ -3429,13 +3432,13 @@ export default function InstallationsScreen({
 
       if (error) {
         if (error.code === '23505') {
-          setMessage('Mõned detailid on juba paigaldatud');
+          setMessage(t('installation:screen.someAlreadyInstalled'));
         } else {
           throw error;
         }
       } else {
-        const skippedMsg = totalSkipped > 0 ? ` (${totalSkipped} juba paigaldatud jäeti vahele)` : '';
-        setMessage(`${allObjectsToSave.length} detail(i) edukalt paigaldatud!${skippedMsg}`);
+        const skippedMsg = totalSkipped > 0 ? ` (${totalSkipped} ${t('common:actions.skipped')})` : '';
+        setMessage(t('installation:screen.detailsSuccessfullyInstalled', { count: allObjectsToSave.length }) + skippedMsg);
         setNotes('');
         // Don't reset monteerijad and method - keep them for next installation
 
@@ -3465,7 +3468,7 @@ export default function InstallationsScreen({
       }
     } catch (e) {
       console.error('Error saving installation:', e);
-      setMessage('Viga paigalduse salvestamisel');
+      setMessage(t('installation:screen.errorSavingInstallation'));
     } finally {
       setSaving(false);
     }
@@ -3475,19 +3478,19 @@ export default function InstallationsScreen({
   const savePreassembly = async () => {
     // Check assembly selection first
     if (!assemblySelectionEnabled) {
-      setMessage('Assembly Selection peab olema sisse lülitatud!');
+      setMessage(t('installation:screen.assemblySelectionRequired'));
       return;
     }
 
     // Allow saving if either selectedObjects OR tempList has items
     if (selectedObjects.length === 0 && tempList.size === 0) {
-      setMessage('Vali esmalt detail(id) mudelilt või lisa detaile ajutisse nimekirja');
+      setMessage(t('installation:screen.selectDetailsFirst'));
       return;
     }
 
     // Validate monteerijad (mandatory)
     if (monteerijad.length === 0) {
-      setMessage('Lisa vähemalt üks monteerija!');
+      setMessage(t('installation:screen.addAtLeastOneMonteerija'));
       return;
     }
 
@@ -3590,9 +3593,9 @@ export default function InstallationsScreen({
     // Check if there's ANYTHING to save
     if (newObjects.length === 0 && tempListGuidsToAdd.length === 0) {
       if (alreadyPreassembled.length > 0) {
-        setMessage('Kõik valitud detailid on juba preassembly listis');
+        setMessage(t('installation:screen.allSelectedAlreadyInPreassembly'));
       } else {
-        setMessage('Pole uusi detaile lisamiseks');
+        setMessage(t('installation:screen.noNewDetailsToAdd'));
       }
       return;
     }
@@ -3647,7 +3650,7 @@ export default function InstallationsScreen({
       // Upload photos if any
       let photoUrls: string[] = [];
       if (formPhotos.length > 0) {
-        setMessage('Laadin üles pilte...');
+        setMessage(t('installation:screen.uploadingPhotos'));
         const dateStr = installDate.split('T')[0].replace(/-/g, '');
         photoUrls = await uploadPhotos(formPhotos, `preassembly_${dateStr}_${projectId}`);
       }
@@ -3691,13 +3694,13 @@ export default function InstallationsScreen({
 
       if (error) {
         if (error.code === '23505') {
-          setMessage('Mõned detailid on juba preassembly listis');
+          setMessage(t('installation:screen.someAlreadyInPreassembly'));
         } else {
           throw error;
         }
       } else {
-        const skippedMsg = totalSkipped > 0 ? ` (${totalSkipped} juba olemas jäeti vahele)` : '';
-        setMessage(`${allObjectsToSave.length} detail(i) edukalt preassembly lisatud!${skippedMsg}`);
+        const skippedMsg = totalSkipped > 0 ? ` (${totalSkipped} ${t('common:actions.skipped')})` : '';
+        setMessage(t('installation:screen.detailsSuccessfullyAddedToPreassembly', { count: allObjectsToSave.length }) + skippedMsg);
         setNotes('');
 
         // Clear photos after successful save
@@ -3734,7 +3737,7 @@ export default function InstallationsScreen({
       }
     } catch (e) {
       console.error('Error saving preassembly:', e);
-      setMessage('Viga preassembly salvestamisel');
+      setMessage(t('installation:screen.errorSavingPreassembly'));
     } finally {
       setSaving(false);
     }
@@ -3748,7 +3751,7 @@ export default function InstallationsScreen({
     setPreassemblyConfirm(null);
 
     if (objectsToSave.length === 0) {
-      setMessage('Pole detaile lisamiseks');
+      setMessage(t('installation:screen.noDetailsToAdd'));
       return;
     }
 
@@ -3806,12 +3809,12 @@ export default function InstallationsScreen({
 
       if (error) {
         if (error.code === '23505') {
-          setMessage('Mõned detailid on juba preassembly listis');
+          setMessage(t('installation:screen.someAlreadyInPreassembly'));
         } else {
           throw error;
         }
       } else {
-        setMessage(`${objectsToSave.length} detail(i) edukalt preassembly lisatud!`);
+        setMessage(t('installation:screen.detailsSuccessfullyAddedToPreassembly', { count: objectsToSave.length }));
         setNotes('');
 
         // Reload data
@@ -3841,7 +3844,7 @@ export default function InstallationsScreen({
       }
     } catch (e) {
       console.error('Error saving preassembly:', e);
-      setMessage('Viga preassembly salvestamisel');
+      setMessage(t('installation:screen.errorSavingPreassembly'));
     } finally {
       setSaving(false);
     }
@@ -3860,7 +3863,7 @@ export default function InstallationsScreen({
         .filter((guid): guid is string => !!guid);
 
       if (guids.length === 0) {
-        setMessage('Valitud detailidel pole GUID-e');
+        setMessage(t('installation:screen.selectedGuidsEmpty'));
         return;
       }
 
@@ -3890,13 +3893,13 @@ export default function InstallationsScreen({
 
       if (modelObjectIds.length > 0) {
         await api.viewer.setSelection({ modelObjectIds }, 'set');
-        setMessage(`Valitud ${items.length} detaili`);
+        setMessage(t('installation:screen.selectedDetails', { count: items.length }));
       } else {
-        setMessage('Detaile ei leitud mudelist');
+        setMessage(t('installation:screen.detailsNotFoundInModel'));
       }
     } catch (e) {
       console.error('Error selecting installations:', e);
-      setMessage('Viga detailide valimisel');
+      setMessage(t('installation:screen.errorSelectingDetails'));
     }
   };
 
@@ -3912,7 +3915,7 @@ export default function InstallationsScreen({
         .filter((guid): guid is string => !!guid);
 
       if (guids.length === 0) {
-        setMessage('Valitud detailidel pole GUID-e');
+        setMessage(t('installation:screen.selectedGuidsEmpty'));
         return;
       }
 
@@ -3940,13 +3943,13 @@ export default function InstallationsScreen({
 
       if (modelObjectIds.length > 0) {
         await api.viewer.setSelection({ modelObjectIds }, 'set');
-        setMessage(`Valitud ${items.length} detaili`);
+        setMessage(t('installation:screen.selectedDetails', { count: items.length }));
       } else {
-        setMessage('Detaile ei leitud mudelist');
+        setMessage(t('installation:screen.detailsNotFoundInModel'));
       }
     } catch (e) {
       console.error('Error selecting preassemblies:', e);
-      setMessage('Viga detailide valimisel');
+      setMessage(t('installation:screen.errorSelectingDetails'));
     }
   };
 
@@ -4050,14 +4053,14 @@ export default function InstallationsScreen({
 
       await Promise.all(updatePromises);
 
-      setMessage(`${selectedPreassemblyIds.size} preassembly kirjet uuendatud`);
+      setMessage(t('installation:screen.preassemblyRecordsUpdated', { count: selectedPreassemblyIds.size }));
       setShowPreassemblyEditModal(false);
       setSelectedPreassemblyIds(new Set());
       await loadPreassemblies();
       await loadPreassembledGuids();
     } catch (e) {
       console.error('Error updating preassemblies:', e);
-      setMessage('Viga preassembly uuendamisel');
+      setMessage(t('installation:screen.errorUpdatingPreassembly'));
     } finally {
       setEditingSaving(false);
     }
@@ -4077,7 +4080,7 @@ export default function InstallationsScreen({
     });
 
     if (alreadyInstalled.length > 0) {
-      setMessage(`${alreadyInstalled.length} detaili on juba paigaldatud`);
+      setMessage(t('installation:screen.alreadyInstalledCount', { count: alreadyInstalled.length }));
       return;
     }
 
@@ -4103,15 +4106,15 @@ export default function InstallationsScreen({
 
     // Validate required fields
     if (!installDate) {
-      setMessage('Kuupäev on kohustuslik');
+      setMessage(t('installation:screen.dateRequired'));
       return;
     }
     if (monteerijad.length === 0) {
-      setMessage('Lisa vähemalt üks monteerija');
+      setMessage(t('installation:screen.addAtLeastOneMonteerijaMethods'));
       return;
     }
     if (Object.values(selectedInstallMethods).every(v => !v || v === 0)) {
-      setMessage('Vali vähemalt üks paigaldusviis');
+      setMessage(t('installation:screen.selectAtLeastOneMethod'));
       return;
     }
 
@@ -4134,7 +4137,7 @@ export default function InstallationsScreen({
 
       // If all items are already installed, show message and return
       if (itemsToInstall.length === 0) {
-        setMessage('Kõik valitud detailid on juba paigaldatud');
+        setMessage(t('installation:screen.allSelectedAlreadyInstalled'));
         setSaving(false);
         setShowMarkInstalledModal(false);
         return;
@@ -4199,8 +4202,8 @@ export default function InstallationsScreen({
       await autoConfirmDeliveryItems(installedGuidsForConfirm, installDate);
 
       // Show appropriate message
-      const installedMsg = `${itemsToInstall.length} detaili paigaldatuks märgitud`;
-      const skippedMsg = skippedCount > 0 ? ` (${skippedCount} jäeti vahele - juba paigaldatud)` : '';
+      const installedMsg = t('installation:screen.detailsSuccessfullyInstalled', { count: itemsToInstall.length });
+      const skippedMsg = skippedCount > 0 ? ` (${skippedCount} ${t('common:actions.skipped')})` : '';
       setMessage(installedMsg + skippedMsg);
       setShowMarkInstalledModal(false);
       setMarkInstalledItems([]);
@@ -4217,7 +4220,7 @@ export default function InstallationsScreen({
       await applyTempListColoring();
     } catch (e) {
       console.error('Error marking as installed:', e);
-      setMessage('Viga paigaldamisel');
+      setMessage(t('installation:screen.errorSavingInstallation'));
     } finally {
       setSaving(false);
     }
@@ -4426,7 +4429,7 @@ export default function InstallationsScreen({
     if (currentPlayIndex >= allItems.length) {
       setIsPlaying(false);
       setIsPaused(false);
-      setMessage('Esitus lõpetatud');
+      setMessage(t('installation:screen.playbackEnded'));
       return;
     }
 
@@ -4459,7 +4462,7 @@ export default function InstallationsScreen({
     // Find the installation first to get its GUID for coloring
     const installationToDelete = installations.find(inst => inst.id === id);
     if (!installationToDelete) {
-      setMessage('Paigaldust ei leitud');
+      setMessage(t('installation:screen.installationNotFound'));
       return;
     }
 
@@ -4467,7 +4470,7 @@ export default function InstallationsScreen({
     const monthKey = getMonthKey(installationToDelete.installed_at);
     if (isMonthLocked(monthKey)) {
       const lockInfo = getMonthLockInfo(monthKey);
-      setMessage(`🔒 Kuu on lukustatud - kustutamine keelatud (${lockInfo?.locked_by_name || lockInfo?.locked_by || 'administraatori poolt'})`);
+      setMessage(t('installation:screen.monthLockedDeleteForbidden', { by: lockInfo?.locked_by_name || lockInfo?.locked_by || t('installation:screen.lockedByAdmin') }));
       return;
     }
 
@@ -4493,10 +4496,10 @@ export default function InstallationsScreen({
         await colorGuidsWhite([guidToColor]);
       }
 
-      setMessage('Paigaldus kustutatud');
+      setMessage(t('installation:screen.installationDeleted'));
     } catch (e) {
       console.error('Error deleting installation:', e);
-      setMessage('Viga kustutamisel');
+      setMessage(t('installation:screen.errorDeleting'));
     }
   };
 
@@ -4504,7 +4507,7 @@ export default function InstallationsScreen({
   const deletePreassembly = async (id: string) => {
     const preassemblyToDelete = preassemblies.find(p => p.id === id);
     if (!preassemblyToDelete) {
-      setMessage('Preassembly kirjet ei leitud');
+      setMessage(t('installation:screen.preassemblyNotFound'));
       return;
     }
 
@@ -4523,10 +4526,10 @@ export default function InstallationsScreen({
       // Reload data
       await Promise.all([loadPreassemblies(), loadPreassembledGuids()]);
 
-      setMessage('Preassembly kirje kustutatud');
+      setMessage(t('installation:screen.preassemblyDeleted'));
     } catch (e) {
       console.error('Error deleting preassembly:', e);
-      setMessage('Viga kustutamisel');
+      setMessage(t('installation:screen.errorDeleting'));
     }
   };
 
@@ -4537,7 +4540,7 @@ export default function InstallationsScreen({
     // Check if month is locked
     const monthKey = getMonthKey(items[0].installed_at);
     if (isMonthLocked(monthKey)) {
-      setMessage('🔒 Kuu on lukustatud - kustutamine keelatud');
+      setMessage(t('installation:screen.monthLockedDeletionForbidden'));
       return;
     }
 
@@ -4549,7 +4552,7 @@ export default function InstallationsScreen({
       return;
     }
 
-    setMessage(`Kustutan ${items.length} paigaldust...`);
+    setMessage(t('installation:screen.deletingInstallations', { count: items.length }));
     try {
       const ids = items.map(i => i.id);
       const guidsToColor = items.map(i => i.guid_ifc || i.guid).filter(Boolean) as string[];
@@ -4567,11 +4570,11 @@ export default function InstallationsScreen({
         await colorGuidsWhite(guidsToColor);
       }
 
-      setMessage(`${items.length} paigaldust kustutatud`);
+      setMessage(t('installation:screen.installationsDeleted', { count: items.length }));
       setDayMenuOpen(null);
     } catch (e) {
       console.error('Error deleting day installations:', e);
-      setMessage('Viga kustutamisel');
+      setMessage(t('installation:screen.errorDeleting'));
     }
   };
 
@@ -4581,7 +4584,7 @@ export default function InstallationsScreen({
 
     // Check if month is locked
     if (isMonthLocked(monthKey)) {
-      setMessage('🔒 Kuu on lukustatud - kustutamine keelatud');
+      setMessage(t('installation:screen.monthLockedDeletionForbidden'));
       return;
     }
 
@@ -4594,7 +4597,7 @@ export default function InstallationsScreen({
       return;
     }
 
-    setMessage(`Kustutan ${items.length} paigaldust...`);
+    setMessage(t('installation:screen.deletingInstallations', { count: items.length }));
     try {
       const ids = items.map(i => i.id);
       const guidsToColor = items.map(i => i.guid_ifc || i.guid).filter(Boolean) as string[];
@@ -4612,11 +4615,11 @@ export default function InstallationsScreen({
         await colorGuidsWhite(guidsToColor);
       }
 
-      setMessage(`${items.length} paigaldust kustutatud`);
+      setMessage(t('installation:screen.installationsDeleted', { count: items.length }));
       setMonthMenuOpen(null);
     } catch (e) {
       console.error('Error deleting month installations:', e);
-      setMessage('Viga kustutamisel');
+      setMessage(t('installation:screen.errorDeleting'));
     }
   };
 
@@ -4632,7 +4635,7 @@ export default function InstallationsScreen({
       return;
     }
 
-    setMessage(`Kustutan ${items.length} preassembly kirjet...`);
+    setMessage(t('installation:screen.deletingPreassemblyRecords', { count: items.length }));
     try {
       const ids = items.map(i => i.id);
 
@@ -4645,11 +4648,11 @@ export default function InstallationsScreen({
 
       await Promise.all([loadPreassemblies(), loadPreassembledGuids()]);
 
-      setMessage(`${items.length} preassembly kirjet kustutatud`);
+      setMessage(t('installation:screen.preassemblyRecordsDeleted', { count: items.length }));
       setDayMenuOpen(null);
     } catch (e) {
       console.error('Error deleting day preassemblies:', e);
-      setMessage('Viga kustutamisel');
+      setMessage(t('installation:screen.errorDeleting'));
     }
   };
 
@@ -4666,7 +4669,7 @@ export default function InstallationsScreen({
       return;
     }
 
-    setMessage(`Kustutan ${items.length} preassembly kirjet...`);
+    setMessage(t('installation:screen.deletingPreassemblyRecords', { count: items.length }));
     try {
       const ids = items.map(i => i.id);
 
@@ -4679,11 +4682,11 @@ export default function InstallationsScreen({
 
       await Promise.all([loadPreassemblies(), loadPreassembledGuids()]);
 
-      setMessage(`${items.length} preassembly kirjet kustutatud`);
+      setMessage(t('installation:screen.preassemblyRecordsDeleted', { count: items.length }));
       setMonthMenuOpen(null);
     } catch (e) {
       console.error('Error deleting month preassemblies:', e);
-      setMessage('Viga kustutamisel');
+      setMessage(t('installation:screen.errorDeleting'));
     }
   };
 
@@ -4875,7 +4878,7 @@ export default function InstallationsScreen({
         console.error('Error coloring newly added temp list items:', e);
       }
     } else {
-      setMessage('Kõik valitud detailid on juba listis');
+      setMessage(t('installation:screen.allSelectedAlreadyInList'));
       setTimeout(() => setMessage(null), 2000);
     }
   };
@@ -4884,7 +4887,7 @@ export default function InstallationsScreen({
     const tempListGuids = Array.from(tempList);
     setTempList(new Set());
     setTempListInfo(new Map());
-    setMessage('Ajutine nimekiri tühjendatud');
+    setMessage(t('installation:screen.temporaryListCleared'));
     setTimeout(() => setMessage(null), 2000);
 
     // Color temp list items WHITE before reapplying base coloring
@@ -5346,13 +5349,13 @@ export default function InstallationsScreen({
 
       await Promise.all(updatePromises);
 
-      setMessage(`${selectedInstallationIds.size} paigaldus${selectedInstallationIds.size > 1 ? 't' : ''} uuendatud`);
+      setMessage(t('installation:screen.installationsUpdated', { count: selectedInstallationIds.size }));
       setShowEditModal(false);
       setSelectedInstallationIds(new Set());
       await loadInstallations();
     } catch (e) {
       console.error('Error updating installations:', e);
-      setMessage('Viga paigalduste uuendamisel');
+      setMessage(t('installation:screen.errorUpdatingInstallations'));
     } finally {
       setEditingSaving(false);
     }
@@ -6206,7 +6209,7 @@ export default function InstallationsScreen({
                     const selected = new Date(e.target.value);
                     const now = new Date();
                     if (selected > now) {
-                      setMessage('Tuleviku kuupäevad ei ole lubatud');
+                      setMessage(t('installation:screen.futureDatesNotAllowed'));
                       return;
                     }
                     setInstallDate(e.target.value);
@@ -7329,13 +7332,13 @@ export default function InstallationsScreen({
                         }));
 
                         await api.viewer.setSelection({ modelObjectIds }, 'set');
-                        setMessage(`✅ ${foundObjects.size}/${guids.length} elementi valitud`);
+                        setMessage(t('installation:screen.elementsSelectedFromModel', { found: foundObjects.size, total: guids.length }));
                       } else {
-                        setMessage('⚠️ Elemente ei leitud mudelist');
+                        setMessage(t('installation:screen.elementsNotFoundInModel'));
                       }
                     } catch (e: any) {
                       console.error('Error selecting temp list items:', e);
-                      setMessage('Viga valimisel');
+                      setMessage(t('installation:screen.errorSelecting'));
                     }
                   }}
                   title="Vali kõik mudelis"

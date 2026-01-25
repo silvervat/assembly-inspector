@@ -156,7 +156,8 @@
     "cancel": "Cancel",
     "play": "Start playback",
     "pause": "Pause",
-    "resume": "Resume"
+    "resume": "Resume",
+    "skipped": "skipped"
   },
   "placeholders": {
     "searchByMark": "Search by mark or vehicle...",
