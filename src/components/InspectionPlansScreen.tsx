@@ -76,7 +76,7 @@ export default function InspectionPlansScreen({
     async function loadInspectionTypes() {
       setLoading(true);
       try {
-        // Get inspection types that have plan items in this project
+        // Get inspection types that have plan items in this project (including review_status)
         const { data: planItems, error: planError } = await supabase
           .from('inspection_plan_items')
           .select(`
@@ -84,6 +84,7 @@ export default function InspectionPlansScreen({
             inspection_type_id,
             guid,
             guid_ifc,
+            review_status,
             inspection_types!inspection_plan_items_inspection_type_id_fkey (
               id, code, name, description, icon, color, sort_order, is_active
             )
@@ -96,32 +97,19 @@ export default function InspectionPlansScreen({
           return;
         }
 
-        // Get all inspection results with review_status for this project
+        // Get inspection results to know which plan items have been inspected
+        // We only need plan_item_id to check existence - review_status is on inspection_plan_items
         const { data: results, error: resultsError } = await supabase
           .from('inspection_results')
-          .select('plan_item_id, assembly_guid, review_status')
+          .select('plan_item_id')
           .eq('project_id', projectId);
 
-        // Create maps to track status by plan_item_id and assembly_guid
-        // Store the "highest" status for each item (approved > rejected > pending)
-        type ReviewStatus = 'pending' | 'approved' | 'rejected' | null;
-        const itemStatusMap = new Map<string, ReviewStatus>();
-
+        // Create set of plan item IDs that have inspection results
+        const inspectedPlanItemIds = new Set<string>();
         if (!resultsError && results) {
           for (const r of results) {
-            const key = r.plan_item_id || r.assembly_guid;
-            if (!key) continue;
-
-            const currentStatus = itemStatusMap.get(key);
-            const newStatus = r.review_status as ReviewStatus;
-
-            // Priority: approved > rejected > pending > null
-            if (!currentStatus) {
-              itemStatusMap.set(key, newStatus || 'pending');
-            } else if (newStatus === 'rejected' && currentStatus !== 'approved') {
-              itemStatusMap.set(key, 'rejected');
-            } else if (newStatus === 'approved') {
-              itemStatusMap.set(key, 'approved');
+            if (r.plan_item_id) {
+              inspectedPlanItemIds.add(r.plan_item_id);
             }
           }
         }
@@ -153,23 +141,23 @@ export default function InspectionPlansScreen({
 
           statsMap[typeData.id].totalItems++;
 
-          // Check status by plan_item_id or matching GUID
-          const status = itemStatusMap.get(item.id) ||
-            (item.guid ? itemStatusMap.get(item.guid) : undefined) ||
-            (item.guid_ifc ? itemStatusMap.get(item.guid_ifc) : undefined);
+          // Check if this plan item has been inspected (has results)
+          const hasResults = inspectedPlanItemIds.has(item.id);
+          // Get review_status from plan item
+          const reviewStatus = item.review_status;
 
-          if (status === 'approved') {
+          if (!hasResults) {
+            // No results - planned
+            statsMap[typeData.id].plannedCount++;
+          } else if (reviewStatus === 'approved') {
             statsMap[typeData.id].approvedCount++;
             statsMap[typeData.id].completedItems++;
-          } else if (status === 'rejected') {
+          } else if (reviewStatus === 'rejected') {
             statsMap[typeData.id].rejectedCount++;
-          } else if (status === 'pending') {
+          } else {
             // Has results but pending review
             statsMap[typeData.id].pendingReviewCount++;
             statsMap[typeData.id].completedItems++;
-          } else {
-            // No results - planned
-            statsMap[typeData.id].plannedCount++;
           }
         }
 
