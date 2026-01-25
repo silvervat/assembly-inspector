@@ -345,21 +345,38 @@ export default function ToolsScreen({
       let productName = '';
       let weight: number | null = null;
 
-      // Try to get GUID from Summary property set
+      // Helper to normalize GUID
+      const normalizeGuid = (g: string): string => {
+        if (!g) return '';
+        return g.trim().toLowerCase();
+      };
+
+      // Try multiple methods to get GUID (same as App.tsx)
       const propertySets = objProps?.propertySets || [];
+
+      // Method 1: Search property sets for any property containing "guid" or "globalid"
       for (const pset of propertySets) {
-        if (pset.name === 'Summary' || pset.name === 'Tekla Common') {
-          for (const prop of pset.properties || []) {
-            if (prop.name === 'GUID' && !guid) {
-              guid = prop.displayValue || prop.value || '';
+        const propArray = pset.properties || [];
+        for (const prop of propArray) {
+          const propName = ((prop as any).name || '').toLowerCase().replace(/[\s_()]/g, '');
+          const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+          if (!propValue) continue;
+
+          if (propName.includes('guid') || propName === 'globalid') {
+            const guidValue = normalizeGuid(String(propValue));
+            if (guidValue && !guid) {
+              guid = guidValue;
             }
           }
         }
-        // Use property mappings
+
+        // Use property mappings for assembly_mark
         if (pset.name === propertyMappings.assembly_mark_set) {
           const markProp = pset.properties?.find((p: any) => p.name === propertyMappings.assembly_mark_prop);
           if (markProp) assemblyMark = markProp.displayValue || markProp.value || '';
         }
+        // Use property mappings for weight
         if (pset.name === propertyMappings.weight_set) {
           const weightProp = pset.properties?.find((p: any) => p.name === propertyMappings.weight_prop);
           if (weightProp) {
@@ -369,14 +386,39 @@ export default function ToolsScreen({
         }
       }
 
+      // Method 2: convertToObjectIds for IFC GUID
+      if (!guid) {
+        try {
+          const externalIds = await api.viewer.convertToObjectIds(modelId, [runtimeId]);
+          if (externalIds && externalIds.length > 0 && externalIds[0]) {
+            guid = normalizeGuid(String(externalIds[0]));
+          }
+        } catch (e) {
+          console.warn('convertToObjectIds failed:', e);
+        }
+      }
+
+      // Method 3: getObjectMetadata for MS GUID
+      if (!guid) {
+        try {
+          const metaArr = await (api.viewer as any)?.getObjectMetadata?.(modelId, [runtimeId]);
+          const metaOne = Array.isArray(metaArr) ? metaArr[0] : metaArr;
+          if (metaOne?.globalId) {
+            guid = normalizeGuid(String(metaOne.globalId));
+          }
+        } catch (e) {
+          console.warn('getObjectMetadata failed:', e);
+        }
+      }
+
+      // Method 4: product.ifcGuid fallback
+      if (!guid && objProps?.product?.ifcGuid) {
+        guid = normalizeGuid(objProps.product.ifcGuid);
+      }
+
       // Get product name from object metadata
       if (objProps?.product?.name) {
         productName = objProps.product.name;
-      }
-
-      // Fallback: get GUID from object identifier
-      if (!guid && objProps?.product?.ifcGuid) {
-        guid = objProps.product.ifcGuid;
       }
 
       if (!guid) {
@@ -384,6 +426,8 @@ export default function ToolsScreen({
         setQrGenerating(false);
         return;
       }
+
+      console.log('🔑 QR: Found GUID:', guid, 'Assembly:', assemblyMark, 'Weight:', weight);
 
       // Check if QR already exists for this guid
       const { data: existing } = await supabase
