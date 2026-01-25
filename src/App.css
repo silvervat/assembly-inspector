@@ -5568,7 +5568,7 @@ button.stat-toggle.off:hover {
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-right: var(--modus-spacing-xs);
+  flex-shrink: 0;
 }
 
 .item-asm-mode {
@@ -5624,20 +5624,23 @@ button.stat-toggle.off:hover {
 
 .item-actions {
   display: flex;
-  gap: 2px;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 8px;
 }
 
 .btn-icon-small {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  background: transparent;
-  border: none;
+  width: 28px;
+  height: 28px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
   border-radius: var(--modus-radius-sm);
   cursor: pointer;
-  color: var(--modus-text-secondary);
+  color: #64748b;
   transition: all 0.1s ease;
 }
 
