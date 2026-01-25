@@ -823,7 +823,11 @@ export default function InspectorScreen({
               let ifcNominalLength: string | undefined;
               let ifcFastenerTypeName: string | undefined;
 
-              for (const pset of objProps.properties || []) {
+              // Support both property formats: objProps.properties and objProps.propertySets
+              const propertySets = objProps.properties || (objProps as any).propertySets || [];
+              console.log(`📋 Property sets found: ${propertySets.length}, format: ${objProps.properties ? 'properties' : 'propertySets'}`);
+
+              for (const pset of propertySets) {
                 const setName = (pset as any).set || (pset as any).name || '';
                 const setNameLower = setName.toLowerCase();
                 const propArray = pset.properties || [];
@@ -847,8 +851,11 @@ export default function InspectorScreen({
                   const propNameNorm = propName.replace(/\s+/g, '_');
 
                   if (setNameNorm.includes('tekla_bolt') || setNameLower.includes('bolt')) {
+                    // Debug: log all properties in bolt property set
+                    console.log(`🔩 Bolt property: ${setName}.${propNameOriginal} = ${propValue} (propNameNorm: ${propNameNorm})`);
+
                     // Bolt Name - check various formats
-                    if ((propNameNorm.includes('bolt_name') || propName === 'name' || propNameNorm === 'bolt_name') && !boltName) {
+                    if ((propNameNorm.includes('bolt_name') || propNameNorm.includes('name') || propName === 'name') && !boltName) {
                       boltName = String(propValue);
                       console.log(`✅ Found Bolt Name: ${setName}.${propNameOriginal} = ${boltName}`);
                     }
