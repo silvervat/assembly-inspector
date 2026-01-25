@@ -1930,22 +1930,67 @@ export default function InspectorScreen({
       setInspectionListData(items);
       setInspectionListMode('todo'); // Reuse todo mode for plan items list
 
-      // Color model: highlight items of this status, others light gray
+      // Color model: reset to white first
       if (onColorModelWhite) {
         await onColorModelWhite();
       }
 
-      // Get the status color
-      const statusColor = status
-        ? INSPECTION_STATUS_COLORS[status as keyof typeof INSPECTION_STATUS_COLORS]
-        : INSPECTION_STATUS_COLORS.planned;
+      if (status) {
+        // Single status selected - color all items with that status color
+        const statusColor = INSPECTION_STATUS_COLORS[status as keyof typeof INSPECTION_STATUS_COLORS];
+        const guids = planItems.map(item => item.guid_ifc || item.guid).filter(Boolean) as string[];
 
-      // Find and color the filtered items
-      const guids = planItems.map(item => item.guid_ifc || item.guid).filter(Boolean) as string[];
-      if (guids.length > 0) {
-        const foundObjects = await findObjectsInLoadedModels(api, guids);
+        if (guids.length > 0) {
+          const foundObjects = await findObjectsInLoadedModels(api, guids);
 
-        if (foundObjects.size > 0) {
+          if (foundObjects.size > 0) {
+            const byModel: Record<string, number[]> = {};
+            for (const [, found] of foundObjects) {
+              if (!byModel[found.modelId]) byModel[found.modelId] = [];
+              byModel[found.modelId].push(found.runtimeId);
+            }
+
+            const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+              modelId,
+              objectRuntimeIds: runtimeIds
+            }));
+
+            await api.viewer.setObjectState(
+              { modelObjectIds },
+              { color: { r: statusColor.r, g: statusColor.g, b: statusColor.b, a: statusColor.a } }
+            );
+          }
+        }
+      } else {
+        // "Kõik" selected - color each item by its own status
+        const statusGroups: Record<string, string[]> = {
+          planned: [],
+          inProgress: [],
+          completed: [],
+          rejected: [],
+          approved: []
+        };
+
+        // Group items by status
+        for (const item of planItems) {
+          const guid = item.guid_ifc || item.guid;
+          if (!guid) continue;
+          const itemStatus = item.inspection_status || 'planned';
+          if (statusGroups[itemStatus]) {
+            statusGroups[itemStatus].push(guid);
+          }
+        }
+
+        // Color each status group with their respective colors
+        for (const [statusKey, guids] of Object.entries(statusGroups)) {
+          if (guids.length === 0) continue;
+
+          const statusColor = INSPECTION_STATUS_COLORS[statusKey as keyof typeof INSPECTION_STATUS_COLORS];
+          if (!statusColor) continue;
+
+          const foundObjects = await findObjectsInLoadedModels(api, guids);
+          if (foundObjects.size === 0) continue;
+
           const byModel: Record<string, number[]> = {};
           for (const [, found] of foundObjects) {
             if (!byModel[found.modelId]) byModel[found.modelId] = [];
