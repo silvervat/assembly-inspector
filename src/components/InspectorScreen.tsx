@@ -304,138 +304,121 @@ export default function InspectorScreen({
     }
   }, [assignedPlan]);
 
-  // Auto-color model on page load based on plan item status (inspection_type mode only)
-  useEffect(() => {
+  // Reusable function to color model by inspection status
+  const colorModelByStatus = useCallback(async () => {
     if (inspectionMode !== 'inspection_type' || !inspectionTypeId) return;
 
-    const autoColorModel = async () => {
-      try {
-        console.log('🎨 Auto-coloring model for inspection type:', inspectionTypeId);
+    try {
+      console.log('🎨 Coloring model by status for inspection type:', inspectionTypeId);
 
-        // First, reset model to white using onColorModelWhite callback
-        // This ensures proper assembly-level coloring
-        if (onColorModelWhite) {
-          await onColorModelWhite();
-        }
-
-        // Fetch all plan items for this inspection type (including review_status)
-        const { data: planItems, error } = await supabase
-          .from('inspection_plan_items')
-          .select('id, guid, guid_ifc, review_status')
-          .eq('project_id', projectId)
-          .eq('inspection_type_id', inspectionTypeId);
-
-        if (error || !planItems || planItems.length === 0) {
-          console.log('⚠️ No plan items found for auto-coloring');
-          return;
-        }
-
-        // Get inspection results to know which plan items have been inspected
-        // We only need plan_item_id to check existence - review_status is on inspection_plan_items
-        const { data: results } = await supabase
-          .from('inspection_results')
-          .select('plan_item_id')
-          .eq('project_id', projectId);
-
-        // Create set of plan item IDs that have inspection results
-        const inspectedPlanItemIds = new Set<string>();
-        if (results) {
-          for (const r of results) {
-            if (r.plan_item_id) {
-              inspectedPlanItemIds.add(r.plan_item_id);
-            }
-          }
-        }
-
-        // Group items by calculated status with their GUIDs
-        const statusGroups: Record<string, string[]> = {
-          planned: [],
-          inProgress: [],
-          completed: [],
-          rejected: [],
-          approved: []
-        };
-
-        let completedCount = 0;
-
-        for (const item of planItems) {
-          const guid = item.guid_ifc || item.guid;
-          if (!guid) continue;
-
-          // Check if this plan item has been inspected (has results)
-          const hasResults = inspectedPlanItemIds.has(item.id);
-          // Get review_status from plan item (not from inspection_results)
-          const reviewStatus = (item as { review_status?: string }).review_status;
-
-          let actualStatus: string;
-          if (!hasResults) {
-            actualStatus = 'planned'; // No results = not yet inspected
-          } else if (reviewStatus === 'approved') {
-            actualStatus = 'approved';
-            completedCount++;
-          } else if (reviewStatus === 'rejected') {
-            actualStatus = 'rejected';
-          } else {
-            // Has results but pending review (or review_status is 'pending'/'returned')
-            actualStatus = 'completed';
-            completedCount++;
-          }
-
-          if (statusGroups[actualStatus]) {
-            statusGroups[actualStatus].push(guid);
-          }
-        }
-
-        // Update stats
-        setInspectionCount(completedCount);
-        setTotalPlanItems(planItems.length);
-
-        // Color each status group with their respective colors
-        for (const [status, guids] of Object.entries(statusGroups)) {
-          if (guids.length === 0) continue;
-
-          const color = INSPECTION_STATUS_COLORS[status as keyof typeof INSPECTION_STATUS_COLORS];
-          if (!color) continue;
-
-          // Find objects in loaded models using GUIDs
-          const foundObjects = await findObjectsInLoadedModels(api, guids);
-
-          if (foundObjects.size === 0) continue;
-
-          // Group by model
-          const byModel: Record<string, number[]> = {};
-          for (const [, found] of foundObjects) {
-            if (!byModel[found.modelId]) byModel[found.modelId] = [];
-            byModel[found.modelId].push(found.runtimeId);
-          }
-
-          const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
-            modelId,
-            objectRuntimeIds: runtimeIds
-          }));
-
-          await api.viewer.setObjectState(
-            { modelObjectIds },
-            { color: { r: color.r, g: color.g, b: color.b, a: color.a } }
-          );
-        }
-
-        console.log('🎨 Auto-colored model by status:', {
-          planned: statusGroups.planned.length,
-          inProgress: statusGroups.inProgress.length,
-          completed: statusGroups.completed.length,
-          rejected: statusGroups.rejected.length,
-          approved: statusGroups.approved.length
-        });
-      } catch (e) {
-        console.error('Failed to auto-color model:', e);
+      // First, reset model to white
+      if (onColorModelWhite) {
+        await onColorModelWhite();
       }
-    };
 
-    // Small delay to ensure the model is loaded
-    const timer = setTimeout(autoColorModel, 500);
+      // Fetch all plan items for this inspection type
+      const { data: planItems, error } = await supabase
+        .from('inspection_plan_items')
+        .select('id, guid, guid_ifc, review_status')
+        .eq('project_id', projectId)
+        .eq('inspection_type_id', inspectionTypeId);
+
+      if (error || !planItems || planItems.length === 0) {
+        console.log('⚠️ No plan items found for coloring');
+        return;
+      }
+
+      // Get inspection results to know which items have been inspected
+      const { data: results } = await supabase
+        .from('inspection_results')
+        .select('plan_item_id')
+        .eq('project_id', projectId);
+
+      const inspectedPlanItemIds = new Set<string>();
+      if (results) {
+        for (const r of results) {
+          if (r.plan_item_id) inspectedPlanItemIds.add(r.plan_item_id);
+        }
+      }
+
+      // Group items by status
+      const statusGroups: Record<string, string[]> = {
+        planned: [], inProgress: [], completed: [], rejected: [], approved: []
+      };
+
+      let completedCount = 0;
+
+      for (const item of planItems) {
+        const guid = item.guid_ifc || item.guid;
+        if (!guid) continue;
+
+        const hasResults = inspectedPlanItemIds.has(item.id);
+        const reviewStatus = (item as { review_status?: string }).review_status;
+
+        let actualStatus: string;
+        if (!hasResults) {
+          actualStatus = 'planned';
+        } else if (reviewStatus === 'approved') {
+          actualStatus = 'approved';
+          completedCount++;
+        } else if (reviewStatus === 'rejected') {
+          actualStatus = 'rejected';
+        } else {
+          actualStatus = 'completed';
+          completedCount++;
+        }
+
+        if (statusGroups[actualStatus]) {
+          statusGroups[actualStatus].push(guid);
+        }
+      }
+
+      setInspectionCount(completedCount);
+      setTotalPlanItems(planItems.length);
+
+      // Color each status group
+      for (const [status, guids] of Object.entries(statusGroups)) {
+        if (guids.length === 0) continue;
+
+        const color = INSPECTION_STATUS_COLORS[status as keyof typeof INSPECTION_STATUS_COLORS];
+        if (!color) continue;
+
+        const foundObjects = await findObjectsInLoadedModels(api, guids);
+        if (foundObjects.size === 0) continue;
+
+        const byModel: Record<string, number[]> = {};
+        for (const [, found] of foundObjects) {
+          if (!byModel[found.modelId]) byModel[found.modelId] = [];
+          byModel[found.modelId].push(found.runtimeId);
+        }
+
+        const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+          modelId, objectRuntimeIds: runtimeIds
+        }));
+
+        await api.viewer.setObjectState(
+          { modelObjectIds },
+          { color: { r: color.r, g: color.g, b: color.b, a: color.a } }
+        );
+      }
+
+      console.log('🎨 Colored model by status:', {
+        planned: statusGroups.planned.length,
+        completed: statusGroups.completed.length,
+        rejected: statusGroups.rejected.length,
+        approved: statusGroups.approved.length
+      });
+    } catch (e) {
+      console.error('Failed to color model by status:', e);
+    }
+  }, [api, projectId, inspectionMode, inspectionTypeId, onColorModelWhite]);
+
+  // Auto-color model on page load (uses colorModelByStatus)
+  useEffect(() => {
+    if (inspectionMode !== 'inspection_type' || !inspectionTypeId) return;
+    const timer = setTimeout(colorModelByStatus, 500);
     return () => clearTimeout(timer);
-  }, [api, projectId, inspectionMode, inspectionTypeId]);
+  }, [colorModelByStatus, inspectionMode, inspectionTypeId]);
 
   // Fetch checkpoints for a category
   const fetchCheckpoints = useCallback(async (categoryId: string, assemblyGuid: string) => {
@@ -1876,6 +1859,31 @@ export default function InspectorScreen({
         return;
       }
 
+      // Get assembly_mark and product_name from trimble_model_objects as fallback
+      const guidsForLookup = planItems
+        .map(item => (item.guid_ifc || item.guid)?.toLowerCase())
+        .filter(Boolean) as string[];
+
+      let modelObjectsMap = new Map<string, { assembly_mark?: string; product_name?: string }>();
+      if (guidsForLookup.length > 0) {
+        const { data: modelObjects } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc, assembly_mark, product_name')
+          .eq('trimble_project_id', projectId)
+          .in('guid_ifc', guidsForLookup);
+
+        if (modelObjects) {
+          for (const obj of modelObjects) {
+            if (obj.guid_ifc) {
+              modelObjectsMap.set(obj.guid_ifc.toLowerCase(), {
+                assembly_mark: obj.assembly_mark,
+                product_name: obj.product_name
+              });
+            }
+          }
+        }
+      }
+
       // Get inspection results to know which plan items have been inspected
       // We only need plan_item_id to check existence - review_status is on inspection_plan_items
       const { data: results } = await supabase
@@ -1941,18 +1949,25 @@ export default function InspectorScreen({
         return;
       }
 
-      // Transform to InspectionItem format
-      const items: InspectionItem[] = filteredItems.map(item => ({
-        id: item.id,
-        assembly_mark: item.assembly_mark || item.object_name || item.guid?.substring(0, 12) || 'N/A',
-        model_id: item.model_id,
-        object_runtime_id: item.object_runtime_id || 0,
-        inspector_name: '-',
-        inspected_at: '',
-        guid: item.guid || undefined,
-        guid_ifc: item.guid_ifc || undefined,
-        product_name: item.product_name || item.object_type || undefined  // Fallback to IFC class
-      }));
+      // Transform to InspectionItem format (with trimble_model_objects fallback)
+      const items: InspectionItem[] = filteredItems.map(item => {
+        const guidKey = (item.guid_ifc || item.guid)?.toLowerCase();
+        const modelObj = guidKey ? modelObjectsMap.get(guidKey) : undefined;
+
+        return {
+          id: item.id,
+          // assembly_mark: prefer plan item, then model objects, then fallback
+          assembly_mark: item.assembly_mark || modelObj?.assembly_mark || item.object_name || item.guid?.substring(0, 12) || 'N/A',
+          model_id: item.model_id,
+          object_runtime_id: item.object_runtime_id || 0,
+          inspector_name: '-',
+          inspected_at: '',
+          guid: item.guid || undefined,
+          guid_ifc: item.guid_ifc || undefined,
+          // product_name: prefer plan item, then model objects, then IFC class
+          product_name: item.product_name || modelObj?.product_name || item.object_type || undefined
+        };
+      });
 
       setInspectionListTotal(items.length);
       setInspectionListData(items);
@@ -2268,11 +2283,11 @@ export default function InspectorScreen({
 
   // Välju inspektsioonide vaatest
   const exitInspectionList = () => {
-    // Keep selection and colors intact when going back
-    // User can continue inspecting or navigate elsewhere
     setInspectionListMode('none');
     setInspectionListData([]);
     setMessage('');
+    // Re-color model to show all statuses when going back
+    colorModelByStatus();
   };
 
   // Handle navigation from header
