@@ -13,6 +13,7 @@ import ArrivedDeliveriesScreen from './components/ArrivedDeliveriesScreen';
 import IssuesScreen from './components/IssuesScreen';
 import ToolsScreen from './components/ToolsScreen';
 import DeliveryShareGallery from './components/DeliveryShareGallery';
+import QRActivationPage from './components/QRActivationPage';
 import DeliverySpreadsheetEditor from './components/DeliverySpreadsheetEditor';
 import CranePlannerScreen from './components/CranePlannerScreen';
 import CraneLibraryScreen from './components/CraneLibraryScreen';
@@ -33,7 +34,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.945';
+export const APP_VERSION = '3.0.946';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -67,9 +68,16 @@ const pathMatch = window.location.pathname.match(sharePathRegex);
 let isShareMode = !!pathMatch;
 let shareToken = pathMatch ? pathMatch[1] : '';
 
-// GitHub Pages 404.html redirects to /?p=/assembly-inspector/share/token
-// Extract share token from query parameter if not found in path
-if (!isShareMode) {
+// Check if this is a QR activation page
+// Path can be: /qr/uuid OR /assembly-inspector/qr/uuid
+const qrPathRegex = /\/qr\/([a-f0-9-]+)$/i;
+const qrPathMatch = window.location.pathname.match(qrPathRegex);
+let isQrMode = !!qrPathMatch;
+let qrCodeId = qrPathMatch ? qrPathMatch[1] : '';
+
+// GitHub Pages 404.html redirects to /?p=/assembly-inspector/share/token or /?p=/assembly-inspector/qr/uuid
+// Extract share token or QR id from query parameter if not found in path
+if (!isShareMode && !isQrMode) {
   const redirectPath = new URLSearchParams(window.location.search).get('p');
   if (redirectPath) {
     const redirectMatch = redirectPath.match(sharePathRegex);
@@ -79,6 +87,13 @@ if (!isShareMode) {
       // Clean up URL to show proper share path with base
       const cleanBase = basePath.endsWith('/') ? basePath.slice(0, -1) : basePath;
       window.history.replaceState(null, '', `${cleanBase}/share/${shareToken}`);
+    }
+    const qrRedirectMatch = redirectPath.match(qrPathRegex);
+    if (qrRedirectMatch) {
+      isQrMode = true;
+      qrCodeId = qrRedirectMatch[1];
+      const cleanBase = basePath.endsWith('/') ? basePath.slice(0, -1) : basePath;
+      window.history.replaceState(null, '', `${cleanBase}/qr/${qrCodeId}`);
     }
   }
 }
@@ -2423,6 +2438,11 @@ export default function App() {
   // Share gallery mode - public page without authentication
   if (isShareMode && shareToken) {
     return <DeliveryShareGallery token={shareToken} />;
+  }
+
+  // QR activation mode - public page for confirming element found on site
+  if (isQrMode && qrCodeId) {
+    return <QRActivationPage qrCodeId={qrCodeId} />;
   }
 
   // Spreadsheet editor mode - standalone spreadsheet editor window
