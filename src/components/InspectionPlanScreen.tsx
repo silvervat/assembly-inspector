@@ -640,8 +640,34 @@ export default function InspectionPlanScreen({
         return;
       }
 
-      // Prepare items for insert
-      const items = objectsToSave.map(obj => ({
+      // Get category code for generating inspection_code
+      const selectedCategory = categories.find(c => c.id === selectedCategoryId);
+      const categoryCode = selectedCategory?.code || 'XX';
+
+      // Find the highest existing inspection_code number for this category in this project
+      const { data: existingCodes } = await supabase
+        .from('inspection_plan_items')
+        .select('inspection_code')
+        .eq('project_id', projectId)
+        .eq('category_id', selectedCategoryId)
+        .not('inspection_code', 'is', null);
+
+      let maxNumber = 0;
+      if (existingCodes) {
+        for (const item of existingCodes) {
+          if (item.inspection_code) {
+            // Extract number from code like "PK001" -> 1
+            const match = item.inspection_code.match(/\d+$/);
+            if (match) {
+              const num = parseInt(match[0], 10);
+              if (num > maxNumber) maxNumber = num;
+            }
+          }
+        }
+      }
+
+      // Prepare items for insert with generated inspection codes
+      const items = objectsToSave.map((obj, index) => ({
         project_id: projectId,
         model_id: obj.modelId,
         guid: obj.guid,
@@ -655,6 +681,7 @@ export default function InspectionPlanScreen({
         inspection_type_id: selectedTypeId || null,
         category_id: selectedCategoryId || null,
         assembly_selection_mode: assemblyMode === 'on',
+        inspection_code: `${categoryCode}${String(maxNumber + index + 1).padStart(3, '0')}`,
         status: 'planned',
         priority: 0,
         planner_notes: plannerNotes || null,
@@ -1778,6 +1805,9 @@ export default function InspectionPlanScreen({
                                               </div>
                                             )}
                                             <div className="item-info">
+                                              {item.inspection_code && (
+                                                <span className="item-inspection-code">{item.inspection_code}</span>
+                                              )}
                                               <span className="item-mark">
                                                 {item.assembly_mark || item.object_name || `Object #${item.object_runtime_id || '?'}`}
                                               </span>

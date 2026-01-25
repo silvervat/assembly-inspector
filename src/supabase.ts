@@ -184,6 +184,8 @@ export interface InspectionPlanItem {
   inspection_type_id?: string;
   category_id?: string;
   assembly_selection_mode: boolean;
+  // Unikaalne inspektsiooni kood (nt PK001, PK002)
+  inspection_code?: string;
   // Staatus
   status: InspectionPlanStatus;
   priority: number;

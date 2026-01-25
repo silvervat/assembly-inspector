@@ -1161,21 +1161,60 @@ export default function InspectorScreen({
         // Salvesta praegune kaamera
         const currentCamera = await api.viewer.getCamera();
 
+        // Lisa tekst marker inspektsiooni koodiga kui olemas
+        let createdMarkupId: number | null = null;
+        const inspectionCode = assignedPlan?.inspection_code;
+        if (inspectionCode) {
+          try {
+            // Get object bounding box for marker position
+            const boundsArray = await api.viewer.getObjectBoundingBoxes(obj.modelId, [obj.runtimeId]);
+            const bbox = boundsArray?.[0]?.boundingBox;
+            if (bbox) {
+              const centerX = ((bbox.min.x + bbox.max.x) / 2) * 1000; // Convert to mm
+              const centerY = ((bbox.min.y + bbox.max.y) / 2) * 1000;
+              const topZ = bbox.max.z * 1000;
+              const markerHeight = 3000; // 3m leader line
+
+              // Add text marker with inspection code
+              const markupApi = api.markup as any;
+              const result = await markupApi?.addTextMarkup?.([{
+                text: inspectionCode,
+                start: { positionX: centerX, positionY: centerY, positionZ: topZ },
+                end: { positionX: centerX, positionY: centerY, positionZ: topZ + markerHeight },
+                color: { r: 0, g: 0, b: 0, a: 255 }
+              }]);
+
+              // Save markup ID for later removal
+              if (Array.isArray(result) && result[0]?.id) {
+                createdMarkupId = Number(result[0].id);
+              } else if (result?.id) {
+                createdMarkupId = Number(result.id);
+              }
+            }
+          } catch (markerErr) {
+            console.warn('Failed to add inspection marker:', markerErr);
+          }
+        }
+
         // Lülita topview preset
         await api.viewer.setCamera('top', { animationTime: 0 });
 
         // Oota et kaamera jõuaks kohale
         await new Promise(resolve => setTimeout(resolve, 150));
 
-        // Seadista ortho projektsioon (õige pealtvaade)
+        // Seadista ortho projektsioon täiuslik pealtvaade (pitch = 0)
         const topCamera = await api.viewer.getCamera();
         await api.viewer.setCamera(
-          { ...topCamera, projectionType: 'ortho' },
+          {
+            ...topCamera,
+            projectionType: 'ortho',
+            pitch: 0 // Täielik pealtvaade
+          },
           { animationTime: 0 }
         );
 
         // Oota renderimist
-        await new Promise(resolve => setTimeout(resolve, 150));
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         // Tee topview snapshot
         const topviewDataUrl = await api.viewer.getSnapshot();
@@ -1200,6 +1239,15 @@ export default function InspectorScreen({
 
         // Taasta kaamera
         await api.viewer.setCamera(currentCamera, { animationTime: 0 });
+
+        // Eemalda ajutine marker
+        if (createdMarkupId) {
+          try {
+            await (api.markup as any)?.deleteMarkup?.(createdMarkupId);
+          } catch (delErr) {
+            console.warn('Failed to delete inspection marker:', delErr);
+          }
+        }
       }
 
       setMessage('💾 Salvestan...');
@@ -2403,11 +2451,15 @@ export default function InspectorScreen({
       {/* Compact plan info for inspection_type mode */}
       {inspectionMode === 'inspection_type' && assignedPlan && (
         <div className="plan-info-compact">
-          {assignedPlan.category && (
-            <span className="plan-info-item">{assignedPlan.category.name}</span>
+          {assignedPlan.inspection_type && (
+            <span className="plan-info-item">{assignedPlan.inspection_type.name}</span>
           )}
           <span className="plan-info-divider">|</span>
-          <span className="plan-info-item">ASM: {assignedPlan.assembly_selection_mode ? 'SEES' : 'VÄLJAS'}</span>
+          <span className="plan-info-item">
+            {totalPlanItems > 0
+              ? `${Math.round((inspectionCount / totalPlanItems) * 100)}%`
+              : '0%'}
+          </span>
         </div>
       )}
 
@@ -2473,15 +2525,6 @@ export default function InspectorScreen({
                 </button>
               </div>
             )}
-            {/* Stats row */}
-            <div className="stats-row">
-              <div className="stat-item">
-                <span className="stat-num">
-                  {totalPlanItems > 0 ? `${inspectionCount}/${totalPlanItems}` : inspectionCount}
-                </span>
-                <span className="stat-lbl">insp.</span>
-              </div>
-            </div>
           </>
         ) : (
           /* List view header with back button and title */
@@ -2505,7 +2548,8 @@ export default function InspectorScreen({
         )}
       </div>
 
-      {requiresAssemblySelection && !assemblySelectionEnabled && (
+      {/* Only show warning if assembly is required AND not intentionally locked OFF */}
+      {requiresAssemblySelection && !assemblySelectionEnabled && lockedAssemblyMode !== false && (
         <div className="warning-banner">
           ⚠️ Assembly Selection pole sisse lülitatud
         </div>
