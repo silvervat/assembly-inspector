@@ -980,6 +980,59 @@ export default function App() {
     globalToastTimeoutRef.current = setTimeout(() => setGlobalToast(null), 3000);
   }, []);
 
+  // Subscribe to QR activation events - color detail green when found
+  useEffect(() => {
+    if (!api || !projectId) return;
+
+    const channel = supabase
+      .channel('qr_activations_global')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'qr_activation_codes',
+        filter: `project_id=eq.${projectId}`
+      }, async (payload) => {
+        const updated = payload.new as { status: string; guid: string; assembly_mark: string | null };
+
+        // If activated, color the detail green
+        if (updated.status === 'activated' && updated.guid) {
+          console.log('[QR Activation] Detail found:', updated.assembly_mark || updated.guid);
+          showGlobalToast(`${updated.assembly_mark || 'Detail'} leitud platsilt!`, 'success');
+
+          try {
+            // First color entire model white
+            await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+            // Find and color this element green
+            const foundMap = await findObjectsInLoadedModels(api, [updated.guid]);
+            if (foundMap.size > 0) {
+              const foundItem = foundMap.values().next().value;
+              if (foundItem) {
+                const green = { r: 34, g: 197, b: 94, a: 255 };
+                await api.viewer.setObjectState(
+                  { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
+                  { color: green }
+                );
+                // Also select the object
+                await api.viewer.setSelection(
+                  { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
+                  'set'
+                );
+                console.log('[QR Activation] Detail colored green and selected');
+              }
+            }
+          } catch (e) {
+            console.error('[QR Activation] Error coloring model:', e);
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [api, projectId, showGlobalToast]);
+
   // Global keyboard shortcuts
   useEffect(() => {
     if (!api || !projectId) return;
