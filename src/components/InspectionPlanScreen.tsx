@@ -6,6 +6,7 @@ import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
 import { InspectionHistory } from './InspectionHistory';
 import InspectionConfigScreen from './InspectionConfigScreen';
+import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 
 // Checkpoint result data (from inspection_results table)
 interface CheckpointResultData {
@@ -83,6 +84,9 @@ export default function InspectionPlanScreen({
   onColorModelWhite,
   onOpenPartDatabase
 }: InspectionPlanScreenProps) {
+  // Property mappings for correct Tekla property reading
+  const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
+
   // View state
   const [viewMode, setViewMode] = useState<ViewMode>('add');
   const [assemblyMode, setAssemblyMode] = useState<AssemblyMode>('on');
@@ -216,10 +220,15 @@ export default function InspectionPlanScreen({
               let productName = '';
 
               if (objProps?.properties) {
+                // Get property mapping settings (with defaults)
+                const assemblyMarkSet = propertyMappings?.assembly_mark_set || 'Tekla Assembly';
+                const assemblyMarkProp = propertyMappings?.assembly_mark_prop || 'Cast_unit_Mark';
+
                 for (const pset of objProps.properties) {
                   const psetAny = pset as any;
                   const psetName = psetAny.name || '';
                   const psetNameLower = psetName.toLowerCase();
+                  const psetNameNormalized = psetName.replace(/\s+/g, '').toLowerCase();
 
                   for (const prop of psetAny.properties || []) {
                     const propName = (prop.name || '').toLowerCase();
@@ -240,20 +249,34 @@ export default function InspectionPlanScreen({
                     if (propName === 'name' && !objectName) objectName = propValue;
                   }
 
-                  if (psetName === 'Tekla Assembly') {
+                  // Check for assembly mark using mapped property set/property
+                  const assemblyMarkSetNorm = assemblyMarkSet.replace(/\s+/g, '').toLowerCase();
+                  if (psetNameNormalized === assemblyMarkSetNorm || psetName === assemblyMarkSet) {
                     for (const prop of psetAny.properties || []) {
-                      if (prop.name === 'Cast_unit_Mark') assemblyMark = String(prop.value || '');
+                      if (prop.name === assemblyMarkProp) {
+                        assemblyMark = String(prop.value || '');
+                      }
                     }
                   }
 
+                  // Check for product name in Product property set
+                  if (psetNameLower === 'product') {
+                    for (const prop of psetAny.properties || []) {
+                      if (prop.name === 'Name' && !productName) {
+                        productName = String(prop.value || '');
+                      }
+                    }
+                    // Also check direct Name property on pset
+                    if (psetAny.Name && !productName) {
+                      productName = String(psetAny.Name || '');
+                    }
+                  }
+
+                  // Fallback: Tekla Common for object name
                   if (psetName === 'Tekla Common') {
                     for (const prop of psetAny.properties || []) {
                       if (prop.name === 'Name' && !objectName) objectName = String(prop.value || '');
                     }
-                  }
-
-                  if (psetNameLower === 'product' && psetAny.Name) {
-                    productName = String(psetAny.Name || '');
                   }
                 }
               }
@@ -1294,6 +1317,9 @@ export default function InspectionPlanScreen({
                     <span className="selected-name">
                       {obj.assemblyMark || obj.objectName || `Object ${idx + 1}`}
                     </span>
+                    {obj.productName && (
+                      <span className="selected-product">{obj.productName}</span>
+                    )}
                     <span className="selected-type">{obj.objectType}</span>
                     {duplicates.find(d => d.guid === obj.guid) && (
                       <span className="duplicate-badge">⚠️ Juba kavas</span>

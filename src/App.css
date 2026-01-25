@@ -4606,13 +4606,20 @@ button.stat-toggle.off:hover {
 }
 
 .selected-name {
+  font-weight: 600;
+  color: var(--modus-text-primary);
+}
+
+.selected-product {
+  font-size: 0.75rem;
+  color: var(--modus-primary);
   font-weight: 500;
-  flex: 1;
 }
 
 .selected-type {
   font-size: 0.7rem;
   color: var(--modus-text-secondary);
+  margin-left: auto;
 }
 
 .duplicate-badge {
