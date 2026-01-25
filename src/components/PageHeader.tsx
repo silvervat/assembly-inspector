@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   FiArrowLeft, FiMenu, FiTruck, FiCalendar, FiClipboard,
   FiFolder, FiAlertTriangle, FiShield, FiX, FiTool, FiChevronRight, FiSearch, FiLoader, FiBook
@@ -33,19 +34,20 @@ interface NavItem {
   hasSubmenu?: boolean; // If true, shows submenu on hover
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { mode: 'delivery_schedule', label: 'Tarnegraafikud', icon: <FiTruck size={18} />, color: '#059669' },
-  { mode: 'schedule', label: 'Paigaldusgraafikud', icon: <FiCalendar size={18} />, color: '#8b5cf6' },
-  { mode: 'arrived_deliveries', label: 'Saabumised', icon: <FiClipboard size={18} />, color: '#0891b2' },
-  { mode: 'installations', label: 'Paigaldamised', icon: <PiCraneTowerFill size={18} />, color: 'var(--modus-info)' },
-  { mode: 'inspection_plans', label: 'Kontrollid', icon: <FiClipboard size={18} />, color: '#10b981', hasSubmenu: true },
-  { mode: 'issues', label: 'Mittevastavaused', icon: <FiAlertTriangle size={18} />, color: '#dc2626' },
-  { mode: 'organizer', label: 'Organiseerija', icon: <FiFolder size={18} />, color: '#7c3aed' },
-  { mode: 'tools', label: 'Tööriistad', icon: <FiTool size={18} />, color: '#f59e0b', hasSubmenu: true },
-  { mode: 'keyboard_shortcuts', label: 'Kasutusjuhendid', icon: <FiBook size={18} />, color: '#8b5cf6' },
-  { mode: 'inspection_plan', label: 'Inspektsiooni kava', icon: <FiClipboard size={18} />, color: '#6b7280', adminOnly: true },
-  { mode: 'admin', label: 'Administratsioon', icon: <FiShield size={18} />, color: '#6b7280', adminOnly: true },
-  { mode: null, label: 'Peamenüü', icon: <FiMenu size={18} />, color: '#6b7280' },
+// Nav items with translation keys
+const getNavItems = (t: (key: string) => string): NavItem[] => [
+  { mode: 'delivery_schedule', label: t('menu.deliverySchedules'), icon: <FiTruck size={18} />, color: '#059669' },
+  { mode: 'schedule', label: t('menu.installationSchedules'), icon: <FiCalendar size={18} />, color: '#8b5cf6' },
+  { mode: 'arrived_deliveries', label: t('menu.arrivals'), icon: <FiClipboard size={18} />, color: '#0891b2' },
+  { mode: 'installations', label: t('menu.installations'), icon: <PiCraneTowerFill size={18} />, color: 'var(--modus-info)' },
+  { mode: 'inspection_plans', label: t('menu.inspectionPlans'), icon: <FiClipboard size={18} />, color: '#10b981', hasSubmenu: true },
+  { mode: 'issues', label: t('menu.nonConformances'), icon: <FiAlertTriangle size={18} />, color: '#dc2626' },
+  { mode: 'organizer', label: t('menu.organizer'), icon: <FiFolder size={18} />, color: '#7c3aed' },
+  { mode: 'tools', label: t('menu.tools'), icon: <FiTool size={18} />, color: '#f59e0b', hasSubmenu: true },
+  { mode: 'keyboard_shortcuts', label: t('menu.guides'), icon: <FiBook size={18} />, color: '#8b5cf6' },
+  { mode: 'inspection_plan', label: t('menu.inspectionPlan'), icon: <FiClipboard size={18} />, color: '#6b7280', adminOnly: true },
+  { mode: 'admin', label: t('menu.admin'), icon: <FiShield size={18} />, color: '#6b7280', adminOnly: true },
+  { mode: null, label: t('menu.mainMenu'), icon: <FiMenu size={18} />, color: '#6b7280' },
 ];
 
 export default function PageHeader({
@@ -62,9 +64,13 @@ export default function PageHeader({
   onSelectInspectionType,
   onOpenPartDatabase
 }: PageHeaderProps) {
+  const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const [submenuOpen, setSubmenuOpen] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Get translated nav items
+  const NAV_ITEMS = getNavItems(t);
 
   // Quick search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -181,7 +187,7 @@ export default function PageHeader({
       if (error) throw error;
 
       if (!data || data.length === 0) {
-        setSearchResult({ count: 0, message: `"${query}" - ei leitud` });
+        setSearchResult({ count: 0, message: t('pageHeader.notFound', { query }) });
         setSearchLoading(false);
         return;
       }
@@ -190,7 +196,7 @@ export default function PageHeader({
       const guids = data.map(d => d.guid_ifc).filter(Boolean) as string[];
 
       if (guids.length === 0) {
-        setSearchResult({ count: 0, message: `"${query}" - GUID puudub` });
+        setSearchResult({ count: 0, message: t('pageHeader.noGuid', { query }) });
         setSearchLoading(false);
         return;
       }
@@ -199,7 +205,7 @@ export default function PageHeader({
       const foundObjects = await findObjectsInLoadedModels(api, guids);
 
       if (foundObjects.size === 0) {
-        setSearchResult({ count: data.length, message: `${data.length} leitud andmebaasist, mudel pole laaditud` });
+        setSearchResult({ count: data.length, message: t('pageHeader.foundInDb', { count: data.length }) });
         setSearchLoading(false);
         return;
       }
@@ -227,11 +233,11 @@ export default function PageHeader({
 
       setSearchResult({
         count: foundObjects.size,
-        message: `${foundObjects.size} detaili valitud mudelis`
+        message: t('pageHeader.selectedInModel', { count: foundObjects.size })
       });
     } catch (e) {
       console.error('Quick search error:', e);
-      setSearchResult({ count: 0, message: 'Otsingu viga' });
+      setSearchResult({ count: 0, message: t('pageHeader.searchError') });
     } finally {
       setSearchLoading(false);
     }
@@ -271,7 +277,7 @@ export default function PageHeader({
         <button
           className="page-header-back"
           onClick={onBack}
-          title="Tagasi"
+          title={t('pageHeader.back')}
         >
           <FiArrowLeft size={18} />
         </button>
@@ -280,7 +286,7 @@ export default function PageHeader({
           <button
             className={`page-header-hamburger ${menuOpen ? 'active' : ''}`}
             onClick={() => setMenuOpen(!menuOpen)}
-            title="Menüü"
+            title={t('pageHeader.menu')}
           >
             {menuOpen ? <FiX size={18} /> : <FiMenu size={18} />}
           </button>
@@ -295,7 +301,7 @@ export default function PageHeader({
                     <input
                       type="text"
                       className="quick-search-input"
-                      placeholder="Otsi Cast Unit Mark..."
+                      placeholder={t('pageHeader.searchPlaceholder')}
                       value={searchQuery}
                       onChange={(e) => handleSearchInputChange(e.target.value)}
                     />
@@ -304,7 +310,7 @@ export default function PageHeader({
                       <button
                         className="quick-search-clear"
                         onClick={clearSearch}
-                        title="Tühjenda"
+                        title={t('pageHeader.clear')}
                       >
                         <FiX size={14} />
                       </button>
@@ -346,7 +352,7 @@ export default function PageHeader({
                         className="submenu-item"
                         onClick={() => handleNavigate('inspection_plans')}
                       >
-                        Kõik kontrollplaanid
+                        {t('pageHeader.allInspectionPlans')}
                       </button>
                       {inspectionTypes.map((type) => (
                         <button
@@ -373,13 +379,13 @@ export default function PageHeader({
                         className="submenu-item"
                         onClick={() => handleNavigate('tools')}
                       >
-                        Kõik tööriistad
+                        {t('pageHeader.allTools')}
                       </button>
                       <button
                         className="submenu-item"
                         onClick={() => handleNavigate('crane_planner')}
                       >
-                        Kraanade Planeerimine
+                        {t('pageHeader.cranePlanning')}
                       </button>
                       <button
                         className="submenu-item"
@@ -393,7 +399,7 @@ export default function PageHeader({
                           }
                         }}
                       >
-                        Detaili andmebaas
+                        {t('pageHeader.partDatabase')}
                       </button>
                       <button
                         className="submenu-item"
@@ -403,7 +409,7 @@ export default function PageHeader({
                           onColorModelWhite?.();
                         }}
                       >
-                        Värvi mudel valgeks
+                        {t('pageHeader.colorModelWhite')}
                       </button>
                     </div>
                   )}

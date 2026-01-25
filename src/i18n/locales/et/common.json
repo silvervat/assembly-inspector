@@ -111,6 +111,23 @@
     "inspectionPlan": "Inspektsiooni kava",
     "inspectionPlanDesc": "Koosta inspektsiooni kava",
     "admin": "Administratsioon",
-    "adminDesc": "Admin tööriistad"
+    "adminDesc": "Admin tööriistad",
+    "mainMenu": "Peamenüü"
+  },
+  "pageHeader": {
+    "back": "Tagasi",
+    "menu": "Menüü",
+    "searchPlaceholder": "Otsi Cast Unit Mark...",
+    "clear": "Tühjenda",
+    "notFound": "\"{{query}}\" - ei leitud",
+    "noGuid": "\"{{query}}\" - GUID puudub",
+    "foundInDb": "{{count}} leitud andmebaasist, mudel pole laaditud",
+    "selectedInModel": "{{count}} detaili valitud mudelis",
+    "searchError": "Otsingu viga",
+    "allInspectionPlans": "Kõik kontrollplaanid",
+    "allTools": "Kõik tööriistad",
+    "cranePlanning": "Kraanade Planeerimine",
+    "partDatabase": "Detaili andmebaas",
+    "colorModelWhite": "Värvi mudel valgeks"
   }
 }

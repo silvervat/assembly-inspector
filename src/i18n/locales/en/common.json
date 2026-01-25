@@ -111,6 +111,23 @@
     "inspectionPlan": "Inspection Plan",
     "inspectionPlanDesc": "Create inspection plan",
     "admin": "Administration",
-    "adminDesc": "Admin tools"
+    "adminDesc": "Admin tools",
+    "mainMenu": "Main Menu"
+  },
+  "pageHeader": {
+    "back": "Back",
+    "menu": "Menu",
+    "searchPlaceholder": "Search Cast Unit Mark...",
+    "clear": "Clear",
+    "notFound": "\"{{query}}\" - not found",
+    "noGuid": "\"{{query}}\" - GUID missing",
+    "foundInDb": "{{count}} found in database, model not loaded",
+    "selectedInModel": "{{count}} items selected in model",
+    "searchError": "Search error",
+    "allInspectionPlans": "All Inspection Plans",
+    "allTools": "All Tools",
+    "cranePlanning": "Crane Planning",
+    "partDatabase": "Part Database",
+    "colorModelWhite": "Color Model White"
   }
 }
