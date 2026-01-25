@@ -476,6 +476,8 @@ export default function AdminScreen({
   const [positionsLoading, setPositionsLoading] = useState(false);
   const [positionCapturing, setPositionCapturing] = useState(false);
   const [scannerActive, setScannerActive] = useState(false);
+  const scannerActiveRef = useRef(false); // Ref for interval access
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -3461,62 +3463,108 @@ export default function AdminScreen({
   // Start QR scanner
   const startScanner = useCallback(async () => {
     try {
+      console.log('[Scanner] Starting camera...');
+
+      // Check if BarcodeDetector is available
+      if (!('BarcodeDetector' in window)) {
+        setMessage('QR skänner pole selles brauseris toetatud. Kasuta Chrome\'i.');
+        return;
+      }
+
       // Request camera permission
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' } // Use back camera on mobile
+        video: {
+          facingMode: 'environment', // Use back camera on mobile
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
       });
+
+      console.log('[Scanner] Camera stream obtained');
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        setScannerActive(true);
-        setMessage('Suuna kaamera QR koodile...');
 
-        // Start scanning loop
-        const scanInterval = setInterval(async () => {
-          if (!videoRef.current || !canvasRef.current || !scannerActive) {
-            clearInterval(scanInterval);
-            return;
-          }
+        // Wait for video to be ready
+        videoRef.current.onloadedmetadata = () => {
+          console.log('[Scanner] Video metadata loaded');
+          if (videoRef.current) {
+            videoRef.current.play().then(() => {
+              console.log('[Scanner] Video playing');
+              setScannerActive(true);
+              scannerActiveRef.current = true;
+              setMessage('Suuna kaamera QR koodile...');
 
-          const video = videoRef.current;
-          const canvas = canvasRef.current;
-          const ctx = canvas.getContext('2d');
-
-          if (video.readyState === video.HAVE_ENOUGH_DATA && ctx) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-            // Use built-in BarcodeDetector API for QR scanning
-            if ('BarcodeDetector' in window) {
-              try {
-                const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
-                const barcodes = await barcodeDetector.detect(canvas);
-                if (barcodes.length > 0) {
-                  clearInterval(scanInterval);
-                  handleQrScanned(barcodes[0].rawValue);
+              // Start scanning loop
+              scanIntervalRef.current = setInterval(async () => {
+                if (!videoRef.current || !canvasRef.current || !scannerActiveRef.current) {
+                  if (scanIntervalRef.current) {
+                    clearInterval(scanIntervalRef.current);
+                    scanIntervalRef.current = null;
+                  }
+                  return;
                 }
-              } catch (e) {
-                console.warn('BarcodeDetector error:', e);
-              }
-            }
+
+                const video = videoRef.current;
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+
+                if (video.readyState === video.HAVE_ENOUGH_DATA && ctx) {
+                  canvas.width = video.videoWidth;
+                  canvas.height = video.videoHeight;
+                  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                  try {
+                    const barcodeDetector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+                    const barcodes = await barcodeDetector.detect(canvas);
+                    if (barcodes.length > 0 && scannerActiveRef.current) {
+                      console.log('[Scanner] QR detected:', barcodes[0].rawValue);
+                      if (scanIntervalRef.current) {
+                        clearInterval(scanIntervalRef.current);
+                        scanIntervalRef.current = null;
+                      }
+                      handleQrScanned(barcodes[0].rawValue);
+                    }
+                  } catch (e) {
+                    // Silent - BarcodeDetector sometimes throws on invalid frames
+                  }
+                }
+              }, 250);
+            }).catch(e => {
+              console.error('[Scanner] Video play error:', e);
+              setMessage('Video ei käivitu. Kontrolli kaamera õigusi.');
+            });
           }
-        }, 200);
+        };
       }
     } catch (e: any) {
-      console.error('Camera error:', e);
-      setMessage('Kaamera ligipääs keelatud. Luba kaamera kasutamine.');
+      console.error('[Scanner] Camera error:', e);
+      if (e.name === 'NotAllowedError') {
+        setMessage('Kaamera ligipääs keelatud. Luba kaamera kasutamine brauseri seadetes.');
+      } else if (e.name === 'NotFoundError') {
+        setMessage('Kaamerat ei leitud. Kontrolli, et seadmel on kaamera.');
+      } else {
+        setMessage(`Kaamera viga: ${e.message}`);
+      }
     }
-  }, [scannerActive]);
+  }, []);
 
   // Stop scanner
   const stopScanner = useCallback(() => {
+    console.log('[Scanner] Stopping...');
+    scannerActiveRef.current = false;
+
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+
     if (videoRef.current?.srcObject) {
       const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
       tracks.forEach(track => track.stop());
       videoRef.current.srcObject = null;
     }
+
     setScannerActive(false);
   }, []);
 
