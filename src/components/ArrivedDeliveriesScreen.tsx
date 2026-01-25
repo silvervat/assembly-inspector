@@ -14,7 +14,7 @@ import {
   FiUpload, FiImage, FiMessageCircle,
   FiFileText, FiDownload, FiSearch, FiDroplet, FiTrash2,
   FiExternalLink, FiLoader, FiCopy, FiEdit2, FiMoreVertical, FiShare2,
-  FiList, FiSave
+  FiList, FiSave, FiTarget
 } from 'react-icons/fi';
 import * as XLSX from 'xlsx-js-style';
 import { downloadDeliveryReportPDF } from '../utils/pdfGenerator';
@@ -508,6 +508,12 @@ export default function ArrivedDeliveriesScreen({
   const [itemsListEditVehicleId, setItemsListEditVehicleId] = useState<string | null>(null); // For edit modal
   const [itemsListEditMode, setItemsListEditMode] = useState(false); // Edit mode toggle
   const [itemsListPendingChanges, setItemsListPendingChanges] = useState<Map<string, ArrivalItemStatus>>(new Map()); // itemId -> new status
+  const [itemsListShowOnlyModelSelected, setItemsListShowOnlyModelSelected] = useState(false); // Filter to show only model-selected items
+  const [itemsListModelSelectedGuids, setItemsListModelSelectedGuids] = useState<Set<string>>(new Set()); // GUIDs from model selection
+  // Mass arrival marking state
+  const [massArrivalComment, setMassArrivalComment] = useState('');
+  const [massArrivalDateMode, setMassArrivalDateMode] = useState<'planned' | 'custom'>('planned');
+  const [massArrivalCustomDate, setMassArrivalCustomDate] = useState(new Date().toISOString().split('T')[0]);
 
   // State - Unassigned arrivals (items found on site without vehicle assignment)
   const [unassignedArrivals, setUnassignedArrivals] = useState<UnassignedArrival[]>([]);
@@ -5244,10 +5250,55 @@ export default function ArrivedDeliveriesScreen({
         ));
         const markColumnWidth = Math.max(60, maxMarkLength * 9 + 16); // ~9px per char + padding
 
+        // Function to sync model selection to filter
+        const syncModelSelection = async () => {
+          try {
+            const selection = await api.viewer.getSelection();
+            if (!selection || selection.length === 0) {
+              setMessage('Mudelis pole midagi valitud');
+              return;
+            }
+
+            const guids = new Set<string>();
+            for (const sel of selection) {
+              if (!sel.objectRuntimeIds || sel.objectRuntimeIds.length === 0) continue;
+              const externalIds = await api.viewer.convertToObjectIds(sel.modelId, sel.objectRuntimeIds) || [];
+              for (const guid of externalIds) {
+                if (guid) guids.add(guid.toLowerCase());
+              }
+            }
+
+            if (guids.size === 0) {
+              setMessage('Valitud objektidel pole GUID-i');
+              return;
+            }
+
+            setItemsListModelSelectedGuids(guids);
+            setItemsListShowOnlyModelSelected(true);
+
+            // Auto-select matching items in the list
+            const matchingItemIds = items
+              .filter(item => item.guid_ifc && guids.has(item.guid_ifc.toLowerCase()))
+              .map(item => item.id);
+            setItemsListSelectedIds(new Set(matchingItemIds));
+
+            setMessage(`✓ ${guids.size} objekti filtreeritud, ${matchingItemIds.length} leitud nimekirjast`);
+          } catch (e: any) {
+            setMessage('Viga: ' + e.message);
+          }
+        };
+
         // Filter and sort items
         const query = itemsListSearchQuery.toLowerCase().trim();
         const filteredItems = items
           .filter(item => {
+            // Model selection filter
+            if (itemsListShowOnlyModelSelected && itemsListModelSelectedGuids.size > 0) {
+              if (!item.guid_ifc || !itemsListModelSelectedGuids.has(item.guid_ifc.toLowerCase())) {
+                return false;
+              }
+            }
+            // Text search filter
             if (!query) return true;
             const vehicle = getVehicle(item.vehicle_id);
             return (
@@ -5484,6 +5535,49 @@ export default function ArrivedDeliveriesScreen({
                 )}
               </div>
 
+              {/* Model selection filter button */}
+              <button
+                onClick={syncModelSelection}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '4px 8px',
+                  background: itemsListShowOnlyModelSelected ? '#3b82f6' : '#f3f4f6',
+                  color: itemsListShowOnlyModelSelected ? '#fff' : '#374151',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '4px',
+                  fontSize: '10px',
+                  cursor: 'pointer'
+                }}
+                title="Näita ainult mudelis valitud detaile"
+              >
+                <FiTarget size={11} />
+                Mudelis valitud
+              </button>
+
+              {/* Clear model filter */}
+              {itemsListShowOnlyModelSelected && (
+                <button
+                  onClick={() => {
+                    setItemsListShowOnlyModelSelected(false);
+                    setItemsListModelSelectedGuids(new Set());
+                  }}
+                  style={{
+                    padding: '4px 6px',
+                    background: '#fee2e2',
+                    color: '#dc2626',
+                    border: 'none',
+                    borderRadius: '4px',
+                    fontSize: '10px',
+                    cursor: 'pointer'
+                  }}
+                  title="Tühista filter"
+                >
+                  <FiX size={11} />
+                </button>
+              )}
+
               {/* Items count */}
               <span style={{ fontSize: '10px', color: '#64748b' }}>
                 {filteredItems.length} tk
@@ -5674,6 +5768,214 @@ export default function ArrivedDeliveriesScreen({
                 )}
               </div>
             </div>
+
+            {/* Mass arrival panel - shown when items are selected */}
+            {itemsListSelectedIds.size > 0 && !itemsListEditMode && (
+              <div style={{
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: '6px',
+                padding: '10px',
+                marginBottom: '8px'
+              }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: '#1e40af', marginBottom: '8px' }}>
+                  Märgi {itemsListSelectedIds.size} detaili saabunuks
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {/* Date selection */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <label style={{ fontSize: '10px', color: '#374151', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input
+                        type="radio"
+                        name="arrivalDateMode"
+                        checked={massArrivalDateMode === 'planned'}
+                        onChange={() => setMassArrivalDateMode('planned')}
+                        style={{ width: '12px', height: '12px' }}
+                      />
+                      Nagu planeeritud
+                    </label>
+                    <label style={{ fontSize: '10px', color: '#374151', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input
+                        type="radio"
+                        name="arrivalDateMode"
+                        checked={massArrivalDateMode === 'custom'}
+                        onChange={() => setMassArrivalDateMode('custom')}
+                        style={{ width: '12px', height: '12px' }}
+                      />
+                      Muu kuupäev:
+                    </label>
+                    {massArrivalDateMode === 'custom' && (
+                      <input
+                        type="date"
+                        value={massArrivalCustomDate}
+                        onChange={(e) => setMassArrivalCustomDate(e.target.value)}
+                        style={{
+                          padding: '3px 6px',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '4px',
+                          fontSize: '10px'
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  {/* Comment field */}
+                  <div>
+                    <textarea
+                      placeholder="Kommentaar (valikuline)..."
+                      value={massArrivalComment}
+                      onChange={(e) => setMassArrivalComment(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '6px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '4px',
+                        fontSize: '10px',
+                        resize: 'vertical',
+                        minHeight: '40px'
+                      }}
+                    />
+                  </div>
+
+                  {/* Action button */}
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={async () => {
+                        setItemsListSaving(true);
+                        try {
+                          let updated = 0;
+                          const newlyCreatedArrivals = new Map<string, ArrivedVehicle>();
+
+                          for (const itemId of itemsListSelectedIds) {
+                            const item = items.find(i => i.id === itemId);
+                            if (!item) continue;
+                            const vehicle = getVehicle(item.vehicle_id);
+                            if (!vehicle) continue;
+
+                            let arrivedVehicle = getArrivedVehicle(vehicle.id) || newlyCreatedArrivals.get(vehicle.id);
+
+                            // Determine arrival date
+                            const arrivalDate = massArrivalDateMode === 'planned'
+                              ? (vehicle.scheduled_date || new Date().toISOString().split('T')[0])
+                              : massArrivalCustomDate;
+
+                            // Create arrival record if doesn't exist
+                            if (!arrivedVehicle) {
+                              const { data, error } = await supabase
+                                .from('trimble_arrived_vehicles')
+                                .insert({
+                                  vehicle_id: vehicle.id,
+                                  trimble_project_id: projectId,
+                                  arrival_date: arrivalDate,
+                                  arrival_time: new Date().toTimeString().substring(0, 5),
+                                  is_confirmed: false,
+                                  created_by: tcUserEmail
+                                })
+                                .select()
+                                .single();
+
+                              if (!error && data) {
+                                arrivedVehicle = data;
+                                newlyCreatedArrivals.set(vehicle.id, data);
+                                // Create confirmation records for all vehicle items
+                                const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
+                                await supabase.from('trimble_arrival_confirmations').insert(
+                                  vehicleItems.map(vi => ({
+                                    trimble_project_id: projectId,
+                                    arrived_vehicle_id: data.id,
+                                    item_id: vi.id,
+                                    status: 'pending',
+                                    confirmed_by: tcUserEmail
+                                  }))
+                                );
+                              }
+                            }
+
+                            if (arrivedVehicle) {
+                              const { data: updateData } = await supabase
+                                .from('trimble_arrival_confirmations')
+                                .update({
+                                  status: 'confirmed',
+                                  comment: massArrivalComment || null,
+                                  confirmed_at: new Date().toISOString(),
+                                  confirmed_by: tcUserEmail
+                                })
+                                .eq('arrived_vehicle_id', arrivedVehicle.id)
+                                .eq('item_id', itemId)
+                                .select();
+
+                              // If update affected 0 rows, insert new confirmation record
+                              if (!updateData || updateData.length === 0) {
+                                await supabase
+                                  .from('trimble_arrival_confirmations')
+                                  .insert({
+                                    trimble_project_id: projectId,
+                                    arrived_vehicle_id: arrivedVehicle.id,
+                                    item_id: itemId,
+                                    status: 'confirmed',
+                                    comment: massArrivalComment || null,
+                                    confirmed_at: new Date().toISOString(),
+                                    confirmed_by: tcUserEmail
+                                  });
+                              }
+                              updated++;
+                            }
+                          }
+
+                          await loadArrivedVehicles();
+                          await loadConfirmations();
+                          setItemsListSelectedIds(new Set());
+                          setMassArrivalComment('');
+                          setMassArrivalDateMode('planned');
+                          setMessage(`✓ ${updated} detaili märgitud saabunuks`);
+                        } catch (e: any) {
+                          setMessage('Viga: ' + e.message);
+                        } finally {
+                          setItemsListSaving(false);
+                        }
+                      }}
+                      disabled={itemsListSaving}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '6px 12px',
+                        background: '#22c55e',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 500,
+                        cursor: itemsListSaving ? 'not-allowed' : 'pointer',
+                        opacity: itemsListSaving ? 0.7 : 1
+                      }}
+                    >
+                      <FiCheck size={12} />
+                      Märgi saabunuks
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setItemsListSelectedIds(new Set());
+                        setMassArrivalComment('');
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        background: '#f3f4f6',
+                        color: '#374151',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Tühista
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Compact items table */}
             <div style={{
