@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { FiPlus, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage, FiEdit2, FiX, FiCheck, FiSearch, FiFilter, FiFileText, FiSettings } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage, FiEdit2, FiX, FiCheck, FiSearch, FiFilter, FiFileText, FiSettings, FiDownload } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, InspectionTypeRef, InspectionCategory, InspectionPlanItem, InspectionPlanStats, TrimbleExUser, INSPECTION_STATUS_COLORS } from '../supabase';
 import PageHeader from './PageHeader';
@@ -8,6 +8,7 @@ import { InspectionHistory } from './InspectionHistory';
 import InspectionConfigScreen from './InspectionConfigScreen';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
+import { downloadInspectionReportPDF, InspectionReportData } from '../utils/inspectionPdfGenerator';
 
 // Checkpoint result data (from inspection_results table)
 interface CheckpointResultData {
@@ -136,6 +137,10 @@ export default function InspectionPlanScreen({
 
   // Config screen state (for admin/moderator)
   const [showConfigScreen, setShowConfigScreen] = useState(false);
+
+  // PDF export state
+  const [exportingPdfItemId, setExportingPdfItemId] = useState<string | null>(null);
+  const [pdfProgress, setPdfProgress] = useState<{ percent: number; message: string } | null>(null);
 
   // Mass selection/delete state
   const [selectionMode, setSelectionMode] = useState(false);
@@ -847,6 +852,71 @@ export default function InspectionPlanScreen({
     } catch (error) {
       console.error('Failed to zoom to item:', error);
       showMessage('❌ Viga objekti valimisel', 'error');
+    }
+  };
+
+  // Export inspection result as PDF
+  const exportInspectionPdf = async (item: PlanItemWithStats) => {
+    if (!item.checkpointResults || item.checkpointResults.length === 0) {
+      showMessage('⚠️ Sellel objektil pole inspektsiooni tulemusi PDF-i jaoks', 'warning');
+      return;
+    }
+
+    setExportingPdfItemId(item.id);
+    setPdfProgress({ percent: 0, message: 'Alustab PDF genereerimist...' });
+
+    try {
+      // Get the inspection type and category info
+      const inspType = item.inspection_type || inspectionTypes.find(t => t.id === item.inspection_type_id);
+      const cat = item.category || categories.find(c => c.id === item.category_id);
+
+      // Get checkpoints for this category
+      const { data: checkpoints } = await supabase
+        .from('inspection_checkpoints')
+        .select('*')
+        .eq('category_id', item.category_id)
+        .eq('is_active', true)
+        .order('sort_order');
+
+      // Get full results with photos
+      const resultIds = item.checkpointResults.map(r => r.id);
+      const { data: fullResults } = await supabase
+        .from('inspection_results')
+        .select(`
+          *,
+          photos:inspection_result_photos(*)
+        `)
+        .in('id', resultIds);
+
+      // Map results with checkpoint info
+      const resultsWithCheckpoints = (fullResults || []).map(result => ({
+        ...result,
+        checkpoint: (checkpoints || []).find(cp => cp.id === result.checkpoint_id)
+      }));
+
+      // Build report data
+      const reportData: InspectionReportData = {
+        projectName: 'Project', // Could be passed as prop if needed
+        planItem: item,
+        inspectionType: inspType,
+        category: cat,
+        checkpoints: checkpoints || [],
+        results: resultsWithCheckpoints,
+        companyName: 'Assembly Inspector'
+      };
+
+      // Generate and download PDF
+      await downloadInspectionReportPDF(reportData, (percent, message) => {
+        setPdfProgress({ percent, message });
+      });
+
+      showMessage('✅ PDF allalaaditud!', 'success');
+    } catch (error) {
+      console.error('Failed to export PDF:', error);
+      showMessage('❌ PDF genereerimise viga: ' + (error as Error).message, 'error');
+    } finally {
+      setExportingPdfItemId(null);
+      setPdfProgress(null);
     }
   };
 
@@ -2007,6 +2077,16 @@ export default function InspectionPlanScreen({
                                                     >
                                                       <FiFileText size={12} />
                                                       Ajalugu
+                                                    </button>
+                                                    <button
+                                                      className="btn-export-pdf"
+                                                      onClick={(e) => { e.stopPropagation(); exportInspectionPdf(item); }}
+                                                      title="Ekspordi PDF raport"
+                                                      disabled={exportingPdfItemId === item.id}
+                                                      style={{ marginRight: '4px', background: exportingPdfItemId === item.id ? '#94a3b8' : '#059669', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: exportingPdfItemId === item.id ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}
+                                                    >
+                                                      <FiDownload size={12} />
+                                                      {exportingPdfItemId === item.id ? (pdfProgress?.message || 'Genereerin...') : 'PDF'}
                                                     </button>
                                                     <button
                                                       className="btn-delete-results"
