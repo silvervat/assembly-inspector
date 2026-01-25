@@ -178,6 +178,9 @@ export default function InspectorScreen({
   });
   const [activeStatusFilter, setActiveStatusFilter] = useState<string | null>(null);
   const [_planAssemblyModeRequired, setPlanAssemblyModeRequired] = useState<boolean | null>(null);
+  // Assembly mode locked by plan - when true, prevents user from changing it
+  const [assemblyModeLocked, setAssemblyModeLocked] = useState<boolean>(false);
+  const [lockedAssemblyMode, setLockedAssemblyMode] = useState<boolean | null>(null);
   const inspectionListRef = useRef<HTMLDivElement>(null);
 
   // EOS2 Navigation hook - polls for commands from EOS2 and auto-navigates
@@ -295,14 +298,47 @@ export default function InspectorScreen({
     checkAssemblySelection();
   }, [checkAssemblySelection]);
 
-  // Auto-set assembly selection mode based on assigned plan
+  // Auto-set assembly selection mode based on assigned plan AND lock it
   useEffect(() => {
     if (assignedPlan && assignedPlan.assembly_selection_mode !== undefined) {
-      applyAssemblyMode(assignedPlan.assembly_selection_mode);
-      // Update local state to reflect the change
-      setAssemblySelectionEnabled(assignedPlan.assembly_selection_mode);
+      const targetMode = assignedPlan.assembly_selection_mode;
+      applyAssemblyMode(targetMode);
+      setAssemblySelectionEnabled(targetMode);
+      // Lock the assembly mode so user can't change it during inspection
+      setAssemblyModeLocked(true);
+      setLockedAssemblyMode(targetMode);
+      console.log(`🔒 Assembly mode locked to: ${targetMode ? 'ON' : 'OFF'}`);
+    } else {
+      // No plan assigned - unlock assembly mode
+      setAssemblyModeLocked(false);
+      setLockedAssemblyMode(null);
     }
   }, [assignedPlan]);
+
+  // Poll to enforce locked assembly mode - re-apply if user changes it in Trimble UI
+  useEffect(() => {
+    if (!assemblyModeLocked || lockedAssemblyMode === null) return;
+
+    const enforceLockedMode = async () => {
+      try {
+        const settings = await api.viewer.getSettings();
+        const currentMode = !!settings.assemblySelection;
+
+        // If user changed the mode, re-apply the locked mode
+        if (currentMode !== lockedAssemblyMode) {
+          console.log(`⚠️ User changed assembly mode, re-enforcing locked mode: ${lockedAssemblyMode ? 'ON' : 'OFF'}`);
+          await applyAssemblyMode(lockedAssemblyMode);
+        }
+      } catch (e) {
+        console.warn('Failed to check assembly mode:', e);
+      }
+    };
+
+    // Check every 2 seconds
+    const interval = setInterval(enforceLockedMode, 2000);
+
+    return () => clearInterval(interval);
+  }, [assemblyModeLocked, lockedAssemblyMode, api]);
 
   // Reusable function to color model by inspection status
   const colorModelByStatus = useCallback(async () => {
@@ -1771,10 +1807,13 @@ export default function InspectorScreen({
       const hasAssemblyModeRequired = planItems.some(item => item.assembly_selection_mode === true);
       setPlanAssemblyModeRequired(hasAssemblyModeRequired);
 
-      // If assembly mode is required, ensure it's enabled
-      if (hasAssemblyModeRequired && !assemblySelectionEnabled) {
-        await applyAssemblyMode(true);
-        setAssemblySelectionEnabled(true);
+      // Only apply assembly mode from plan items if NOT currently locked by assigned plan
+      // This prevents overriding a locked OFF mode when the user is inspecting a specific item
+      if (!assemblyModeLocked) {
+        if (hasAssemblyModeRequired && !assemblySelectionEnabled) {
+          await applyAssemblyMode(true);
+          setAssemblySelectionEnabled(true);
+        }
       }
 
       // Get inspection results to know which plan items have been inspected
@@ -1826,7 +1865,7 @@ export default function InspectorScreen({
     } catch (e) {
       console.error('Failed to load plan items:', e);
     }
-  }, [inspectionMode, inspectionTypeId, projectId, assemblySelectionEnabled]);
+  }, [inspectionMode, inspectionTypeId, projectId, assemblySelectionEnabled, assemblyModeLocked]);
 
   // Load plan items on mount for inspection_type mode
   useEffect(() => {
