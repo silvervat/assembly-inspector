@@ -34,7 +34,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.948';
+export const APP_VERSION = '3.0.949';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -2143,6 +2143,88 @@ export default function App() {
         } catch (err) {
           console.error('ALT+SHIFT+3 error:', err);
           showGlobalToast('Viga värvimisel', 'error');
+        } finally {
+          setShortcutLoading(null);
+        }
+        return;
+      }
+
+      // ALT+SHIFT+4 - Select installed elements in batches (handles 20k+ objects)
+      if (e.code === 'Digit4') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (shortcutLoading) return;
+        setShortcutLoading('4');
+
+        try {
+          // Get all installed items from database
+          const { data: installations, error: instError } = await supabase
+            .from('installations')
+            .select('guid_ifc')
+            .eq('project_id', projectId);
+
+          if (instError) throw instError;
+
+          if (!installations || installations.length === 0) {
+            showGlobalToast('Paigaldatud detaile ei leitud', 'info');
+            setShortcutLoading(null);
+            return;
+          }
+
+          const installedGuids = installations.map(i => i.guid_ifc).filter(Boolean) as string[];
+          console.log(`[ALT+SHIFT+4] Total installed GUIDs: ${installedGuids.length}`);
+
+          // Process in chunks for large datasets (20k+ support)
+          const GUID_CHUNK_SIZE = 5000; // How many GUIDs to process at a time
+          const SELECT_BATCH_SIZE = 2000; // How many objects to select per API call
+
+          let totalSelected = 0;
+          let isFirstBatch = true;
+
+          // Process GUIDs in chunks
+          for (let chunkStart = 0; chunkStart < installedGuids.length; chunkStart += GUID_CHUNK_SIZE) {
+            const guidChunk = installedGuids.slice(chunkStart, chunkStart + GUID_CHUNK_SIZE);
+            console.log(`[ALT+SHIFT+4] Processing GUID chunk ${chunkStart}-${chunkStart + guidChunk.length}`);
+
+            // Find objects in model for this chunk
+            const foundObjects = await findObjectsInLoadedModels(api, guidChunk);
+
+            if (foundObjects.size === 0) continue;
+
+            // Group by model
+            const objectsByModel: Record<string, number[]> = {};
+            for (const [, found] of foundObjects) {
+              if (!objectsByModel[found.modelId]) objectsByModel[found.modelId] = [];
+              objectsByModel[found.modelId].push(found.runtimeId);
+            }
+
+            // Select in batches
+            for (const [modelId, runtimeIds] of Object.entries(objectsByModel)) {
+              for (let i = 0; i < runtimeIds.length; i += SELECT_BATCH_SIZE) {
+                const batch = runtimeIds.slice(i, i + SELECT_BATCH_SIZE);
+                const modelObjectIds = [{ modelId, objectRuntimeIds: batch }];
+
+                // First batch uses 'set' to clear previous selection, rest use 'add'
+                const mode = isFirstBatch ? 'set' : 'add';
+                await api.viewer.setSelection({ modelObjectIds }, mode);
+
+                totalSelected += batch.length;
+                isFirstBatch = false;
+
+                console.log(`[ALT+SHIFT+4] Selected batch: ${batch.length} objects (total: ${totalSelected})`);
+              }
+            }
+          }
+
+          if (totalSelected === 0) {
+            showGlobalToast('Paigaldatud detaile mudelis ei leitud', 'info');
+          } else {
+            console.log(`[ALT+SHIFT+4] Total selected: ${totalSelected} objects`);
+            showGlobalToast(`${totalSelected} paigaldatud detaili valitud`, 'success');
+          }
+        } catch (err) {
+          console.error('ALT+SHIFT+4 error:', err);
+          showGlobalToast('Viga valimisel', 'error');
         } finally {
           setShortcutLoading(null);
         }
