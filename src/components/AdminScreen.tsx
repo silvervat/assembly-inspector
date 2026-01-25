@@ -3616,26 +3616,157 @@ export default function AdminScreen({
     }
 
     try {
-      setMessage('Joonistan asukohta mudelile...');
+      setMessage('Otsin detaili mudelis...');
 
-      // Check if model is loaded
-      const loadedModels = await api.viewer.getModels('loaded');
-      if (!loadedModels || loadedModels.length === 0) {
-        setMessage('Mudel pole laaditud');
+      // First, find the detail in the model to get its position
+      const { data: modelObj } = await supabase
+        .from('trimble_model_objects')
+        .select('guid_ifc')
+        .eq('trimble_project_id', projectId)
+        .ilike('guid_ifc', position.guid)
+        .limit(1)
+        .maybeSingle();
+
+      const guidsToSearch = modelObj?.guid_ifc
+        ? [modelObj.guid_ifc, position.guid]
+        : [position.guid];
+
+      const foundMap = await findObjectsInLoadedModels(api, guidsToSearch);
+      if (foundMap.size === 0) {
+        setMessage('Detaili ei leitud mudelis. Avan Google Maps...');
+        window.open(`https://www.google.com/maps?q=${position.latitude},${position.longitude}`, '_blank');
         return;
       }
 
-      // TODO: Implement proper GPS to model coordinate transformation
-      // For now, open Google Maps to show the location
-      // In future: use model geo-reference to convert GPS coords and draw markup circle
+      const foundItem = foundMap.values().next().value;
+      if (!foundItem) {
+        setMessage('Detaili ei leitud');
+        return;
+      }
 
-      const mapsUrl = `https://www.google.com/maps?q=${position.latitude},${position.longitude}`;
-      window.open(mapsUrl, '_blank');
-      setMessage(`📍 GPS: ${position.latitude!.toFixed(6)}, ${position.longitude!.toFixed(6)} - Avatud Google Maps`);
+      setMessage('Küsin detaili asukohta...');
+
+      // Get the object's bounding box to find its center position
+      const boundsArray = await api.viewer.getObjectBoundingBoxes(
+        foundItem.modelId,
+        [foundItem.runtimeId]
+      );
+
+      const bbox = boundsArray?.[0]?.boundingBox;
+      if (!bbox || !bbox.min || !bbox.max) {
+        setMessage('Detaili asukohta ei saanud määrata');
+        return;
+      }
+
+      // Calculate center of the bounding box
+      // Note: Trimble API returns coordinates in meters, need to convert to mm for markup
+      const centerX = ((bbox.min.x + bbox.max.x) / 2) * 1000; // meters to mm
+      const centerY = ((bbox.min.y + bbox.max.y) / 2) * 1000;
+      const centerZ = bbox.min.z * 1000; // Use bottom of object for ground level
+
+      setMessage('Joonistan 10m ringi...');
+
+      // Draw a 10m radius red circle using markup API
+      const markupApi = (api as any).markup;
+      if (!markupApi?.addFreelineMarkups) {
+        setMessage('Markup API pole saadaval');
+        return;
+      }
+
+      const radiusMm = 10 * 1000; // 10 meters in mm
+      const segments = 72;
+      const lineSegments: { start: { positionX: number; positionY: number; positionZ: number }; end: { positionX: number; positionY: number; positionZ: number } }[] = [];
+
+      // Generate circle segments
+      for (let i = 0; i < segments; i++) {
+        const angle1 = (i / segments) * 2 * Math.PI;
+        const angle2 = ((i + 1) / segments) * 2 * Math.PI;
+
+        lineSegments.push({
+          start: {
+            positionX: centerX + radiusMm * Math.cos(angle1),
+            positionY: centerY + radiusMm * Math.sin(angle1),
+            positionZ: centerZ
+          },
+          end: {
+            positionX: centerX + radiusMm * Math.cos(angle2),
+            positionY: centerY + radiusMm * Math.sin(angle2),
+            positionZ: centerZ
+          }
+        });
+      }
+
+      // Red color with full opacity
+      const red = { r: 255, g: 0, b: 0, a: 255 };
+
+      // Draw the circle
+      const circleMarkup = await markupApi.addFreelineMarkups([{
+        color: red,
+        lines: lineSegments
+      }]);
+
+      // Save markup ID to database for later cleanup
+      if (circleMarkup?.[0]?.id) {
+        await supabase
+          .from('detail_positions')
+          .update({ markup_id: String(circleMarkup[0].id) })
+          .eq('id', position.id);
+
+        // Update local state
+        setPositions(prev => prev.map(p =>
+          p.id === position.id ? { ...p, markup_id: String(circleMarkup[0].id) } : p
+        ));
+      }
+
+      // Color the detail orange and zoom to it
+      const orange = { r: 255, g: 165, b: 0, a: 255 };
+      await api.viewer.setObjectState(
+        { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
+        { color: orange }
+      );
+
+      // Zoom to show the circle
+      await api.viewer.setCamera(
+        { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
+        { animationTime: 500 }
+      );
+
+      setMessage(`✅ 10m ring joonistatud! GPS: ${position.latitude!.toFixed(6)}, ${position.longitude!.toFixed(6)}`);
 
     } catch (e: any) {
       console.error('Error drawing position:', e);
-      setMessage('Viga asukha joonistamisel');
+      setMessage('Viga asukoha joonistamisel: ' + e.message);
+    }
+  }, [api, projectId]);
+
+  // Remove position markup circle
+  const removePositionMarkup = useCallback(async (position: DetailPosition) => {
+    if (!position.markup_id) {
+      setMessage('Markup puudub');
+      return;
+    }
+
+    try {
+      const markupApi = (api as any).markup;
+      if (markupApi?.deleteMarkups) {
+        await markupApi.deleteMarkups([parseInt(position.markup_id)]);
+      }
+
+      // Clear markup_id from database
+      await supabase
+        .from('detail_positions')
+        .update({ markup_id: null })
+        .eq('id', position.id);
+
+      // Update local state
+      setPositions(prev => prev.map(p =>
+        p.id === position.id ? { ...p, markup_id: null } : p
+      ));
+
+      setMessage('Markup eemaldatud');
+    } catch (e: any) {
+      console.error('Error removing markup:', e);
+      setMessage('Viga markupi eemaldamisel');
     }
   }, [api]);
 
@@ -17681,15 +17812,27 @@ document.body.appendChild(div);`;
                     </button>
                     {pos.latitude && pos.longitude && (
                       <>
-                        <button
-                          className="admin-tool-btn"
-                          onClick={() => drawPositionCircle(pos)}
-                          style={{ flex: '1', minWidth: '80px', background: '#22c55e', color: '#fff' }}
-                          title="Joonista asukoht mudelile"
-                        >
-                          <FiTarget size={12} />
-                          <span>Joonista</span>
-                        </button>
+                        {pos.markup_id ? (
+                          <button
+                            className="admin-tool-btn"
+                            onClick={() => removePositionMarkup(pos)}
+                            style={{ flex: '1', minWidth: '80px', background: '#dc2626', color: '#fff' }}
+                            title="Eemalda ring mudelilt"
+                          >
+                            <FiX size={12} />
+                            <span>Eemalda</span>
+                          </button>
+                        ) : (
+                          <button
+                            className="admin-tool-btn"
+                            onClick={() => drawPositionCircle(pos)}
+                            style={{ flex: '1', minWidth: '80px', background: '#22c55e', color: '#fff' }}
+                            title="Joonista 10m ring mudelile"
+                          >
+                            <FiTarget size={12} />
+                            <span>Joonista</span>
+                          </button>
+                        )}
                         <button
                           className="admin-tool-btn"
                           onClick={() => window.open(`https://www.google.com/maps?q=${pos.latitude},${pos.longitude}`, '_blank')}
