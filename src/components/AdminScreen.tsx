@@ -3173,6 +3173,29 @@ export default function AdminScreen({
     }
   }, [projectId]);
 
+  // Real-time subscription for QR code updates
+  useEffect(() => {
+    if (!projectId) return;
+
+    const channel = supabase
+      .channel('qr_codes_admin')
+      .on('postgres_changes', {
+        event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+        schema: 'public',
+        table: 'qr_activation_codes',
+        filter: `project_id=eq.${projectId}`
+      }, (payload) => {
+        console.log('[QR Admin] Real-time update received:', payload);
+        // Reload QR codes when any change occurs
+        loadQrCodes();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [projectId, loadQrCodes]);
+
   // Generate QR for selected object
   const handleGenerateQr = useCallback(async () => {
     if (qrGenerating) return;
