@@ -434,12 +434,12 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
   const renderTypesTab = () => (
     <div className="config-section">
       <div className="section-header">
-        <h3>Inspektsioonitüübid</h3>
+        <h3>Inspektsiooni kategooriad</h3>
         <button
           className="btn btn-primary btn-sm"
           onClick={() => setEditingType({ is_active: true })}
         >
-          <FiPlus size={16} /> Lisa tüüp
+          <FiPlus size={16} /> Lisa kategooria
         </button>
       </div>
 
@@ -483,7 +483,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                   </div>
                 )}
                 <div className="detail-row">
-                  <span className="label">Kategooriaid:</span>
+                  <span className="label">Tüüpe:</span>
                   <span className="value">{categories.filter(c => c.type_id === type.id).length}</span>
                 </div>
               </div>
@@ -505,7 +505,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
       <div className="modal-overlay">
         <div className="modal-content">
           <div className="modal-header">
-            <h3>{editingType.id ? 'Muuda tüüpi' : 'Uus inspektsioonitüüp'}</h3>
+            <h3>{editingType.id ? 'Muuda kategooriat' : 'Uus inspektsiooni kategooria'}</h3>
             <button className="btn-icon" onClick={() => setEditingType(null)}>
               <FiX size={20} />
             </button>
@@ -583,14 +583,14 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
   const renderCategoriesTab = () => (
     <div className="config-section">
       <div className="section-header">
-        <h3>Kategooriad</h3>
+        <h3>Inspektsiooni tüübid</h3>
         <div className="header-controls">
           <select
             value={selectedTypeId || ''}
             onChange={e => setSelectedTypeId(e.target.value || null)}
             className="type-filter"
           >
-            <option value="">Kõik tüübid</option>
+            <option value="">Kõik kategooriad</option>
             {types.filter(t => t.is_active).map(t => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
@@ -599,7 +599,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
             className="btn btn-primary btn-sm"
             onClick={() => setEditingCategory({ type_id: selectedTypeId || '', is_active: true })}
           >
-            <FiPlus size={16} /> Lisa kategooria
+            <FiPlus size={16} /> Lisa tüüp
           </button>
         </div>
       </div>
@@ -613,7 +613,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
             <h4 className="type-title">{type.name}</h4>
             <div className="categories-list">
               {typeCategories.length === 0 ? (
-                <p className="empty-text">Kategooriaid pole. Lisa uus kategooria.</p>
+                <p className="empty-text">Tüüpe pole. Lisa uus tüüp.</p>
               ) : (
                 typeCategories.map(cat => (
                   <div key={cat.id} className="category-card">
@@ -660,7 +660,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
       <div className="modal-overlay">
         <div className="modal-content">
           <div className="modal-header">
-            <h3>{editingCategory.id ? 'Muuda kategooriat' : 'Uus kategooria'}</h3>
+            <h3>{editingCategory.id ? 'Muuda tüüpi' : 'Uus inspektsiooni tüüp'}</h3>
             <button className="btn-icon" onClick={() => setEditingCategory(null)}>
               <FiX size={20} />
             </button>
@@ -668,12 +668,12 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
 
           <div className="modal-body">
             <div className="form-group">
-              <label>Inspektsioonitüüp *</label>
+              <label>Inspektsiooni kategooria *</label>
               <select
                 value={editingCategory.type_id || ''}
                 onChange={e => setEditingCategory({ ...editingCategory, type_id: e.target.value })}
               >
-                <option value="">Vali tüüp...</option>
+                <option value="">Vali kategooria...</option>
                 {types.filter(t => t.is_active).map(t => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
@@ -727,7 +727,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                     checked={editingCategory.is_required || false}
                     onChange={e => setEditingCategory({ ...editingCategory, is_required: e.target.checked })}
                   />
-                  Kohustuslik kategooria
+                  Kohustuslik tüüp
                 </label>
               </div>
               <div className="form-group">
@@ -779,7 +779,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
               onChange={e => setSelectedCategoryId(e.target.value || null)}
               className="category-filter"
             >
-              <option value="">Kõik kategooriad</option>
+              <option value="">Kõik tüübid</option>
               {categories.filter(c => c.is_active).map(c => {
                 const type = types.find(t => t.id === c.type_id);
                 return (
@@ -942,12 +942,12 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
               <h4>Põhiandmed</h4>
 
               <div className="form-group">
-                <label>Kategooria *</label>
+                <label>Inspektsiooni tüüp *</label>
                 <select
                   value={editingCheckpoint.category_id || ''}
                   onChange={e => setEditingCheckpoint({ ...editingCheckpoint, category_id: e.target.value })}
                 >
-                  <option value="">Vali kategooria...</option>
+                  <option value="">Vali tüüp...</option>
                   {categories.filter(c => c.is_active).map(c => {
                     const type = types.find(t => t.id === c.type_id);
                     return (
@@ -1344,13 +1344,13 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
           className={`tab ${activeTab === 'types' ? 'active' : ''}`}
           onClick={() => setActiveTab('types')}
         >
-          <FiSettings size={16} /> Tüübid
+          <FiSettings size={16} /> Kategooriad
         </button>
         <button
           className={`tab ${activeTab === 'categories' ? 'active' : ''}`}
           onClick={() => setActiveTab('categories')}
         >
-          <FiFileText size={16} /> Kategooriad
+          <FiFileText size={16} /> Tüübid
         </button>
         <button
           className={`tab ${activeTab === 'checkpoints' ? 'active' : ''}`}

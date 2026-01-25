@@ -234,13 +234,14 @@ export default function InspectionPlanScreen({
 
                 for (const pset of objProps.properties) {
                   const psetAny = pset as any;
-                  const psetName = psetAny.name || '';
+                  // Check both 'set' and 'name' for property set name (Trimble API uses both)
+                  const psetName = psetAny.set || psetAny.name || '';
                   const psetNameLower = psetName.toLowerCase();
                   const psetNameNormalized = psetName.replace(/\s+/g, '').toLowerCase();
 
                   for (const prop of psetAny.properties || []) {
                     const propName = (prop.name || '').toLowerCase();
-                    const propValue = String(prop.value || '');
+                    const propValue = String(prop.displayValue ?? prop.value ?? '');
 
                     if (!propValue) continue;
 
@@ -258,20 +259,30 @@ export default function InspectionPlanScreen({
                   }
 
                   // Check for assembly mark using mapped property set/property
+                  // Use flexible matching like App.tsx - includes() instead of exact match
                   const assemblyMarkSetNorm = assemblyMarkSet.replace(/\s+/g, '').toLowerCase();
-                  if (psetNameNormalized === assemblyMarkSetNorm || psetName === assemblyMarkSet) {
+                  const assemblyMarkPropNorm = assemblyMarkProp.replace(/[_\s]+/g, '').toLowerCase();
+
+                  if (psetNameNormalized === assemblyMarkSetNorm ||
+                      psetNameNormalized.includes('tekla') && psetNameNormalized.includes('assembly') ||
+                      psetName === assemblyMarkSet) {
                     for (const prop of psetAny.properties || []) {
-                      if (prop.name === assemblyMarkProp) {
-                        assemblyMark = String(prop.value || '');
+                      const propNameNorm = (prop.name || '').replace(/[_\s]+/g, '').toLowerCase();
+                      // Match configured property or fallback to cast_unit_mark/assembly_mark patterns
+                      if (propNameNorm === assemblyMarkPropNorm ||
+                          (propNameNorm.includes('cast') && propNameNorm.includes('mark')) ||
+                          (propNameNorm.includes('assembly') && propNameNorm.includes('mark'))) {
+                        assemblyMark = String(prop.displayValue ?? prop.value ?? '');
+                        break;
                       }
                     }
                   }
 
                   // Check for product name in Product property set
-                  if (psetNameLower === 'product') {
+                  if (psetNameLower === 'product' || psetNameNormalized === 'product') {
                     for (const prop of psetAny.properties || []) {
                       if (prop.name === 'Name' && !productName) {
-                        productName = String(prop.value || '');
+                        productName = String(prop.displayValue ?? prop.value ?? '');
                       }
                     }
                     // Also check direct Name property on pset
@@ -303,6 +314,22 @@ export default function InspectionPlanScreen({
               if (!guid && guidIfc) guid = guidIfc;
               if (!guid && guidMs) guid = guidMs;
               if (!guid) guid = `${sel.modelId}_${runtimeId}`;
+
+              // Fallback: try to get assembly mark and product name from database
+              if ((!assemblyMark || !productName) && (guidIfc || guid)) {
+                try {
+                  const { data: dbObj } = await supabase
+                    .from('trimble_model_objects')
+                    .select('assembly_mark, product_name')
+                    .eq('trimble_project_id', projectId)
+                    .eq('guid_ifc', (guidIfc || guid).toLowerCase())
+                    .maybeSingle();
+                  if (dbObj) {
+                    if (!assemblyMark && dbObj.assembly_mark) assemblyMark = dbObj.assembly_mark;
+                    if (!productName && dbObj.product_name) productName = dbObj.product_name;
+                  }
+                } catch { /* ignore */ }
+              }
 
               const existingItem = planItems.find(item =>
                 item.guid === guid && item.inspection_type_id === selectedTypeId
@@ -1130,10 +1157,10 @@ export default function InspectionPlanScreen({
 
     for (const item of filtered) {
       const typeId = item.inspection_type_id || 'unknown';
-      const typeName = item.inspection_type?.name || 'Tüüp määramata';
+      const typeName = item.inspection_type?.name || 'Kategooria määramata';
       const typeColor = item.inspection_type?.color;
       const categoryId = item.category_id || 'unknown';
-      const categoryName = item.category?.name || 'Kategooria määramata';
+      const categoryName = item.category?.name || 'Tüüp määramata';
 
       if (!typeMap.has(typeId)) {
         typeMap.set(typeId, {
@@ -1364,7 +1391,7 @@ export default function InspectionPlanScreen({
 
           {/* Inspection Type Select */}
           <div className="plan-type-select">
-            <label>Inspektsiooni tüüp: *</label>
+            <label>Inspektsiooni kategooria: *</label>
             <div className="type-grid">
               {inspectionTypes.map(type => (
                 <button
@@ -1387,21 +1414,21 @@ export default function InspectionPlanScreen({
 
           {/* Category Select - REQUIRED */}
           <div className="plan-category-select">
-            <label>Kategooria: *</label>
+            <label>Inspektsiooni tüüp: *</label>
             {filteredCategories.length > 0 ? (
               <select
                 value={selectedCategoryId}
                 onChange={(e) => setSelectedCategoryId(e.target.value)}
                 className={`category-dropdown ${!selectedCategoryId ? 'required-empty' : ''}`}
               >
-                <option value="">-- Vali kategooria --</option>
+                <option value="">-- Vali inspektsiooni tüüp --</option>
                 {filteredCategories.map(cat => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
             ) : (
               <div className="category-hint">
-                {selectedTypeId ? '⚠️ Sellel tüübil pole kategooriaid' : 'Vali esmalt inspektsiooni tüüp'}
+                {selectedTypeId ? '⚠️ Sellel kategoorial pole inspektsiooni tüüpe' : 'Vali esmalt inspektsiooni kategooria'}
               </div>
             )}
           </div>

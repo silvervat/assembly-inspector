@@ -168,6 +168,18 @@ export default function InspectorScreen({
   const [inspectionListLoadingMore, setInspectionListLoadingMore] = useState(false);
   const PAGE_SIZE = 50;
 
+  // Plan items state for inspection_type mode
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({
+    planned: 0,
+    inProgress: 0,
+    completed: 0,
+    rejected: 0,
+    approved: 0
+  });
+  const [activeStatusFilter, setActiveStatusFilter] = useState<string | null>(null);
+  const [planAssemblyModeRequired, setPlanAssemblyModeRequired] = useState<boolean | null>(null);
+  const inspectionListRef = useRef<HTMLDivElement>(null);
+
   // EOS2 Navigation hook - polls for commands from EOS2 and auto-navigates
   useEos2Navigation({
     api,
@@ -1814,6 +1826,218 @@ export default function InspectorScreen({
     }
   };
 
+  // Load all plan items with status for inspection_type mode
+  const loadPlanItemsWithStatus = useCallback(async () => {
+    if (inspectionMode !== 'inspection_type' || !inspectionTypeId) return;
+
+    try {
+      // Get all plan items for this inspection type
+      const { data: planItems, error: planError } = await supabase
+        .from('inspection_plan_items')
+        .select('id, guid, guid_ifc, model_id, object_runtime_id, assembly_mark, object_name, product_name, inspection_status, assembly_selection_mode')
+        .eq('project_id', projectId)
+        .eq('inspection_type_id', inspectionTypeId);
+
+      if (planError || !planItems) {
+        console.error('Error loading plan items:', planError);
+        return;
+      }
+
+      // Check if any plan item has assembly_selection_mode set
+      const hasAssemblyModeRequired = planItems.some(item => item.assembly_selection_mode === true);
+      setPlanAssemblyModeRequired(hasAssemblyModeRequired);
+
+      // If assembly mode is required, ensure it's enabled
+      if (hasAssemblyModeRequired && !assemblySelectionEnabled) {
+        await applyAssemblyMode(true);
+        setAssemblySelectionEnabled(true);
+      }
+
+      // Calculate status counts
+      const counts: Record<string, number> = {
+        planned: 0,
+        inProgress: 0,
+        completed: 0,
+        rejected: 0,
+        approved: 0
+      };
+
+      for (const item of planItems) {
+        const status = item.inspection_status || 'planned';
+        if (counts[status] !== undefined) {
+          counts[status]++;
+        }
+      }
+
+      setStatusCounts(counts);
+    } catch (e) {
+      console.error('Failed to load plan items:', e);
+    }
+  }, [inspectionMode, inspectionTypeId, projectId, assemblySelectionEnabled]);
+
+  // Load plan items on mount for inspection_type mode
+  useEffect(() => {
+    if (inspectionMode === 'inspection_type' && inspectionTypeId) {
+      loadPlanItemsWithStatus();
+    }
+  }, [loadPlanItemsWithStatus, inspectionMode, inspectionTypeId]);
+
+  // Show plan items filtered by status
+  const showPlanItemsByStatus = async (status: string | null) => {
+    if (inspectionMode !== 'inspection_type' || !inspectionTypeId) return;
+
+    setActiveStatusFilter(status);
+    setInspectionListLoading(true);
+
+    try {
+      // Get plan items, optionally filtered by status
+      let query = supabase
+        .from('inspection_plan_items')
+        .select('id, guid, guid_ifc, model_id, object_runtime_id, assembly_mark, object_name, product_name, inspection_status')
+        .eq('project_id', projectId)
+        .eq('inspection_type_id', inspectionTypeId);
+
+      if (status) {
+        query = query.eq('inspection_status', status);
+      }
+
+      const { data: planItems, error: planError } = await query;
+
+      if (planError) throw planError;
+
+      if (!planItems || planItems.length === 0) {
+        const statusLabel = status ? INSPECTION_STATUS_COLORS[status as keyof typeof INSPECTION_STATUS_COLORS]?.label || status : 'valitud staatusega';
+        setMessage(`ℹ️ ${statusLabel} objekte pole`);
+        setTimeout(() => setMessage(''), 3000);
+        setInspectionListLoading(false);
+        return;
+      }
+
+      // Transform to InspectionItem format
+      const items: InspectionItem[] = planItems.map(item => ({
+        id: item.id,
+        assembly_mark: item.assembly_mark || item.object_name || item.guid?.substring(0, 12) || 'N/A',
+        model_id: item.model_id,
+        object_runtime_id: item.object_runtime_id || 0,
+        inspector_name: '-',
+        inspected_at: '',
+        guid: item.guid,
+        guid_ifc: item.guid_ifc,
+        product_name: item.product_name
+      }));
+
+      setInspectionListTotal(items.length);
+      setInspectionListData(items);
+      setInspectionListMode('todo'); // Reuse todo mode for plan items list
+
+      // Color model: reset to white first
+      if (onColorModelWhite) {
+        await onColorModelWhite();
+      }
+
+      if (status) {
+        // Single status selected - color all items with that status color
+        const statusColor = INSPECTION_STATUS_COLORS[status as keyof typeof INSPECTION_STATUS_COLORS];
+        const guids = planItems.map(item => item.guid_ifc || item.guid).filter(Boolean) as string[];
+
+        if (guids.length > 0) {
+          const foundObjects = await findObjectsInLoadedModels(api, guids);
+
+          if (foundObjects.size > 0) {
+            const byModel: Record<string, number[]> = {};
+            for (const [, found] of foundObjects) {
+              if (!byModel[found.modelId]) byModel[found.modelId] = [];
+              byModel[found.modelId].push(found.runtimeId);
+            }
+
+            const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+              modelId,
+              objectRuntimeIds: runtimeIds
+            }));
+
+            await api.viewer.setObjectState(
+              { modelObjectIds },
+              { color: { r: statusColor.r, g: statusColor.g, b: statusColor.b, a: statusColor.a } }
+            );
+          }
+        }
+      } else {
+        // "Kõik" selected - color each item by its own status
+        const statusGroups: Record<string, string[]> = {
+          planned: [],
+          inProgress: [],
+          completed: [],
+          rejected: [],
+          approved: []
+        };
+
+        // Group items by status
+        for (const item of planItems) {
+          const guid = item.guid_ifc || item.guid;
+          if (!guid) continue;
+          const itemStatus = item.inspection_status || 'planned';
+          if (statusGroups[itemStatus]) {
+            statusGroups[itemStatus].push(guid);
+          }
+        }
+
+        // Color each status group with their respective colors
+        for (const [statusKey, guids] of Object.entries(statusGroups)) {
+          if (guids.length === 0) continue;
+
+          const statusColor = INSPECTION_STATUS_COLORS[statusKey as keyof typeof INSPECTION_STATUS_COLORS];
+          if (!statusColor) continue;
+
+          const foundObjects = await findObjectsInLoadedModels(api, guids);
+          if (foundObjects.size === 0) continue;
+
+          const byModel: Record<string, number[]> = {};
+          for (const [, found] of foundObjects) {
+            if (!byModel[found.modelId]) byModel[found.modelId] = [];
+            byModel[found.modelId].push(found.runtimeId);
+          }
+
+          const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+            modelId,
+            objectRuntimeIds: runtimeIds
+          }));
+
+          await api.viewer.setObjectState(
+            { modelObjectIds },
+            { color: { r: statusColor.r, g: statusColor.g, b: statusColor.b, a: statusColor.a } }
+          );
+        }
+      }
+    } catch (e: any) {
+      console.error('Failed to show plan items by status:', e);
+      setMessage('❌ Viga nimekirja laadimisel');
+    } finally {
+      setInspectionListLoading(false);
+    }
+  };
+
+  // Auto-scroll to selected item when user selects something in model
+  useEffect(() => {
+    if (inspectionMode !== 'inspection_type' || selectedObjects.length !== 1) return;
+    if (inspectionListMode === 'none') return;
+
+    const selectedGuid = selectedObjects[0].guidIfc || selectedObjects[0].guid;
+    if (!selectedGuid) return;
+
+    // Find matching item in the list
+    const matchingIndex = inspectionListData.findIndex(item =>
+      item.guid_ifc === selectedGuid || item.guid === selectedGuid
+    );
+
+    if (matchingIndex >= 0 && inspectionListRef.current) {
+      // Scroll to the matching item
+      const listItems = inspectionListRef.current.querySelectorAll('.inspection-item, .todo-item');
+      if (listItems[matchingIndex]) {
+        listItems[matchingIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [selectedObjects, inspectionListData, inspectionListMode, inspectionMode]);
+
   // Load more inspections
   const loadMoreInspections = async () => {
     if (inspectionListLoadingMore) return;
@@ -2078,6 +2302,64 @@ export default function InspectorScreen({
       <div className="inspector-header-compact">
         {inspectionListMode === 'none' ? (
           <>
+            {/* Status indicators row for inspection_type mode */}
+            {inspectionMode === 'inspection_type' && (
+              <div className="status-indicators-row">
+                <button
+                  className={`status-indicator-btn ${activeStatusFilter === 'planned' ? 'active' : ''}`}
+                  style={{ backgroundColor: INSPECTION_STATUS_COLORS.planned.hex }}
+                  onClick={() => showPlanItemsByStatus('planned')}
+                  title={INSPECTION_STATUS_COLORS.planned.label}
+                  disabled={inspectionListLoading}
+                >
+                  {statusCounts.planned}
+                </button>
+                <button
+                  className={`status-indicator-btn ${activeStatusFilter === 'inProgress' ? 'active' : ''}`}
+                  style={{ backgroundColor: INSPECTION_STATUS_COLORS.inProgress.hex }}
+                  onClick={() => showPlanItemsByStatus('inProgress')}
+                  title={INSPECTION_STATUS_COLORS.inProgress.label}
+                  disabled={inspectionListLoading}
+                >
+                  {statusCounts.inProgress}
+                </button>
+                <button
+                  className={`status-indicator-btn ${activeStatusFilter === 'completed' ? 'active' : ''}`}
+                  style={{ backgroundColor: INSPECTION_STATUS_COLORS.completed.hex }}
+                  onClick={() => showPlanItemsByStatus('completed')}
+                  title={INSPECTION_STATUS_COLORS.completed.label}
+                  disabled={inspectionListLoading}
+                >
+                  {statusCounts.completed}
+                </button>
+                <button
+                  className={`status-indicator-btn ${activeStatusFilter === 'rejected' ? 'active' : ''}`}
+                  style={{ backgroundColor: INSPECTION_STATUS_COLORS.rejected.hex }}
+                  onClick={() => showPlanItemsByStatus('rejected')}
+                  title={INSPECTION_STATUS_COLORS.rejected.label}
+                  disabled={inspectionListLoading}
+                >
+                  {statusCounts.rejected}
+                </button>
+                <button
+                  className={`status-indicator-btn ${activeStatusFilter === 'approved' ? 'active' : ''}`}
+                  style={{ backgroundColor: INSPECTION_STATUS_COLORS.approved.hex }}
+                  onClick={() => showPlanItemsByStatus('approved')}
+                  title={INSPECTION_STATUS_COLORS.approved.label}
+                  disabled={inspectionListLoading}
+                >
+                  {statusCounts.approved}
+                </button>
+                <button
+                  className={`status-indicator-btn all ${activeStatusFilter === null ? 'active' : ''}`}
+                  onClick={() => showPlanItemsByStatus(null)}
+                  title="Kõik objektid"
+                  disabled={inspectionListLoading}
+                >
+                  Kõik
+                </button>
+              </div>
+            )}
             {/* Stats row */}
             <div className="stats-row">
               <div className="stat-item">
@@ -2090,12 +2372,17 @@ export default function InspectorScreen({
                 <>
                   <div className="stat-divider">|</div>
                   <button
-                    className={`stat-item stat-toggle ${assemblySelectionEnabled ? 'on' : 'off'}`}
-                    onClick={toggleAssemblySelection}
-                    title={assemblySelectionEnabled ? 'Lülita Assembly Selection VÄLJA' : 'Lülita Assembly Selection SISSE'}
+                    className={`stat-item stat-toggle ${assemblySelectionEnabled ? 'on' : 'off'} ${planAssemblyModeRequired ? 'locked' : ''}`}
+                    onClick={planAssemblyModeRequired ? undefined : toggleAssemblySelection}
+                    title={planAssemblyModeRequired
+                      ? 'Assembly Selection on selle kava jaoks kohustuslik'
+                      : assemblySelectionEnabled
+                        ? 'Lülita Assembly Selection VÄLJA'
+                        : 'Lülita Assembly Selection SISSE'}
+                    disabled={planAssemblyModeRequired === true}
                   >
                     <span className={`stat-icon ${assemblySelectionEnabled ? 'on' : 'off'}`}>
-                      {assemblySelectionEnabled ? '✓' : '✗'}
+                      {planAssemblyModeRequired ? '🔒' : assemblySelectionEnabled ? '✓' : '✗'}
                     </span>
                     <span className="stat-lbl">asm</span>
                   </button>
@@ -2133,7 +2420,10 @@ export default function InspectorScreen({
           /* List view header with back button and title */
           <div className="list-view-header">
             <button
-              onClick={exitInspectionList}
+              onClick={() => {
+                exitInspectionList();
+                setActiveStatusFilter(null);
+              }}
               className="list-back-btn"
             >
               <FiArrowLeft size={18} />
@@ -2141,7 +2431,9 @@ export default function InspectorScreen({
             <span className="list-title">
               {inspectionListMode === 'mine' && 'Minu inspektsioonid'}
               {inspectionListMode === 'all' && 'Kõik inspektsioonid'}
-              {inspectionListMode === 'todo' && 'Tegemata'}
+              {inspectionListMode === 'todo' && (activeStatusFilter
+                ? INSPECTION_STATUS_COLORS[activeStatusFilter as keyof typeof INSPECTION_STATUS_COLORS]?.label || 'Nimekiri'
+                : 'Kõik objektid')}
             </span>
             <span className="list-count">({inspectionListTotal})</span>
           </div>
@@ -2177,29 +2469,38 @@ export default function InspectorScreen({
 
       {/* Inspection List View */}
       {inspectionListMode !== 'none' && (
-        <InspectionList
-          inspections={inspectionListData}
-          mode={inspectionListMode}
-          totalCount={inspectionListTotal}
-          hasMore={inspectionListData.length < inspectionListTotal}
-          loadingMore={inspectionListLoadingMore}
-          projectId={projectId}
-          currentUser={user}
-          onZoomToInspection={zoomToInspection}
-          onSelectInspection={selectInspection}
-          onSelectGroup={selectGroup}
-          onZoomToGroup={zoomToGroup}
-          onLoadMore={loadMoreInspections}
-          onClose={exitInspectionList}
-          onRefresh={() => {
-            // Refresh the list by re-running the appropriate function
-            if (inspectionListMode === 'mine') {
-              showMyInspections();
-            } else {
-              showAllInspections();
-            }
-          }}
-        />
+        <div ref={inspectionListRef}>
+          <InspectionList
+            inspections={inspectionListData}
+            mode={inspectionListMode}
+            totalCount={inspectionListTotal}
+            hasMore={inspectionListData.length < inspectionListTotal}
+            loadingMore={inspectionListLoadingMore}
+            projectId={projectId}
+            currentUser={user}
+            onZoomToInspection={zoomToInspection}
+            onSelectInspection={selectInspection}
+            onSelectGroup={selectGroup}
+            onZoomToGroup={zoomToGroup}
+            onLoadMore={loadMoreInspections}
+            onClose={() => {
+              exitInspectionList();
+              setActiveStatusFilter(null);
+            }}
+            onRefresh={() => {
+              // Refresh the list by re-running the appropriate function
+              if (inspectionListMode === 'mine') {
+                showMyInspections();
+              } else if (inspectionListMode === 'all') {
+                showAllInspections();
+              } else if (activeStatusFilter) {
+                showPlanItemsByStatus(activeStatusFilter);
+              } else {
+                showPlanItemsByStatus(null);
+              }
+            }}
+          />
+        </div>
       )}
 
       {/* Normal inspection view - hide when list is active or in inspection_type mode */}
@@ -2329,7 +2630,7 @@ export default function InspectorScreen({
           <div className="plan-card-content">
             {assignedPlan.inspection_type && (
               <div className="plan-card-row">
-                <span className="plan-card-label">Tüüp:</span>
+                <span className="plan-card-label">Kategooria:</span>
                 <span className="plan-card-value type-value">
                   {assignedPlan.inspection_type.name}
                 </span>
@@ -2337,7 +2638,7 @@ export default function InspectorScreen({
             )}
             {assignedPlan.category && (
               <div className="plan-card-row">
-                <span className="plan-card-label">Kategooria:</span>
+                <span className="plan-card-label">Tüüp:</span>
                 <span className="plan-card-value">{assignedPlan.category.name}</span>
               </div>
             )}
