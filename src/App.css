@@ -5613,6 +5613,18 @@ button.stat-toggle.off:hover {
   gap: 1px;
 }
 
+.item-inspection-code {
+  font-weight: 700;
+  font-size: 0.6rem;
+  color: white;
+  background: #6366f1;
+  padding: 1px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
 .item-mark {
   font-weight: 600;
   font-size: var(--modus-font-size-xs);
