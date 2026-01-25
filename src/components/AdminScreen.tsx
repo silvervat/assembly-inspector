@@ -3163,20 +3163,54 @@ export default function AdminScreen({
       let weight: number | null = null;
 
       const normalizeGuid = (g: string): string => g ? g.trim().toLowerCase() : '';
+      const normalizeStr = (s: string): string => s ? s.toLowerCase().replace(/[\s_/()]/g, '') : '';
 
-      // Search for GUID in properties
+      // Search for GUID and assembly mark in properties
       const propertySets = (objProps as any)?.propertySets || [];
       for (const pset of propertySets) {
+        const psetName = normalizeStr((pset as any).name || '');
         const propArray = pset.properties || [];
         for (const prop of propArray) {
-          const propName = ((prop as any).name || '').toLowerCase().replace(/[\s_()]/g, '');
+          const propName = ((prop as any).name || '');
+          const propNameNorm = normalizeStr(propName);
           const propValue = (prop as any).displayValue ?? (prop as any).value;
           if (!propValue) continue;
-          if (propName.includes('guid') || propName === 'globalid') {
+
+          // GUID search
+          if (propNameNorm.includes('guid') || propNameNorm === 'globalid') {
             const guidValue = normalizeGuid(String(propValue));
             if (guidValue && !guid) guid = guidValue;
           }
+
+          // Assembly mark search - look for "Cast unit Mark", "Assembly Mark", etc.
+          if (!assemblyMark) {
+            const isAssemblyMarkProp = (
+              propNameNorm.includes('castunitmark') ||
+              propNameNorm.includes('assemblymark') ||
+              (propNameNorm.includes('mark') && psetName.includes('tekla'))
+            );
+            if (isAssemblyMarkProp) {
+              const markValue = String(propValue).trim();
+              if (markValue && !markValue.startsWith('Object_')) {
+                assemblyMark = markValue;
+                console.log(`[QR] Found assembly mark from property "${propName}":`, assemblyMark);
+              }
+            }
+          }
+
+          // Weight search
+          if (weight === null && (propNameNorm.includes('weight') || propNameNorm.includes('kaal'))) {
+            const weightVal = parseFloat(String(propValue));
+            if (!isNaN(weightVal) && weightVal > 0) {
+              weight = weightVal;
+            }
+          }
         }
+      }
+
+      // Also check product.name for product name
+      if ((objProps as any)?.product?.name) {
+        productName = (objProps as any).product.name;
       }
 
       // Fallback methods for GUID
@@ -3197,20 +3231,27 @@ export default function AdminScreen({
         return;
       }
 
-      // Get assembly_mark from trimble_model_objects
-      const { data: modelObj } = await supabase
-        .from('trimble_model_objects')
-        .select('assembly_mark, product_name')
-        .eq('trimble_project_id', projectId)
-        .eq('guid_ifc', guid.toLowerCase())
-        .maybeSingle();
+      // Fallback: Get assembly_mark from trimble_model_objects if not found in properties
+      if (!assemblyMark || !productName) {
+        const { data: modelObj } = await supabase
+          .from('trimble_model_objects')
+          .select('assembly_mark, product_name')
+          .eq('trimble_project_id', projectId)
+          .ilike('guid_ifc', guid) // Case-insensitive search
+          .maybeSingle();
 
-      if (modelObj) {
-        if (modelObj.assembly_mark && !modelObj.assembly_mark.startsWith('Object_')) {
-          assemblyMark = modelObj.assembly_mark;
+        if (modelObj) {
+          if (!assemblyMark && modelObj.assembly_mark && !modelObj.assembly_mark.startsWith('Object_')) {
+            assemblyMark = modelObj.assembly_mark;
+            console.log('[QR] Assembly mark from database:', assemblyMark);
+          }
+          if (!productName && modelObj.product_name) {
+            productName = modelObj.product_name;
+          }
         }
-        if (modelObj.product_name) productName = modelObj.product_name;
       }
+
+      console.log('[QR] Final values - assemblyMark:', assemblyMark, 'productName:', productName, 'weight:', weight);
 
       // Check if QR already exists
       const { data: existing } = await supabase
