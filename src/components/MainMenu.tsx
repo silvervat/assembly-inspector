@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { TrimbleExUser, supabase } from '../supabase';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import {
   FiTool, FiAlertTriangle, FiChevronRight, FiSettings,
-  FiShield, FiClipboard, FiTruck, FiCalendar, FiFolder, FiSearch, FiBook
+  FiShield, FiClipboard, FiTruck, FiCalendar, FiFolder, FiSearch, FiBook, FiGlobe
 } from 'react-icons/fi';
 import { PiCraneTowerFill } from 'react-icons/pi';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
@@ -50,17 +51,24 @@ export default function MainMenu({
   onSelectMode,
   onOpenSettings
 }: MainMenuProps) {
+  const { t, i18n } = useTranslation();
   const isAdmin = user.role === 'admin';
   const [activeIssuesCount, setActiveIssuesCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
   const [exactMatch, setExactMatch] = useState(true);
+  const [showLanguageMenu, setShowLanguageMenu] = useState(false);
+
+  const changeLanguage = (lng: string) => {
+    i18n.changeLanguage(lng);
+    setShowLanguageMenu(false);
+  };
 
   // Quick search function
   const handleQuickSearch = useCallback(async (query: string, exact: boolean) => {
     if (!query.trim()) {
-      setSearchMessage('Sisesta otsingu tekst');
+      setSearchMessage(t('menu.searchEmpty'));
       setTimeout(() => setSearchMessage(null), 2000);
       return;
     }
@@ -86,7 +94,7 @@ export default function MainMenu({
       if (error) throw error;
 
       if (!results || results.length === 0) {
-        setSearchMessage(`Ei leidnud: ${query}`);
+        setSearchMessage(t('menu.notFound', { query }));
         setTimeout(() => setSearchMessage(null), 3000);
         return;
       }
@@ -96,7 +104,7 @@ export default function MainMenu({
       const foundObjects = await findObjectsInLoadedModels(api, guids);
 
       if (foundObjects.size === 0) {
-        setSearchMessage(`Ei leidnud mudelist: ${query}`);
+        setSearchMessage(t('menu.notFoundInModel', { query }));
         setTimeout(() => setSearchMessage(null), 3000);
         return;
       }
@@ -110,17 +118,17 @@ export default function MainMenu({
       await api.viewer.setSelection({ modelObjectIds }, 'set');
       await api.viewer.setCamera({ modelObjectIds }, { animationTime: 300 });
 
-      setSearchMessage(`✓ Leitud: ${results[0].assembly_mark}`);
+      setSearchMessage(`✓ ${t('menu.found', { mark: results[0].assembly_mark })}`);
       setTimeout(() => setSearchMessage(null), 2000);
       setSearchQuery('');
     } catch (e) {
       console.error('Quick search error:', e);
-      setSearchMessage('Viga otsingul');
+      setSearchMessage(t('menu.searchError'));
       setTimeout(() => setSearchMessage(null), 2000);
     } finally {
       setSearching(false);
     }
-  }, [projectId, api, exactMatch]);
+  }, [projectId, api, exactMatch, t]);
 
   // Load active issues count for badge
   useEffect(() => {
@@ -155,9 +163,38 @@ export default function MainMenu({
             <span className="menu-user-role">{user.role?.toUpperCase()}</span>
           </div>
         </div>
-        <button className="menu-settings-btn" onClick={onOpenSettings} title="Seaded">
-          <FiSettings size={18} />
-        </button>
+        <div className="menu-header-actions">
+          {/* Language selector */}
+          <div className="language-selector-wrapper">
+            <button
+              className="menu-language-btn"
+              onClick={() => setShowLanguageMenu(!showLanguageMenu)}
+              title={t('language.label')}
+            >
+              <FiGlobe size={18} />
+              <span className="language-code">{i18n.language.toUpperCase()}</span>
+            </button>
+            {showLanguageMenu && (
+              <div className="language-dropdown">
+                <button
+                  className={`language-option ${i18n.language === 'et' ? 'active' : ''}`}
+                  onClick={() => changeLanguage('et')}
+                >
+                  🇪🇪 {t('language.et')}
+                </button>
+                <button
+                  className={`language-option ${i18n.language === 'en' ? 'active' : ''}`}
+                  onClick={() => changeLanguage('en')}
+                >
+                  🇬🇧 {t('language.en')}
+                </button>
+              </div>
+            )}
+          </div>
+          <button className="menu-settings-btn" onClick={onOpenSettings} title={t('menu.settings')}>
+            <FiSettings size={18} />
+          </button>
+        </div>
       </div>
 
       {/* Quick search */}
@@ -172,7 +209,7 @@ export default function MainMenu({
                 handleQuickSearch(searchQuery, exactMatch);
               }
             }}
-            placeholder="Otsi assembly marki..."
+            placeholder={t('menu.searchPlaceholder')}
             className="search-input"
             disabled={searching}
           />
@@ -180,7 +217,7 @@ export default function MainMenu({
             className="search-button"
             onClick={() => handleQuickSearch(searchQuery, exactMatch)}
             disabled={searching || !searchQuery.trim()}
-            title="Otsi"
+            title={t('buttons.search')}
           >
             {searching ? <span className="search-spinner">⏳</span> : <FiSearch size={16} />}
           </button>
@@ -192,7 +229,7 @@ export default function MainMenu({
               checked={exactMatch}
               onChange={(e) => setExactMatch(e.target.checked)}
             />
-            <span>Täpne vaste</span>
+            <span>{t('menu.exactMatch')}</span>
           </label>
         )}
         {searchMessage && (
@@ -212,8 +249,8 @@ export default function MainMenu({
                 <FiTruck size={20} />
               </span>
               <div className="menu-item-content">
-                <span className="menu-item-title">Tarnegraafikud</span>
-                <span className="menu-item-desc">Planeeri ja jälgi tarneid veokite kaupa</span>
+                <span className="menu-item-title">{t('menu.deliverySchedules')}</span>
+                <span className="menu-item-desc">{t('menu.deliverySchedulesDesc')}</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />
@@ -229,8 +266,8 @@ export default function MainMenu({
                 <FiCalendar size={20} />
               </span>
               <div className="menu-item-content">
-                <span className="menu-item-title">Paigaldusgraafikud</span>
-                <span className="menu-item-desc">Planeeri ja esitle paigaldusi</span>
+                <span className="menu-item-title">{t('menu.installationSchedules')}</span>
+                <span className="menu-item-desc">{t('menu.installationSchedulesDesc')}</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />
@@ -246,8 +283,8 @@ export default function MainMenu({
                 <FiClipboard size={20} />
               </span>
               <div className="menu-item-content">
-                <span className="menu-item-title">Saabumised</span>
-                <span className="menu-item-desc">Kontrolli ja kinnita saabunud veokite sisu</span>
+                <span className="menu-item-title">{t('menu.arrivals')}</span>
+                <span className="menu-item-desc">{t('menu.arrivalsDesc')}</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />
@@ -263,8 +300,8 @@ export default function MainMenu({
                 <PiCraneTowerFill size={20} />
               </span>
               <div className="menu-item-content">
-                <span className="menu-item-title">Paigaldamised</span>
-                <span className="menu-item-desc">Paigalduste päevik</span>
+                <span className="menu-item-title">{t('menu.installations')}</span>
+                <span className="menu-item-desc">{t('menu.installationsDesc')}</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />
@@ -280,8 +317,8 @@ export default function MainMenu({
                 <FiClipboard size={20} />
               </span>
               <div className="menu-item-content">
-                <span className="menu-item-title">Kontrollplaanid</span>
-                <span className="menu-item-desc">Inspektsioonide haldus ja täitmine</span>
+                <span className="menu-item-title">{t('menu.inspectionPlans')}</span>
+                <span className="menu-item-desc">{t('menu.inspectionPlansDesc')}</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />
@@ -298,12 +335,12 @@ export default function MainMenu({
               </span>
               <div className="menu-item-content">
                 <span className="menu-item-title">
-                  Mittevastavaused
+                  {t('menu.nonConformances')}
                   {activeIssuesCount > 0 && (
                     <span className="menu-badge">{activeIssuesCount}</span>
                   )}
                 </span>
-                <span className="menu-item-desc">Mittevastavused ja probleemide haldus</span>
+                <span className="menu-item-desc">{t('menu.nonConformancesDesc')}</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />
@@ -319,8 +356,8 @@ export default function MainMenu({
                 <FiFolder size={20} />
               </span>
               <div className="menu-item-content">
-                <span className="menu-item-title">Organiseerija</span>
-                <span className="menu-item-desc">Grupeeri ja organiseeri detaile</span>
+                <span className="menu-item-title">{t('menu.organizer')}</span>
+                <span className="menu-item-desc">{t('menu.organizerDesc')}</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />
@@ -336,8 +373,8 @@ export default function MainMenu({
                 <FiTool size={20} />
               </span>
               <div className="menu-item-content">
-                <span className="menu-item-title">Tööriistad</span>
-                <span className="menu-item-desc">Ekspordid, markup'id ja märgistamine</span>
+                <span className="menu-item-title">{t('menu.tools')}</span>
+                <span className="menu-item-desc">{t('menu.toolsDesc')}</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />
@@ -353,8 +390,8 @@ export default function MainMenu({
                 <FiBook size={20} />
               </span>
               <div className="menu-item-content">
-                <span className="menu-item-title">Kasutusjuhendid</span>
-                <span className="menu-item-desc">Klaviatuuri otseteed ja juhendid</span>
+                <span className="menu-item-title">{t('menu.guides')}</span>
+                <span className="menu-item-desc">{t('menu.guidesDesc')}</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />
@@ -373,8 +410,8 @@ export default function MainMenu({
                 <FiClipboard size={20} />
               </span>
               <div className="menu-item-content">
-                <span className="menu-item-title">Inspektsiooni kava</span>
-                <span className="menu-item-desc">Koosta inspektsiooni kava</span>
+                <span className="menu-item-title">{t('menu.inspectionPlan')}</span>
+                <span className="menu-item-desc">{t('menu.inspectionPlanDesc')}</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />
@@ -388,8 +425,8 @@ export default function MainMenu({
                 <FiShield size={20} />
               </span>
               <div className="menu-item-content">
-                <span className="menu-item-title">Administratsioon</span>
-                <span className="menu-item-desc">Admin tööriistad</span>
+                <span className="menu-item-title">{t('menu.admin')}</span>
+                <span className="menu-item-desc">{t('menu.adminDesc')}</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />
