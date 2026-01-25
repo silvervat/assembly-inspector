@@ -608,6 +608,65 @@ body {
   gap: var(--modus-spacing-xs);
 }
 
+/* Status indicators row - clickable color badges */
+.status-indicators-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 0;
+  margin-bottom: 4px;
+}
+
+.status-indicator-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 28px;
+  padding: 0 8px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.status-indicator-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.status-indicator-btn.active {
+  border-color: var(--modus-text-primary);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+  transform: scale(1.08);
+}
+
+.status-indicator-btn.all {
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+  color: white;
+}
+
+.status-indicator-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Locked assembly selection toggle */
+.stat-toggle.locked {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.stat-toggle.locked .stat-icon {
+  color: var(--modus-warning);
+}
+
 /* List view header */
 .list-view-header {
   display: flex;
