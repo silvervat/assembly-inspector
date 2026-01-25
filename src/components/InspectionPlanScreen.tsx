@@ -435,6 +435,36 @@ export default function InspectionPlanScreen({
         return;
       }
 
+      // Enrich plan items with assembly_mark from trimble_model_objects if missing
+      const itemsNeedingMark = data.filter(item => !item.assembly_mark && (item.guid_ifc || item.guid));
+      if (itemsNeedingMark.length > 0) {
+        const guidsToLookup = itemsNeedingMark.map(item => (item.guid_ifc || item.guid || '').toLowerCase()).filter(Boolean);
+
+        if (guidsToLookup.length > 0) {
+          const { data: modelObjects } = await supabase
+            .from('trimble_model_objects')
+            .select('guid_ifc, assembly_mark, product_name')
+            .eq('trimble_project_id', projectId)
+            .in('guid_ifc', guidsToLookup);
+
+          if (modelObjects && modelObjects.length > 0) {
+            const markMap = new Map(modelObjects.map(obj => [obj.guid_ifc, obj]));
+            for (const item of data) {
+              if (!item.assembly_mark) {
+                const guidLower = (item.guid_ifc || item.guid || '').toLowerCase();
+                const modelObj = markMap.get(guidLower);
+                if (modelObj?.assembly_mark) {
+                  item.assembly_mark = modelObj.assembly_mark;
+                }
+                if (!item.product_name && modelObj?.product_name) {
+                  item.product_name = modelObj.product_name;
+                }
+              }
+            }
+          }
+        }
+      }
+
       // Get all GUIDs and plan item IDs to fetch checkpoint results
       const guids = data.map(item => item.guid).filter(Boolean);
       const planItemIds = data.map(item => item.id);
