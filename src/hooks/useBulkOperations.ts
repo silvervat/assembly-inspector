@@ -143,29 +143,28 @@ export function useBulkOperations(options: UseBulkOperationsOptions): UseBulkOpe
     setError(null);
 
     try {
-      // Use bulk_change_status with rejected status
-      const { data, error: rpcError } = await supabase.rpc('bulk_change_status', {
-        p_plan_item_ids: ids,
-        p_new_status: 'rejected',
-        p_user_email: userEmail,
-        p_user_name: userName,
-        p_comment: comment,
-        p_ip_address: null
-      });
+      // Update inspection_results directly
+      const { error: updateError, count } = await supabase
+        .from('inspection_results')
+        .update({
+          review_status: 'rejected',
+          reviewer_comment: comment,
+          reviewed_at: new Date().toISOString(),
+          reviewer_email: userEmail,
+          reviewer_name: userName
+        })
+        .in('plan_item_id', ids);
 
-      if (rpcError) {
-        throw rpcError;
+      if (updateError) {
+        throw updateError;
       }
 
-      const result = data?.[0] || { success_count: 0, failure_count: 0, results: [] };
       setProgress(100);
 
       return {
-        success_count: result.success_count,
-        failure_count: result.failure_count,
-        results: typeof result.results === 'string'
-          ? JSON.parse(result.results)
-          : (result.results || [])
+        success_count: count || ids.length,
+        failure_count: 0,
+        results: ids.map(id => ({ entity_id: id, success: true }))
       };
     } catch (err) {
       console.error('Error in bulk reject:', err);
@@ -191,28 +190,33 @@ export function useBulkOperations(options: UseBulkOperationsOptions): UseBulkOpe
     setError(null);
 
     try {
-      const { data, error: rpcError } = await supabase.rpc('bulk_change_status', {
-        p_plan_item_ids: ids,
-        p_new_status: newStatus,
-        p_user_email: userEmail,
-        p_user_name: userName,
-        p_comment: comment || null,
-        p_ip_address: null
-      });
+      // Update inspection_results directly
+      const updateData: Record<string, unknown> = {
+        review_status: newStatus,
+        reviewed_at: new Date().toISOString(),
+        reviewer_email: userEmail,
+        reviewer_name: userName
+      };
 
-      if (rpcError) {
-        throw rpcError;
+      if (comment) {
+        updateData.reviewer_comment = comment;
       }
 
-      const result = data?.[0] || { success_count: 0, failure_count: 0, results: [] };
+      const { error: updateError, count } = await supabase
+        .from('inspection_results')
+        .update(updateData)
+        .in('plan_item_id', ids);
+
+      if (updateError) {
+        throw updateError;
+      }
+
       setProgress(100);
 
       return {
-        success_count: result.success_count,
-        failure_count: result.failure_count,
-        results: typeof result.results === 'string'
-          ? JSON.parse(result.results)
-          : (result.results || [])
+        success_count: count || ids.length,
+        failure_count: 0,
+        results: ids.map(id => ({ entity_id: id, success: true }))
       };
     } catch (err) {
       console.error('Error in bulk status change:', err);
