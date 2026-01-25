@@ -3475,6 +3475,8 @@ export default function AdminScreen({
 
         // Try to get model coordinates for this object
         try {
+          addDebugLog(`[${pos.assembly_mark}] Searching GUID: ${pos.guid}`);
+
           // Find original GUID from model objects
           const { data: modelObj } = await supabase
             .from('trimble_model_objects')
@@ -3484,15 +3486,20 @@ export default function AdminScreen({
             .limit(1)
             .maybeSingle();
 
+          addDebugLog(`[${pos.assembly_mark}] DB lookup: ${modelObj?.guid_ifc || 'not found'}`);
+
           const guidsToSearch = modelObj?.guid_ifc
             ? [modelObj.guid_ifc, pos.guid]
             : [pos.guid];
 
           const foundMap = await findObjectsInLoadedModels(api, guidsToSearch);
+          addDebugLog(`[${pos.assembly_mark}] Model search: found ${foundMap.size} objects`);
+
           const foundItem = foundMap.get(pos.guid.toLowerCase()) ||
                            (modelObj?.guid_ifc ? foundMap.get(modelObj.guid_ifc.toLowerCase()) : undefined);
 
           if (foundItem) {
+            addDebugLog(`[${pos.assembly_mark}] Found in model: ${foundItem.modelId}:${foundItem.runtimeId}`);
             // Get bounding box to find object position
             const boundsArray = await api.viewer.getObjectBoundingBoxes(foundItem.modelId, [foundItem.runtimeId]);
             const bbox = boundsArray?.[0]?.boundingBox;
@@ -3502,14 +3509,19 @@ export default function AdminScreen({
               enriched.model_x = (bbox.min.x + bbox.max.x) / 2;
               enriched.model_y = (bbox.min.y + bbox.max.y) / 2;
               enriched.model_z = (bbox.min.z + bbox.max.z) / 2;
+              addDebugLog(`[${pos.assembly_mark}] Coords: ${enriched.model_x?.toFixed(1)}, ${enriched.model_y?.toFixed(1)}`);
 
               // Convert Belgian Lambert 72 to WGS84
               const gps = belgianLambert72ToWGS84(enriched.model_x, enriched.model_y);
               enriched.calculated_lat = gps.latitude;
               enriched.calculated_lng = gps.longitude;
+              addDebugLog(`[${pos.assembly_mark}] GPS: ${gps.latitude.toFixed(6)}, ${gps.longitude.toFixed(6)}`);
             }
+          } else {
+            addDebugLog(`[${pos.assembly_mark}] NOT found in model`);
           }
-        } catch (e) {
+        } catch (e: any) {
+          addDebugLog(`[${pos.assembly_mark}] ERROR: ${e.message}`);
           console.warn(`Could not get model coords for ${pos.guid}:`, e);
         }
 
