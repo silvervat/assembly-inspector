@@ -1085,7 +1085,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
     } catch (e) {
       console.error('Error uploading photos:', e);
-      setMessage('Viga fotode üleslaadimisel');
+      setMessage(t('messages.photoUploadError'));
     } finally {
       setUploadingPhoto(false);
       e.target.value = '';
@@ -1126,7 +1126,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         } else {
           // Don't allow clearing vehicle - it would create an orphan
           // If user wants to remove, they should use delete button
-          setMessage('Veoki eemaldamiseks kasuta "Kustuta" nuppu');
+          setMessage(t('messages.useDeleteButton'));
           setSaving(false);
           return;
         }
@@ -1147,12 +1147,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
       }
 
-      setMessage('Muudatused salvestatud');
+      setMessage(t('messages.changesSaved'));
       setShowItemEditModal(false);
       await loadItems();
     } catch (e: any) {
       console.error('Error saving item:', e);
-      setMessage('Viga salvestamisel: ' + e.message);
+      setMessage(t('messages.saveError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -1351,9 +1351,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       console.error('Error loading arrived vehicle details:', e);
       setArrivedVehicleModalData(null);
       setShowArrivedVehicleModal(false);
-      setMessage('Viga saabumise detailide laadimisel');
+      setMessage(t('messages.arrivalLoadError'));
     }
-  }, []);
+  }, [t]);
 
   const loadAllData = useCallback(async () => {
     setLoading(true);
@@ -1424,11 +1424,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
 
     if (targetItems.length === 0) {
-      setMessage('Kõik detailid on juba mudeliga seotud');
+      setMessage(t('messages.allItemsLinked'));
       return 0;
     }
 
-    setMessage(`Seon ${targetItems.length} detaili mudeliga...`);
+    setMessage(t('messages.linkingItems', { count: targetItems.length }));
 
     try {
       // Collect all IFC GUIDs from items
@@ -1460,7 +1460,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       console.log('GUIDs to lookup:', allGuids.length);
 
       if (allGuids.length === 0) {
-        setMessage('Detailidel puuduvad GUID-id');
+        setMessage(t('messages.noGuids'));
         return 0;
       }
 
@@ -1592,10 +1592,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       return { linkedCount, notFoundItems };
     } catch (e: any) {
       console.error('Error linking items with model:', e);
-      setMessage('Viga mudeliga sidumiseel: ' + e.message);
+      setMessage(t('messages.linkError') + ': ' + e.message);
       return { linkedCount: 0, notFoundItems: [] };
     }
-  }, [projectId, tcUserEmail, loadItems]);
+  }, [projectId, tcUserEmail, loadItems, t]);
 
   // Load project name
   useEffect(() => {
@@ -2024,7 +2024,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   const createFactory = async () => {
     if (!newFactoryName.trim() || !newFactoryCode.trim()) {
-      setMessage('Sisesta tehase nimi ja kood');
+      setMessage(t('messages.enterFactoryDetails'));
       return;
     }
 
@@ -2043,14 +2043,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       if (error) throw error;
 
-      setMessage('Tehas lisatud');
+      setMessage(t('messages.factoryAdded'));
       setNewFactoryName('');
       setNewFactoryCode('');
       setNewFactorySeparator('.');
       await loadFactories();
     } catch (e: any) {
       console.error('Error creating factory:', e);
-      setMessage('Viga tehase loomisel: ' + e.message);
+      setMessage(t('messages.factoryCreateError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2058,7 +2058,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   const updateFactory = async () => {
     if (!editingFactoryId || !editFactoryName.trim() || !editFactoryCode.trim()) {
-      setMessage('Sisesta tehase nimi ja kood');
+      setMessage(t('messages.enterFactoryDetails'));
       return;
     }
 
@@ -2095,7 +2095,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         await loadVehicles();
       }
 
-      setMessage('Tehas uuendatud');
+      setMessage(t('messages.factoryUpdated'));
       setEditingFactoryId(null);
       setEditFactoryName('');
       setEditFactoryCode('');
@@ -2103,7 +2103,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       broadcastReload();
     } catch (e: any) {
       console.error('Error updating factory:', e);
-      setMessage('Viga tehase uuendamisel: ' + e.message);
+      setMessage(t('messages.factoryUpdateError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2113,11 +2113,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     // Check if factory has vehicles
     const factoryVehicles = vehicles.filter(v => v.factory_id === factoryId);
     if (factoryVehicles.length > 0) {
-      setMessage(`Ei saa kustutada - tehasel on ${factoryVehicles.length} veoki(t)`);
+      setMessage(t('messages.factoryHasVehicles', { count: factoryVehicles.length }));
       return;
     }
 
-    if (!confirm('Kas oled kindel, et soovid tehase kustutada?')) {
+    if (!confirm(t('factory.deleteConfirm'))) {
       return;
     }
 
@@ -2130,11 +2130,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       if (error) throw error;
 
-      setMessage('Tehas kustutatud');
+      setMessage(t('messages.factoryDeleted'));
       await loadFactories();
     } catch (e: any) {
       console.error('Error deleting factory:', e);
-      setMessage('Viga tehase kustutamisel: ' + e.message);
+      setMessage(t('messages.factoryDeleteError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2169,12 +2169,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       await Promise.all([loadFactories(), loadVehicles(), loadItems()]);
       broadcastReload();
 
-      setMessage('Kõik andmed kustutatud!');
+      setMessage(t('messages.allDataDeleted'));
       setShowDeleteAllConfirm(false);
       setShowSettingsModal(false);
     } catch (e: any) {
       console.error('Error deleting all data:', e);
-      setMessage('Viga kustutamisel: ' + e.message);
+      setMessage(t('messages.deleteError') + ': ' + e.message);
     } finally {
       setDeletingAll(false);
     }
@@ -2203,11 +2203,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   }
 
   const createVehicle = async (factoryId: string, date: string, customCode?: string, settings?: VehicleSettings): Promise<DeliveryVehicle | null> => {
+    let vehicleCode = customCode;
     try {
       const factory = getFactory(factoryId);
       if (!factory) throw new Error('Tehas ei leitud');
-
-      let vehicleCode = customCode;
       let vehicleNumber = 1;
       const separator = factory.vehicle_separator || '';
 
@@ -2231,7 +2230,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Check if this vehicle code already exists in the project
       const existingWithCode = vehicles.find(v => v.vehicle_code === vehicleCode);
       if (existingWithCode) {
-        setMessage(`Veok koodiga "${vehicleCode}" on juba olemas!`);
+        setMessage(t('messages.vehicleCodeExists', { code: vehicleCode }));
         return null;
       }
 
@@ -2268,7 +2267,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     } catch (e: any) {
       console.error('Error creating vehicle:', e);
       if (e.code === '23505') {
-        setMessage('Veok selle koodiga on juba olemas!');
+        setMessage(t('messages.vehicleCodeExists', { code: vehicleCode }));
       }
       return null;
     }
@@ -2289,17 +2288,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       if (error) throw error;
       await loadVehicles();
       broadcastReload();
-      setMessage('Veok uuendatud');
+      setMessage(t('messages.vehicleUpdated'));
     } catch (e: any) {
       console.error('Error updating vehicle:', e);
-      setMessage('Viga veoki uuendamisel: ' + e.message);
+      setMessage(t('messages.vehicleUpdateError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
   };
 
   const deleteVehicle = async (vehicleId: string) => {
-    if (!confirm('Kas oled kindel? Veoki detailid jäävad alles, aga neil ei ole enam veoki seost.')) {
+    if (!confirm(t('vehicle.deleteConfirm'))) {
       return;
     }
 
@@ -2313,10 +2312,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       if (error) throw error;
       await Promise.all([loadVehicles(), loadItems()]);
       broadcastReload();
-      setMessage('Veok kustutatud');
+      setMessage(t('messages.vehicleDeleted'));
     } catch (e: any) {
       console.error('Error deleting vehicle:', e);
-      setMessage('Viga veoki kustutamisel: ' + e.message);
+      setMessage(t('messages.deleteError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2361,10 +2360,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
       }
 
-      setMessage('Veok tõstetud uuele kuupäevale');
+      setMessage(t('messages.vehicleMoved'));
     } catch (e: any) {
       console.error('Error moving vehicle:', e);
-      setMessage('Viga veoki tõstmisel: ' + e.message);
+      setMessage(t('messages.vehicleMoveError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2395,7 +2394,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         // Validate: check if code already exists (except for this vehicle)
         const newCode = String(value || '').trim();
         if (!newCode) {
-          setMessage('Veoki kood ei saa olla tühi');
+          setMessage(t('messages.vehicleCodeEmpty'));
           setSaving(false);
           return;
         }
@@ -2437,7 +2436,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setInlineEditField(null);
     } catch (e: any) {
       console.error('Error updating vehicle:', e);
-      setMessage('Viga salvestamisel: ' + e.message);
+      setMessage(t('messages.saveError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2526,7 +2525,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       if (duplicates.length > 0) {
         setMessage(`Kõik valitud detailid on juba graafikus: ${duplicates.slice(0, 5).join(', ')}${duplicates.length > 5 ? ` (+${duplicates.length - 5} veel)` : ''}`);
       } else {
-        setMessage('Kõik valitud detailid on juba graafikus');
+        setMessage(t('messages.allItemsInSchedule'));
       }
       return;
     }
@@ -2603,9 +2602,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     } catch (e: any) {
       console.error('Error adding items:', e);
       if (e.code === '23505') {
-        setMessage('Mõned detailid on juba graafikus');
+        setMessage(t('messages.someItemsInSchedule'));
       } else {
-        setMessage('Viga detailide lisamisel: ' + e.message);
+        setMessage(t('messages.itemAddError') + ': ' + e.message);
       }
     } finally {
       setSaving(false);
@@ -2636,7 +2635,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       await Promise.all([loadItems(), loadVehicles()]);
       broadcastReload();
-      setMessage('Detail kustutatud');
+      setMessage(t('messages.itemDeleted'));
 
       // Auto-update markups if item was in vehicle with active markups
       if (itemToDelete?.vehicle_id && activeMarkupVehicleId === itemToDelete.vehicle_id && activeMarkupType) {
@@ -2646,7 +2645,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
     } catch (e: any) {
       console.error('Error deleting item:', e);
-      setMessage('Viga kustutamisel: ' + e.message);
+      setMessage(t('messages.deleteError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2697,7 +2696,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
     } catch (e: any) {
       console.error('Error deleting items:', e);
-      setMessage('Viga kustutamisel: ' + e.message);
+      setMessage(t('messages.deleteError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2740,7 +2739,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setMessage(`${removeCount} detaili eemaldatud koormast`);
     } catch (e: any) {
       console.error('Error removing items from vehicle:', e);
-      setMessage('Viga eemaldamisel: ' + e.message);
+      setMessage(t('messages.removeError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2783,7 +2782,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setMessage(`${selectedItemIds.size} detaili tõstetud veokisse ${targetVehicle.vehicle_code}`);
     } catch (e: any) {
       console.error('Error moving items:', e);
-      setMessage('Viga tõstmisel: ' + e.message);
+      setMessage(t('messages.moveError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -3250,7 +3249,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Only recalculate times if auto-recalc is enabled for this date
       if (autoRecalcDates.has(targetDate)) {
         await recalculateVehicleTimes(updatedVehicles);
-        setMessage('Veokite järjekord ja kellaajad uuendatud');
+        setMessage(t('messages.vehicleOrderUpdated'));
       } else {
         // Just update sort_order without recalculating times
         setVehicles(prev => prev.map(v => {
@@ -3264,7 +3263,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             .eq('id', v.id)
             .then();
         }
-        setMessage('Veokite järjekord uuendatud');
+        setMessage(t('messages.vehicleOrderUpdatedSimple'));
       }
 
     } else {
@@ -3326,7 +3325,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setMessage(`Veok tõstetud: ${oldDate} → ${targetDate}`);
       } catch (e) {
         console.error('Error moving vehicle:', e);
-        setMessage('Viga veoki tõstmisel');
+        setMessage(t('messages.vehicleMoveError'));
         loadAllData();
       }
     }
@@ -3350,7 +3349,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setShowHistoryModal(true);
     } catch (e) {
       console.error('Error loading history:', e);
-      setMessage('Viga ajaloo laadimisel');
+      setMessage(t('messages.historyLoadError'));
     }
   };
 
@@ -3444,10 +3443,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       ));
 
       setShowDateChangeModal(false);
-      setMessage('Kuupäev muudetud');
+      setMessage(t('messages.dateChanged'));
     } catch (e) {
       console.error('Error changing date:', e);
-      setMessage('Viga kuupäeva muutmisel');
+      setMessage(t('messages.dateChangeError'));
     }
   };
 
@@ -3476,7 +3475,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setShowHistoryModal(true);
     } catch (e) {
       console.error('Error loading vehicle history:', e);
-      setMessage('Viga ajaloo laadimisel');
+      setMessage(t('messages.historyLoadError'));
     }
   };
 
@@ -3676,7 +3675,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           }
 
           if (guids.length === 0) {
-            setMessage('Failis ei leitud GUID-e');
+            setMessage(t('messages.noGuidsInFile'));
             return;
           }
 
@@ -3695,7 +3694,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           }
         } catch (err: any) {
           console.error('File parse error:', err);
-          setMessage('Viga faili lugemisel: ' + err.message);
+          setMessage(t('messages.fileReadError') + ': ' + err.message);
         }
       };
 
@@ -3706,7 +3705,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
     } catch (err: any) {
       console.error('File read error:', err);
-      setMessage('Viga faili avamisel: ' + err.message);
+      setMessage(t('messages.fileOpenError') + ': ' + err.message);
     }
 
     // Clear file input
@@ -3744,7 +3743,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
     // Download
     XLSX.writeFile(wb, 'tarnegraafik_import_template.xlsx');
-    setMessage('Mall allalaetud');
+    setMessage(t('messages.templateDownloaded'));
   };
 
   const handleImport = async () => {
@@ -3765,7 +3764,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
     if (!importText.trim()) {
       console.log('❌ Import text is empty');
-      setMessage('Kleebi GUID-id tekstiväljale');
+      setMessage(t('messages.pasteGuids'));
       return;
     }
 
@@ -3779,20 +3778,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     if (!hasDetailedData) {
       if (!importFactoryId) {
         console.log('❌ No factory selected for simple import');
-        setMessage('Vali tehas');
+        setMessage(t('messages.selectFactory'));
         return;
       }
 
       if (!addModalDate) {
         console.log('❌ No date selected for simple import');
-        setMessage('Vali kuupäev');
+        setMessage(t('messages.selectDate'));
         return;
       }
     }
 
     console.log('✅ Starting import...');
     setImporting(true);
-    setMessage('Alustame importi...');
+    setMessage(t('messages.startingImport'));
 
     try {
       // Parse GUIDs from text
@@ -3808,7 +3807,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       if (guids.length === 0) {
         console.log('❌ No GUIDs found after parsing');
-        setMessage('GUID-e ei leitud');
+        setMessage(t('messages.noGuidsFound'));
         setImporting(false);
         return;
       }
@@ -4383,7 +4382,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   const refreshFromModel = async () => {
     if (items.length === 0) {
-      setMessage('Pole detaile mida värskendada');
+      setMessage(t('messages.noItemsToRefresh'));
       return;
     }
 
@@ -4391,7 +4390,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     if (!confirmed) return;
 
     setRefreshing(true);
-    setMessage('Värskendame andmeid mudelist...');
+    setMessage(t('messages.refreshingFromModel'));
 
     try {
       console.log(`🔄 Refreshing ${items.length} items from model...`);
@@ -4401,7 +4400,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         .map(item => item.guid_ifc)
         .filter((g): g is string => !!g);
 
-      setMessage('Otsime objekte mudelist...');
+      setMessage(t('messages.searchingInModel'));
       const foundObjects = await findObjectsInLoadedModels(api, guids);
       console.log(`📦 Found ${foundObjects.size} objects in loaded models`);
 
@@ -4584,12 +4583,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     const vehicle = vehicles.find(v => v.id === vehicleId);
 
     if (vehicleItems.length === 0) {
-      setMessage('Veokis pole detaile');
+      setMessage(t('messages.noItemsInVehicle'));
       return;
     }
 
     setSaving(true);
-    setMessage('Eemaldan vanad markupid...');
+    setMessage(t('messages.removingOldMarkups'));
 
     try {
       // First remove all existing markups
@@ -4606,7 +4605,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
       }
 
-      setMessage('Loon markupe...');
+      setMessage(t('messages.creatingMarkups'));
 
       // Collect all GUIDs and find objects in loaded models
       const guids = vehicleItems
@@ -4746,7 +4745,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
 
       if (markupsToCreate.length === 0) {
-        setMessage('Markupe pole võimalik luua (objekte ei leitud mudelist)');
+        setMessage(t('messages.markupsNotPossible'));
         return;
       }
 
@@ -4796,17 +4795,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setActiveMarkupType(null);
 
     setSaving(true);
-    setMessage('Eemaldan markupe...');
+    setMessage(t('messages.removingMarkups'));
     try {
       const allMarkups = await (api.markup as any)?.getTextMarkups?.();
       if (!allMarkups || allMarkups.length === 0) {
-        setMessage('Markupe pole');
+        setMessage(t('messages.noMarkups'));
         setSaving(false);
         return;
       }
       const allIds = allMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
       if (allIds.length === 0) {
-        setMessage('Markupe pole');
+        setMessage(t('messages.noMarkups'));
         setSaving(false);
         return;
       }
@@ -5210,10 +5209,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       XLSX.utils.book_append_sheet(wb, ws, 'Veok');
       XLSX.writeFile(wb, `${vehicle.vehicle_code}_${vehicle.scheduled_date || 'määramata'}.xlsx`);
-      setMessage('Veok eksporditud');
+      setMessage(t('messages.vehicleExported'));
     } catch (e: any) {
       console.error('Error exporting vehicle:', e);
-      setMessage('Viga eksportimisel: ' + e.message);
+      setMessage(t('messages.exportError') + ': ' + e.message);
     }
   };
 
@@ -5303,7 +5302,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setMessage(`${formatDateShort(date)} eksporditud`);
     } catch (e: any) {
       console.error('Error exporting date:', e);
-      setMessage('Viga eksportimisel: ' + e.message);
+      setMessage(t('messages.exportError') + ': ' + e.message);
     }
   };
 
@@ -5313,7 +5312,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   const startPlayback = async () => {
     if (vehicles.length === 0) {
-      setMessage('Pole veokeid mida esitada');
+      setMessage(t('messages.noVehiclesToPlay'));
       return;
     }
 
@@ -5348,7 +5347,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setPlaybackDateColors(dColors);
 
     // Step 1: Fetch all GUIDs from Supabase
-    setMessage('Playback: Loen Supabasest...');
+    setMessage(t('messages.playbackReadingDb'));
     const PAGE_SIZE = 5000;
     const allGuids: string[] = [];
     let offset = 0;
@@ -5373,13 +5372,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
 
     // Step 2: Do ONE lookup for ALL GUIDs to get runtime IDs
-    setMessage('Playback: Otsin mudelitest...');
+    setMessage(t('messages.playbackSearchingModels'));
     const foundObjects = await findObjectsInLoadedModels(api, allGuids);
     console.log(`Playback: Found ${foundObjects.size} objects in loaded models`);
 
     // Step 3: Color NON-SCHEDULED objects WHITE in batches
     // First, build a set of GUIDs that are in the delivery schedule
-    setMessage('Playback: Värvin valged...');
+    setMessage(t('messages.playbackColoringWhite'));
     const scheduleGuids = new Set(
       items.map(i => i.guid_ifc || i.guid).filter((g): g is string => !!g)
     );
@@ -5421,7 +5420,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
     }
 
-    setMessage('Playback alustab...');
+    setMessage(t('messages.playbackStarting'));
 
     // Helper function to color items by model/runtimeId
     const colorItemsByGuids = async (guids: string[], color: { r: number; g: number; b: number }) => {
@@ -5469,7 +5468,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           setIsPlaying(false);
           setCurrentPlaybackVehicleId(null);
           setCurrentPlaybackDate(null);
-          setMessage('Playback lõpetatud!');
+          setMessage(t('messages.playbackFinished'));
           return;
         }
 
@@ -5538,7 +5537,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         if (vehicleIndex >= sortedVehicles.length) {
           setIsPlaying(false);
           setCurrentPlaybackVehicleId(null);
-          setMessage('Playback lõpetatud!');
+          setMessage(t('messages.playbackFinished'));
           return;
         }
 
@@ -5614,7 +5613,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const resumePlayback = () => {
     setIsPaused(false);
     // Resume from current position (simplified for now)
-    setMessage('Jätka esitust');
+    setMessage(t('messages.playbackResume'));
   };
 
   const stopPlayback = async () => {
@@ -5698,7 +5697,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
 
       setColorMode(mode);
-      setMessage('Värvin... Loen Supabasest...');
+      setMessage(t('messages.coloringReadingDb'));
 
       // Step 1: Fetch ALL objects from Supabase with pagination (get guid_ifc for lookup)
       const PAGE_SIZE = 5000;
@@ -5715,7 +5714,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
         if (error) {
           console.error('Supabase error:', error);
-          setMessage('Viga Supabase lugemisel');
+          setMessage(t('messages.coloringDbError'));
           return;
         }
 
@@ -5732,7 +5731,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       console.log(`Total GUIDs fetched for coloring: ${allGuids.length}`);
 
       // Step 2: Do ONE lookup for ALL GUIDs to get runtime IDs
-      setMessage('Värvin... Otsin mudelitest...');
+      setMessage(t('messages.coloringSearchingModels'));
       const foundObjects = await findObjectsInLoadedModels(api, allGuids);
       console.log(`Found ${foundObjects.size} objects in loaded models`);
 
@@ -5870,7 +5869,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setMessage(`✓ Värvitud! Valged=${whiteCount}, Graafikudetaile=${colorGuids.size}`);
     } catch (e) {
       console.error('Error applying color mode:', e);
-      setMessage('Viga värvimisel');
+      setMessage(t('messages.coloringError'));
     }
   };
 
@@ -6604,7 +6603,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         .map(i => i.assembly_mark)
                         .join('\n');
                       navigator.clipboard.writeText(marks);
-                      setMessage('Märgid kopeeritud');
+                      setMessage(t('messages.marksCopied'));
                       setDateMenuId(null);
                     }}>
                       <FiCopy /> Kopeeri märgid
@@ -7250,7 +7249,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     setSelectedItemIds(new Set());
                                     setMessage(`${idsToRemove.length} detaili eemaldatud veokist`);
                                   } catch (e: any) {
-                                    setMessage('Viga eemaldamisel: ' + e.message);
+                                    setMessage(t('messages.removeError') + ': ' + e.message);
                                   } finally {
                                     setSaving(false);
                                   }
@@ -7292,7 +7291,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     broadcastReload();
                                     setMessage(`${idsToRemove.length} mudelist valitud detaili eemaldatud`);
                                   } catch (e: any) {
-                                    setMessage('Viga eemaldamisel: ' + e.message);
+                                    setMessage(t('messages.removeError') + ': ' + e.message);
                                   } finally {
                                     setSaving(false);
                                   }
@@ -7345,7 +7344,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                   broadcastReload();
                                   setMessage(`${orphanedItemIds.length} määramata detaili kustutatud`);
                                 } catch (e: any) {
-                                  setMessage('Viga kustutamisel: ' + e.message);
+                                  setMessage(t('messages.deleteError') + ': ' + e.message);
                                 }
                                 setVehicleMenuId(null);
                               }}
@@ -8230,7 +8229,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     const newCode = e.target.value.trim();
                     if (!newCode) {
                       e.target.value = activeVehicle.vehicle_code;
-                      setMessage('Veoki kood ei saa olla tühi');
+                      setMessage(t('messages.vehicleCodeEmpty'));
                       return;
                     }
                     if (newCode === activeVehicle.vehicle_code) return;
@@ -8256,7 +8255,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       .from('trimble_delivery_vehicles')
                       .update({ vehicle_code: newCode, vehicle_number: vehicleNumber })
                       .eq('id', activeVehicleId);
-                    setMessage('Veoki kood muudetud');
+                    setMessage(t('messages.vehicleCodeChanged'));
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') e.currentTarget.blur();
@@ -9102,7 +9101,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   }
 
                   if (!vehicleId) {
-                    setMessage('Vali veok');
+                    setMessage(t('messages.selectVehicle'));
                     return;
                   }
 
@@ -9411,7 +9410,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   // Validate vehicle code uniqueness
                   const newCode = editingVehicle.vehicle_code?.trim();
                   if (!newCode) {
-                    setMessage('Veoki kood ei saa olla tühi');
+                    setMessage(t('messages.vehicleCodeEmpty'));
                     return;
                   }
                   const existingWithCode = vehicles.find(v => v.vehicle_code === newCode && v.id !== editingVehicle.id);
@@ -10419,7 +10418,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                     setMessage(`✓ ${updated} rida salvestatud`);
                     setShowTableEditor(false);
                   } catch (e: any) {
-                    setMessage('Viga: ' + e.message);
+                    setMessage(t('messages.genericError') + ': ' + e.message);
                   } finally {
                     setTableEditorSaving(false);
                   }
@@ -10474,9 +10473,9 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                           await loadFactories();
                           await loadVehicles();
                           broadcastReload();
-                          setMessage('Eraldaja uuendatud');
+                          setMessage(t('messages.separatorUpdated'));
                         } catch (e: any) {
-                          setMessage('Viga: ' + e.message);
+                          setMessage(t('messages.genericError') + ': ' + e.message);
                         } finally {
                           setSaving(false);
                         }

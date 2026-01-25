@@ -622,11 +622,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setScheduleItems(allItems);
     } catch (e) {
       console.error('Error loading schedule:', e);
-      setMessage('Viga graafiku laadimisel');
+      setMessage(t('messages.loadError'));
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, t]);
 
   // Initialize versions on mount
   useEffect(() => {
@@ -679,7 +679,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       await loadVersions();
     } catch (e) {
       console.error('Error switching version:', e);
-      setMessage('Viga versiooni vahetamisel');
+      setMessage(t('messages.versionSwitchError'));
     }
   };
 
@@ -742,7 +742,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         }
       }
 
-      setMessage(`Versioon "${name}" loodud`);
+      setMessage(t('messages.versionCreated', { name }));
       setShowVersionModal(false);
       setNewVersionName('');
       setNewVersionDescription('');
@@ -752,7 +752,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       await switchVersion(newVersion.id);
     } catch (e) {
       console.error('Error creating version:', e);
-      setMessage('Viga versiooni loomisel');
+      setMessage(t('messages.versionCreateError'));
     }
   };
 
@@ -776,7 +776,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       if (error) throw error;
 
-      setMessage(`Versioon uuendatud`);
+      setMessage(t('messages.versionUpdated'));
       setShowVersionModal(false);
       setEditingVersion(null);
       setNewVersionName('');
@@ -784,7 +784,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       await loadVersions();
     } catch (e) {
       console.error('Error updating version:', e);
-      setMessage('Viga versiooni uuendamisel');
+      setMessage(t('messages.versionUpdateError'));
     }
   };
 
@@ -792,7 +792,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const deleteVersion = async () => {
     if (!editingVersion) return;
     if (deleteConfirmInput !== editingVersion.name) {
-      setMessage('Versiooni nimi ei klapi!');
+      setMessage(t('messages.versionNameMismatch'));
       return;
     }
 
@@ -813,7 +813,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       if (versionError) throw versionError;
 
-      setMessage(`Versioon "${editingVersion.name}" kustutatud`);
+      setMessage(t('messages.versionDeleted', { name: editingVersion.name }));
       setShowVersionModal(false);
       setShowDeleteConfirm(false);
       setDeleteConfirmInput('');
@@ -832,7 +832,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       await loadVersions();
     } catch (e) {
       console.error('Error deleting version:', e);
-      setMessage('Viga versiooni kustutamisel');
+      setMessage(t('messages.versionDeleteError'));
     }
   };
 
@@ -1012,7 +1012,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       await loadComments();
     } catch (e) {
       console.error('Error adding comment:', e);
-      setMessage('Viga kommentaari lisamisel');
+      setMessage(t('messages.commentAddError'));
     } finally {
       setSavingComment(false);
     }
@@ -1028,7 +1028,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     const isOwner = comment.created_by === tcUserEmail;
 
     if (!isAdmin && !isOwner) {
-      setMessage('Sul pole õigust seda kommentaari kustutada');
+      setMessage(t('messages.commentDeleteNoPermission'));
       return;
     }
 
@@ -1042,7 +1042,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       await loadComments();
     } catch (e) {
       console.error('Error deleting comment:', e);
-      setMessage('Viga kommentaari kustutamisel');
+      setMessage(t('messages.commentDeleteError'));
     }
   };
 
@@ -1611,7 +1611,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error updating batch methods:', e);
-      setMessage('Viga ressursside muutmisel');
+      setMessage(t('messages.resourcesUpdateError'));
     }
   };
 
@@ -1646,7 +1646,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Perform undo - restore previous state
   const performUndo = useCallback(async () => {
     if (undoStack.length === 0) {
-      setMessage('Pole midagi tagasi võtta');
+      setMessage(t('messages.nothingToUndo'));
       return;
     }
 
@@ -1685,7 +1685,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setMessage(`Tagasi võetud: ${lastState.description}`);
     } catch (e) {
       console.error('Undo error:', e);
-      setMessage('Viga tagasivõtmisel');
+      setMessage(t('messages.undoError'));
     } finally {
       isUndoingRef.current = false;
     }
@@ -1707,7 +1707,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Add selected objects to date
   const addToDate = async (date: string) => {
     if (selectedObjects.length === 0) {
-      setMessage('Vali esmalt detailid mudelilt');
+      setMessage(t('messages.selectItemsFirst'));
       return;
     }
 
@@ -1787,9 +1787,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     } catch (e: any) {
       console.error('Error adding to schedule:', e);
       if (e.code === '23505') {
-        setMessage('Mõned detailid on juba graafikus!');
+        setMessage(t('messages.someItemsExist'));
       } else {
-        setMessage('Viga graafikusse lisamisel');
+        setMessage(t('messages.addError'));
       }
     } finally {
       setSaving(false);
@@ -1800,7 +1800,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Used by the quick-add "+" button on date headers
   const addUnscheduledToDate = async (date: string) => {
     if (selectedObjects.length === 0) {
-      setMessage('Vali esmalt detailid mudelilt');
+      setMessage(t('messages.selectItemsFirst'));
       return;
     }
 
@@ -1815,7 +1815,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     });
 
     if (unscheduledObjects.length === 0) {
-      setMessage('Kõik valitud detailid on juba graafikus');
+      setMessage(t('messages.allItemsExist'));
       return;
     }
 
@@ -1886,9 +1886,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     } catch (e: any) {
       console.error('Error adding unscheduled items:', e);
       if (e.code === '23505') {
-        setMessage('Mõned detailid on juba graafikus!');
+        setMessage(t('messages.someItemsExist'));
       } else {
-        setMessage('Viga graafikusse lisamisel');
+        setMessage(t('messages.addError'));
       }
     } finally {
       setSaving(false);
@@ -1913,7 +1913,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error moving item:', e);
-      setMessage('Viga detaili liigutamisel');
+      setMessage(t('messages.moveError'));
     }
   };
 
@@ -1989,7 +1989,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error deleting item:', e);
-      setMessage('Viga kustutamisel');
+      setMessage(t('messages.deleteError'));
     }
   };
 
@@ -2086,7 +2086,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error deleting items:', e);
-      setMessage('Viga kustutamisel');
+      setMessage(t('messages.deleteError'));
     }
   };
 
@@ -2177,7 +2177,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       await loadScheduleLocks();
     } catch (e) {
       console.error('Error toggling day lock:', e);
-      setMessage('Viga lukustamisel');
+      setMessage(t('messages.lockError'));
     }
   };
 
@@ -2233,7 +2233,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       await loadScheduleLocks();
     } catch (e) {
       console.error('Error toggling month lock:', e);
-      setMessage('Viga lukustamisel');
+      setMessage(t('messages.lockError'));
     }
   };
 
@@ -2248,7 +2248,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
     // Check if date is locked
     if (isDateLocked(editDayModalDate)) {
-      setMessage('See päev on lukustatud');
+      setMessage(t('messages.dayLocked'));
       setSavingEditDay(false);
       return;
     }
@@ -2296,7 +2296,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       if (error) {
         console.error('Error updating day items:', error);
-        setMessage('Viga päeva muutmisel');
+        setMessage(t('messages.dayChangeError'));
         setSavingEditDay(false);
         return;
       }
@@ -2314,7 +2314,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
     } catch (e) {
       console.error('Error updating day:', e);
-      setMessage('Viga päeva muutmisel');
+      setMessage(t('messages.dayChangeError'));
     } finally {
       setSavingEditDay(false);
     }
@@ -2324,7 +2324,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const deleteAllItemsInDate = async (date: string) => {
     // Check if date is locked
     if (isDateLocked(date)) {
-      setMessage('See päev on lukustatud');
+      setMessage(t('messages.dayLocked'));
       return;
     }
 
@@ -2381,7 +2381,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error deleting date items:', e);
-      setMessage('Viga kustutamisel');
+      setMessage(t('messages.deleteError'));
     }
   };
 
@@ -2410,7 +2410,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     });
 
     if (itemsToRemove.length === 0) {
-      setMessage('Valitud detailid ei ole sellel kuupäeval');
+      setMessage(t('messages.itemsNotOnDate'));
       return;
     }
 
@@ -2468,7 +2468,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error removing items from date:', e);
-      setMessage('Viga eemaldamisel');
+      setMessage(t('messages.removeError'));
     }
   };
 
@@ -2481,7 +2481,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     );
 
     if (itemsToFix.length === 0) {
-      setMessage('Kõik assembly markid on korras');
+      setMessage(t('messages.allMarksOk'));
       return;
     }
 
@@ -2499,7 +2499,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       const allGuids = Array.from(guidMap.keys());
       if (allGuids.length === 0) {
-        setMessage('Detailidel puuduvad GUID-id');
+        setMessage(t('messages.noGuids'));
         return;
       }
 
@@ -2573,7 +2573,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       await loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error refreshing assembly marks:', e);
-      setMessage('Viga assembly markide uuendamisel');
+      setMessage(t('messages.refreshMarksError'));
     }
   };
 
@@ -2583,7 +2583,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       const guidIfc = item.guid_ifc || item.guid;
 
       if (!guidIfc) {
-        setMessage('Objekti identifikaator puudub');
+        setMessage(t('messages.objectIdMissing'));
         return;
       }
 
@@ -2593,7 +2593,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         : await zoomToObjectsByGuid(api, [guidIfc], 300);
 
       if (count === 0) {
-        setMessage('Objekti ei leitud mudelist');
+        setMessage(t('messages.objectNotFound'));
         return;
       }
 
@@ -2746,12 +2746,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           link.click();
           document.body.removeChild(link);
         } else {
-          setMessage('Pildistamine ebaõnnestus');
+          setMessage(t('messages.screenshotFailed'));
         }
       }
     } catch (e) {
       console.error('Error taking screenshot:', e);
-      setMessage('Viga pildistamisel');
+      setMessage(t('messages.screenshotError'));
     }
   };
 
@@ -2760,11 +2760,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const createMarkupsForDate = async (date: string, markupType: 'position' | 'mark' | 'both' | 'delivery') => {
     const items = itemsByDate[date];
     if (!items || items.length === 0) {
-      setMessage('Päeval pole detaile');
+      setMessage(t('messages.noItemsOnDay'));
       return;
     }
 
-    setMessage('Eemaldan vanad markupid...');
+    setMessage(t('messages.removingOldMarkups'));
 
     try {
       // First remove all existing markups (in batches)
@@ -2776,7 +2776,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         }
       }
 
-      setMessage('Loon markupe...');
+      setMessage(t('messages.creatingMarkups'));
 
       // Collect all GUIDs and find objects in loaded models
       const guids = items
@@ -2876,7 +2876,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       if (markupsToCreate.length === 0) {
-        setMessage('Markupe pole võimalik luua');
+        setMessage(t('messages.markupsNotPossible'));
         return;
       }
 
@@ -2920,7 +2920,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setDateMenuId(null);
     } catch (e) {
       console.error('Error creating markups:', e);
-      setMessage('Viga markupite loomisel');
+      setMessage(t('messages.markupsError'));
     }
   };
 
@@ -2931,11 +2931,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
     const allDates = Object.keys(itemsByDate).sort();
     if (allDates.length === 0) {
-      setMessage('Graafikus pole detaile');
+      setMessage(t('messages.scheduleEmpty'));
       return;
     }
 
-    setMessage('Eemaldan vanad markupid...');
+    setMessage(t('messages.removingOldMarkups'));
 
     try {
       // First remove all existing markups (in batches)
@@ -2947,7 +2947,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         }
       }
 
-      setMessage('Loon markupe kõigile päevadele...');
+      setMessage(t('messages.creatingMarkupsAllDays'));
 
       const markupsToCreate: any[] = [];
       const markupDateColors: { id?: number; color: string }[] = [];
@@ -3042,7 +3042,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       if (markupsToCreate.length === 0) {
-        setMessage('Markupe pole võimalik luua');
+        setMessage(t('messages.markupsNotPossible'));
         return;
       }
 
@@ -3073,7 +3073,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setMessage(`${createdIds.length} markupit loodud (${allDates.length} päeva)`);
     } catch (e) {
       console.error('Error creating markups for all days:', e);
-      setMessage('Viga markupite loomisel');
+      setMessage(t('messages.markupsError'));
     }
   };
 
@@ -3162,14 +3162,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       const allMarkups = await api.markup?.getTextMarkups?.();
 
       if (!allMarkups || allMarkups.length === 0) {
-        setMessage('Markupe pole');
+        setMessage(t('messages.noMarkups'));
         return;
       }
 
       const allIds = allMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
 
       if (allIds.length === 0) {
-        setMessage('Markupe pole');
+        setMessage(t('messages.noMarkups'));
         return;
       }
 
@@ -3178,7 +3178,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setDateMenuId(null);
     } catch (e) {
       console.error('Error removing markups:', e);
-      setMessage('Viga markupite eemaldamisel');
+      setMessage(t('messages.markupsRemoveError'));
     }
   };
 
@@ -3188,7 +3188,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     setShowMarkupSubmenu(false);
 
     try {
-      setMessage('Laadin tarnegraafiku andmeid...');
+      setMessage(t('messages.loadingDeliveryData'));
 
       // 1. Get all delivery items with dates from tarnegraafik
       const { data: deliveryItems, error } = await supabase
@@ -3200,7 +3200,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       if (error) throw error;
 
       if (!deliveryItems || deliveryItems.length === 0) {
-        setMessage('Tarnegraafikus pole detaile kuupäevadega');
+        setMessage(t('messages.noDeliveryItemsWithDates'));
         return;
       }
 
@@ -3224,7 +3224,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       });
 
       if (unplannedItems.length === 0) {
-        setMessage('Kõik tarnegraafiku detailid on juba paigaldusgraafikus');
+        setMessage(t('messages.allDeliveryItemsExist'));
         return;
       }
 
@@ -3239,7 +3239,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         }
       }
 
-      setMessage('Loon markupe...');
+      setMessage(t('messages.creatingMarkups'));
 
       // 5. Group by model for batch processing
       const itemsByModel = new Map<string, { item: typeof unplannedItems[0]; runtimeId: number }[]>();
@@ -3325,7 +3325,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       if (markupsToCreate.length === 0) {
-        setMessage('Markupe pole võimalik luua (objekte ei leitud mudelist)');
+        setMessage(t('messages.markupsNotPossibleNotFound'));
         return;
       }
 
@@ -3347,7 +3347,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setMessage(`${createdIds.length} tarnekuupäeva markupit loodud`);
     } catch (e) {
       console.error('Error creating delivery date markups:', e);
-      setMessage('Viga markupite loomisel');
+      setMessage(t('messages.markupsError'));
     }
   };
 
@@ -3357,7 +3357,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     setShowMarkupSubmenu(false);
 
     try {
-      setMessage('Laadin tarnegraafiku andmeid (ilma ERP)...');
+      setMessage(t('messages.loadingDeliveryDataNoErp'));
 
       // 1. Get all delivery items with dates from tarnegraafik
       const { data: deliveryItems, error } = await supabase
@@ -3369,7 +3369,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       if (error) throw error;
 
       if (!deliveryItems || deliveryItems.length === 0) {
-        setMessage('Tarnegraafikus pole detaile kuupäevadega');
+        setMessage(t('messages.noDeliveryItemsWithDates'));
         return;
       }
 
@@ -3399,7 +3399,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       });
 
       if (unplannedItems.length === 0) {
-        setMessage('Pole detaile (ilma ERP) mis pole paigaldusgraafikus');
+        setMessage(t('messages.noItemsWithoutErp'));
         return;
       }
 
@@ -3414,7 +3414,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         }
       }
 
-      setMessage('Loon markupe...');
+      setMessage(t('messages.creatingMarkups'));
 
       // 5. Group by model for batch processing
       const itemsByModel = new Map<string, { item: typeof unplannedItems[0]; runtimeId: number }[]>();
@@ -3499,7 +3499,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       if (markupsToCreate.length === 0) {
-        setMessage('Markupe pole võimalik luua (objekte ei leitud mudelist)');
+        setMessage(t('messages.markupsNotPossibleNotFound'));
         return;
       }
 
@@ -3521,7 +3521,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setMessage(`${createdIds.length} markupit loodud (ilma ERP)`);
     } catch (e) {
       console.error('Error creating delivery date markups (no ERP):', e);
-      setMessage('Viga markupite loomisel');
+      setMessage(t('messages.markupsError'));
     }
   };
 
@@ -3531,7 +3531,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     setShowMarkupSubmenu(false);
 
     try {
-      setMessage('Laadin tarnegraafiku andmeid...');
+      setMessage(t('messages.loadingDeliveryData'));
 
       // 1. Get all delivery items with vehicle_id
       const { data: deliveryItems, error: itemsError } = await supabase
@@ -3543,7 +3543,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       if (itemsError) throw itemsError;
 
       if (!deliveryItems || deliveryItems.length === 0) {
-        setMessage('Tarnegraafikus pole detaile veokitega');
+        setMessage(t('messages.noDeliveryItemsWithVehicles'));
         return;
       }
 
@@ -3580,7 +3580,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       });
 
       if (unplannedItems.length === 0) {
-        setMessage('Kõik veokitega detailid on juba paigaldusgraafikus');
+        setMessage(t('messages.allVehicleItemsExist'));
         return;
       }
 
@@ -3618,7 +3618,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         }
       }
 
-      setMessage('Loon markupe...');
+      setMessage(t('messages.creatingMarkups'));
 
       // 6. Group by model for batch processing
       const itemsByModel = new Map<string, { item: typeof unplannedItems[0]; runtimeId: number; vehicle: typeof vehicles[0] }[]>();
@@ -3715,7 +3715,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       if (markupsToCreate.length === 0) {
-        setMessage('Markupe pole võimalik luua (objekte ei leitud mudelist)');
+        setMessage(t('messages.markupsNotPossibleNotFound'));
         return;
       }
 
@@ -3737,7 +3737,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setMessage(`${createdIds.length} veoki markupit loodud`);
     } catch (e) {
       console.error('Error creating vehicle time markups:', e);
-      setMessage('Viga markupite loomisel');
+      setMessage(t('messages.markupsError'));
     }
   };
 
@@ -3750,7 +3750,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setMessage(`${dateItems.length} marki kopeeritud`);
     } catch (e) {
       console.error('Error copying to clipboard:', e);
-      setMessage('Viga kopeerimisel');
+      setMessage(t('messages.copyError'));
     }
   };
 
@@ -3823,7 +3823,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         const dateColors = generateDateColors(dates);
         setPlaybackDateColors(dateColors);
 
-        setMessage('Värvin... Loen Supabasest...');
+        setMessage(t('messages.coloringReadingDb'));
 
         // Step 1: Fetch ALL objects from Supabase with pagination (get guid_ifc for lookup)
         const PAGE_SIZE = 5000;
@@ -3840,7 +3840,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
           if (error) {
             console.error('Supabase error:', error);
-            setMessage('Viga Supabase lugemisel');
+            setMessage(t('messages.coloringDbError'));
             return;
           }
 
@@ -3857,7 +3857,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         console.log(`Total GUIDs fetched for coloring: ${allGuids.length}`);
 
         // Step 2: Do ONE lookup for ALL GUIDs to get runtime IDs
-        setMessage('Värvin... Otsin mudelitest...');
+        setMessage(t('messages.coloringSearchingModels'));
         const foundObjects = await findObjectsInLoadedModels(api, allGuids);
         console.log(`Found ${foundObjects.size} objects in loaded models`);
 
@@ -3934,7 +3934,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         setTimeout(() => setMessage(null), 3000);
       } catch (e) {
         console.error('Error coloring by date:', e);
-        setMessage('Viga värvimisel');
+        setMessage(t('messages.coloringError'));
       }
     } else {
       // Turning OFF - reset colors
@@ -3989,7 +3989,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Color objects from database white (database-based approach like delivery schedule)
   const colorEntireModelWhite = async () => {
     try {
-      setMessage('Värvin valged... Loen Supabasest...');
+      setMessage(t('messages.coloringWhiteReadingDb'));
 
       // Fetch ALL objects from Supabase with pagination
       const PAGE_SIZE = 5000;
@@ -4864,7 +4864,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error moving items:', e);
-      setMessage('Viga detailide liigutamisel');
+      setMessage(t('messages.moveItemsError'));
     }
   };
 
@@ -4897,7 +4897,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error moving items:', e);
-      setMessage('Viga detailide liigutamisel');
+      setMessage(t('messages.moveItemsError'));
     }
   };
 
@@ -5194,7 +5194,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     const isEnglish = exportLanguage === 'en';
 
     if (totalItems === 0) {
-      setMessage('Graafik on tühi, pole midagi eksportida');
+      setMessage(t('messages.scheduleEmptyExport'));
       return;
     }
 
@@ -8719,7 +8719,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   className="btn-primary"
                   onClick={async () => {
                     if (!scheduledEditDate) {
-                      setMessage('Vali kuupäev');
+                      setMessage(t('messages.selectDate'));
                       return;
                     }
 
@@ -8795,7 +8795,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                       setSelectedItemIds(new Set());
                     } catch (err) {
                       console.error('Error updating items:', err);
-                      setMessage('Viga detailide uuendamisel');
+                      setMessage(t('messages.updateError'));
                     }
                   }}
                 >
