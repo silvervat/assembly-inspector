@@ -2,12 +2,15 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import * as XLSX from 'xlsx-js-style';
 import html2canvas from 'html2canvas';
+import QRCode from 'qrcode';
 import { TrimbleExUser, supabase, MarkeerijPreset } from '../supabase';
 import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet, FiTarget, FiDatabase, FiPlus, FiEye, FiSave, FiShare2, FiInfo, FiList, FiPlay, FiPause } from 'react-icons/fi';
+import { BsQrCode } from 'react-icons/bs';
 import PartDatabasePanel from './PartDatabasePanel';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
 import { findObjectsInLoadedModels, selectObjectsByGuid } from '../utils/navigationHelper';
+import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 
 // Constants
 const MAX_MARKUPS_PER_BATCH = 200;
@@ -136,7 +139,27 @@ export default function ToolsScreen({
   const [hasSelection, setHasSelection] = useState(false);
 
   // Accordion state - which section is expanded (null = all collapsed by default)
-  const [expandedSection, setExpandedSection] = useState<'crane' | 'export' | 'markup' | 'marker' | 'markeerija' | 'steps' | 'partdb' | null>(null);
+  const [expandedSection, setExpandedSection] = useState<'crane' | 'export' | 'markup' | 'marker' | 'markeerija' | 'steps' | 'partdb' | 'qr' | null>(null);
+
+  // Property mappings for reading assembly_mark and weight
+  const { mappings: propertyMappings } = useProjectPropertyMappings(_projectId);
+
+  // QR Aktivaator state
+  interface QrCodeItem {
+    id: string;
+    guid: string;
+    assembly_mark: string | null;
+    product_name: string | null;
+    weight: number | null;
+    status: 'pending' | 'activated' | 'expired';
+    qr_data_url: string | null;
+    created_at: string;
+    activated_by_name?: string;
+    activated_at?: string;
+  }
+  const [qrCodes, setQrCodes] = useState<QrCodeItem[]>([]);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrGenerating, setQrGenerating] = useState(false);
 
   // Marker (Märgista) feature state
   const [markerCategories, setMarkerCategories] = useState<MarkerCategory[]>([
@@ -214,7 +237,7 @@ export default function ToolsScreen({
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Toggle section expansion (accordion style) with auto-scroll
-  const toggleSection = (section: 'crane' | 'export' | 'markup' | 'marker' | 'markeerija' | 'steps' | 'partdb') => {
+  const toggleSection = (section: 'crane' | 'export' | 'markup' | 'marker' | 'markeerija' | 'steps' | 'partdb' | 'qr') => {
     const isExpanding = expandedSection !== section;
     setExpandedSection(prev => prev === section ? null : section);
 
@@ -234,6 +257,298 @@ export default function ToolsScreen({
     setToast({ message, type });
     toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
   }, []);
+
+  // ========== QR AKTIVAATOR FUNCTIONS ==========
+
+  // Load QR codes from database
+  const loadQrCodes = useCallback(async () => {
+    if (!_projectId) return;
+    setQrLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('qr_activation_codes')
+        .select('*')
+        .eq('project_id', _projectId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading QR codes:', error);
+        showToast('Viga QR koodide lugemisel', 'error');
+        return;
+      }
+
+      // Generate QR data URLs for pending codes
+      const codesWithQr: QrCodeItem[] = await Promise.all((data || []).map(async (code: any) => {
+        let qr_data_url = null;
+        if (code.status === 'pending') {
+          try {
+            // Generate public URL for the QR page
+            const baseUrl = window.location.origin;
+            const qrPageUrl = `${baseUrl}/qr/${code.id}`;
+            qr_data_url = await QRCode.toDataURL(qrPageUrl, { width: 200, margin: 2 });
+          } catch (e) {
+            console.error('Error generating QR:', e);
+          }
+        }
+        return {
+          id: code.id,
+          guid: code.guid,
+          assembly_mark: code.assembly_mark,
+          product_name: code.product_name,
+          weight: code.weight,
+          status: code.status,
+          qr_data_url,
+          created_at: code.created_at,
+          activated_by_name: code.activated_by_name,
+          activated_at: code.activated_at
+        };
+      }));
+
+      setQrCodes(codesWithQr);
+    } catch (e) {
+      console.error('Error loading QR codes:', e);
+      showToast('Viga QR koodide lugemisel', 'error');
+    } finally {
+      setQrLoading(false);
+    }
+  }, [_projectId, showToast]);
+
+  // Generate QR code for selected object
+  const handleGenerateQr = useCallback(async () => {
+    setQrGenerating(true);
+    try {
+      const selected = await api.viewer.getSelection();
+      if (!selected || selected.length === 0) {
+        showToast('Vali mudelist detail!', 'error');
+        setQrGenerating(false);
+        return;
+      }
+
+      // Get first selected object
+      const sel = selected[0];
+      const modelId = sel.modelId;
+      const runtimeId = sel.objectRuntimeIds?.[0];
+
+      if (!modelId || !runtimeId) {
+        showToast('Valitud objektil puudub info', 'error');
+        setQrGenerating(false);
+        return;
+      }
+
+      // Get object properties
+      const properties: any[] = await (api.viewer as any).getObjectProperties(modelId, [runtimeId], { includeHidden: true });
+      const objProps = properties[0];
+
+      // Extract guid, assembly_mark, weight from properties
+      let guid = '';
+      let assemblyMark = '';
+      let productName = '';
+      let weight: number | null = null;
+
+      // Try to get GUID from Summary property set
+      const propertySets = objProps?.propertySets || [];
+      for (const pset of propertySets) {
+        if (pset.name === 'Summary' || pset.name === 'Tekla Common') {
+          for (const prop of pset.properties || []) {
+            if (prop.name === 'GUID' && !guid) {
+              guid = prop.displayValue || prop.value || '';
+            }
+          }
+        }
+        // Use property mappings
+        if (pset.name === propertyMappings.assembly_mark_set) {
+          const markProp = pset.properties?.find((p: any) => p.name === propertyMappings.assembly_mark_prop);
+          if (markProp) assemblyMark = markProp.displayValue || markProp.value || '';
+        }
+        if (pset.name === propertyMappings.weight_set) {
+          const weightProp = pset.properties?.find((p: any) => p.name === propertyMappings.weight_prop);
+          if (weightProp) {
+            const val = weightProp.displayValue || weightProp.value;
+            weight = val ? parseFloat(String(val)) : null;
+          }
+        }
+      }
+
+      // Get product name from object metadata
+      if (objProps?.product?.name) {
+        productName = objProps.product.name;
+      }
+
+      // Fallback: get GUID from object identifier
+      if (!guid && objProps?.product?.ifcGuid) {
+        guid = objProps.product.ifcGuid;
+      }
+
+      if (!guid) {
+        showToast('Objektil puudub GUID', 'error');
+        setQrGenerating(false);
+        return;
+      }
+
+      // Check if QR already exists for this guid
+      const { data: existing } = await supabase
+        .from('qr_activation_codes')
+        .select('id')
+        .eq('project_id', _projectId)
+        .eq('guid', guid.toLowerCase())
+        .maybeSingle();
+
+      if (existing) {
+        showToast('QR kood juba eksisteerib selle detaili jaoks', 'error');
+        setQrGenerating(false);
+        return;
+      }
+
+      // Insert new QR code
+      const { data: newCode, error: insertError } = await supabase
+        .from('qr_activation_codes')
+        .insert({
+          project_id: _projectId,
+          guid: guid.toLowerCase(),
+          assembly_mark: assemblyMark || null,
+          product_name: productName || null,
+          weight: weight,
+          status: 'pending',
+          created_by: user.email,
+          created_by_name: user.name || user.email
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('Error creating QR code:', insertError);
+        showToast('Viga QR koodi loomisel', 'error');
+        setQrGenerating(false);
+        return;
+      }
+
+      // Generate QR image
+      const baseUrl = window.location.origin;
+      const qrPageUrl = `${baseUrl}/qr/${newCode.id}`;
+      const qrDataUrl = await QRCode.toDataURL(qrPageUrl, { width: 200, margin: 2 });
+
+      // Add to list
+      setQrCodes(prev => [{
+        id: newCode.id,
+        guid: newCode.guid,
+        assembly_mark: newCode.assembly_mark,
+        product_name: newCode.product_name,
+        weight: newCode.weight,
+        status: 'pending',
+        qr_data_url: qrDataUrl,
+        created_at: newCode.created_at
+      }, ...prev]);
+
+      showToast('QR kood loodud!', 'success');
+
+    } catch (e) {
+      console.error('Error generating QR:', e);
+      showToast('Viga QR genereerimisel', 'error');
+    } finally {
+      setQrGenerating(false);
+    }
+  }, [api, _projectId, user, propertyMappings, showToast]);
+
+  // Select object in model by GUID
+  const handleSelectQrObject = useCallback(async (guid: string) => {
+    try {
+      await selectObjectsByGuid(api, [guid]);
+      showToast('Detail valitud mudelis', 'success');
+    } catch (e) {
+      console.error('Error selecting object:', e);
+      showToast('Viga detaili valimisel', 'error');
+    }
+  }, [api, showToast]);
+
+  // Delete QR code
+  const handleDeleteQr = useCallback(async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('qr_activation_codes')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting QR:', error);
+        showToast('Viga kustutamisel', 'error');
+        return;
+      }
+
+      setQrCodes(prev => prev.filter(qr => qr.id !== id));
+      showToast('QR kood kustutatud', 'success');
+    } catch (e) {
+      console.error('Error deleting QR:', e);
+      showToast('Viga kustutamisel', 'error');
+    }
+  }, [showToast]);
+
+  // Subscribe to QR code activations and color model
+  useEffect(() => {
+    if (!_projectId || expandedSection !== 'qr') return;
+
+    // Load initial data
+    loadQrCodes();
+
+    // Subscribe to realtime changes
+    const channel = supabase
+      .channel('qr_activations')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'qr_activation_codes',
+        filter: `project_id=eq.${_projectId}`
+      }, async (payload) => {
+        const updated = payload.new as any;
+
+        // Update local state
+        setQrCodes(prev => prev.map(qr =>
+          qr.id === updated.id
+            ? {
+                ...qr,
+                status: updated.status,
+                activated_by_name: updated.activated_by_name,
+                activated_at: updated.activated_at,
+                qr_data_url: updated.status === 'activated' ? null : qr.qr_data_url
+              }
+            : qr
+        ));
+
+        // If activated, color the model
+        if (updated.status === 'activated') {
+          showToast(`${updated.assembly_mark || 'Detail'} leitud platsilt!`, 'success');
+
+          // Color model: all white, then this element green
+          try {
+            const foundMap = await findObjectsInLoadedModels(api, [updated.guid]);
+            if (foundMap.size > 0) {
+              const foundItem = foundMap.values().next().value;
+
+              // First color all white
+              if (onColorModelWhite) {
+                onColorModelWhite();
+              }
+
+              // Then color this element green
+              if (foundItem) {
+                await api.viewer.setObjectState(
+                  { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
+                  { color: { r: 34, g: 197, b: 94, a: 255 } } // Green
+                );
+              }
+            }
+          } catch (e) {
+            console.error('Error coloring model:', e);
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [_projectId, expandedSection, loadQrCodes, showToast, api, onColorModelWhite]);
+
+  // ========== END QR AKTIVAATOR FUNCTIONS ==========
 
   // Load markeerija presets from database
   const loadMarkeerijPresets = useCallback(async () => {
@@ -4159,6 +4474,156 @@ export default function ToolsScreen({
                   onNavigate?.('delivery_schedule');
                 }}
               />
+            </>
+          )}
+        </div>
+
+        {/* QR Aktivaator Section */}
+        <div className="tools-section" ref={(el) => { sectionRefs.current['qr'] = el; }}>
+          <div
+            className="tools-section-header tools-section-header-clickable"
+            onClick={() => toggleSection('qr')}
+          >
+            {expandedSection === 'qr' ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
+            <BsQrCode size={18} style={{ color: '#10b981' }} />
+            <h3>QR Aktivaator</h3>
+          </div>
+
+          {expandedSection === 'qr' && (
+            <>
+              <p className="tools-section-desc">
+                Vali mudelist detail, genereeri QR kood. Telefoniga skännides saab keegi platsil kinnitada detaili leidmist.
+              </p>
+
+              {/* Generate QR button */}
+              <div style={{ marginBottom: '12px' }}>
+                <button
+                  className="tools-btn tools-btn-compact"
+                  onClick={handleGenerateQr}
+                  disabled={qrGenerating || !hasSelection}
+                  style={{ width: '100%', background: hasSelection ? '#10b981' : '#e5e7eb', color: hasSelection ? '#fff' : '#6b7280' }}
+                >
+                  {qrGenerating ? (
+                    <FiLoader className="spinning" size={14} />
+                  ) : (
+                    <BsQrCode size={14} />
+                  )}
+                  <span>{hasSelection ? 'Genereeri QR valitud detailile' : 'Vali mudelist detail'}</span>
+                </button>
+              </div>
+
+              {/* QR codes list */}
+              <div style={{ marginBottom: '12px' }}>
+                <button
+                  className="tools-btn tools-btn-compact"
+                  onClick={loadQrCodes}
+                  disabled={qrLoading}
+                  style={{ width: '100%', background: '#f3f4f6' }}
+                >
+                  {qrLoading ? (
+                    <FiRefreshCw className="spinning" size={14} />
+                  ) : (
+                    <FiRefreshCw size={14} />
+                  )}
+                  <span>Lae QR koodid ({qrCodes.length})</span>
+                </button>
+              </div>
+
+              {/* QR codes display */}
+              {qrCodes.length > 0 && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  background: '#fafafa',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '1px solid #e5e7eb',
+                  maxHeight: '400px',
+                  overflowY: 'auto'
+                }}>
+                  {qrCodes.map(qr => (
+                    <div
+                      key={qr.id}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        padding: '12px',
+                        background: qr.status === 'activated' ? '#d1fae5' : '#fff',
+                        borderRadius: '8px',
+                        border: `2px solid ${qr.status === 'activated' ? '#10b981' : '#e5e7eb'}`
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: '14px' }}>
+                            {qr.assembly_mark || 'Tundmatu'}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                            {qr.product_name || ''} {qr.weight ? `• ${qr.weight.toFixed(1)} kg` : ''}
+                          </div>
+                        </div>
+                        <div style={{
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          background: qr.status === 'activated' ? '#10b981' : qr.status === 'expired' ? '#ef4444' : '#f59e0b',
+                          color: '#fff'
+                        }}>
+                          {qr.status === 'activated' ? 'LEITUD' : qr.status === 'expired' ? 'AEGUNUD' : 'OOTEL'}
+                        </div>
+                      </div>
+
+                      {qr.status === 'activated' && qr.activated_by_name && (
+                        <div style={{ fontSize: '12px', color: '#059669' }}>
+                          Leidis: {qr.activated_by_name} • {qr.activated_at ? new Date(qr.activated_at).toLocaleString('et-EE') : ''}
+                        </div>
+                      )}
+
+                      {qr.qr_data_url && qr.status === 'pending' && (
+                        <div style={{ display: 'flex', justifyContent: 'center', padding: '8px' }}>
+                          <img src={qr.qr_data_url} alt="QR" style={{ width: '150px', height: '150px' }} />
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          className="tools-btn tools-btn-compact"
+                          onClick={() => handleSelectQrObject(qr.guid)}
+                          style={{ flex: 1, background: '#3b82f6', color: '#fff' }}
+                        >
+                          <FiTarget size={12} />
+                          <span>Vali mudelist</span>
+                        </button>
+                        {qr.status === 'pending' && (
+                          <button
+                            className="tools-btn tools-btn-compact"
+                            onClick={() => handleDeleteQr(qr.id)}
+                            style={{ background: '#fee2e2', color: '#ef4444' }}
+                          >
+                            <FiTrash2 size={12} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {qrCodes.length === 0 && !qrLoading && (
+                <div style={{
+                  padding: '24px',
+                  textAlign: 'center',
+                  color: '#9ca3af',
+                  fontSize: '13px',
+                  background: '#f9fafb',
+                  borderRadius: '8px'
+                }}>
+                  Pole veel QR koode. Vali mudelist detail ja genereeri QR.
+                </div>
+              )}
             </>
           )}
         </div>
