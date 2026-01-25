@@ -177,7 +177,7 @@ export default function InspectorScreen({
     approved: 0
   });
   const [activeStatusFilter, setActiveStatusFilter] = useState<string | null>(null);
-  const [planAssemblyModeRequired, setPlanAssemblyModeRequired] = useState<boolean | null>(null);
+  const [_planAssemblyModeRequired, setPlanAssemblyModeRequired] = useState<boolean | null>(null);
   const inspectionListRef = useRef<HTMLDivElement>(null);
 
   // EOS2 Navigation hook - polls for commands from EOS2 and auto-navigates
@@ -1767,94 +1767,6 @@ export default function InspectorScreen({
     }
   };
 
-  // Show todo items (plan items not yet inspected)
-  const showTodoItems = async () => {
-    if (inspectionMode !== 'inspection_type' || !inspectionTypeId) {
-      setMessage('⚠️ Tegemata nimekiri on saadaval ainult inspektsiooni kava režiimis');
-      setTimeout(() => setMessage(''), 3000);
-      return;
-    }
-
-    setInspectionListLoading(true);
-    try {
-      // Get all plan items for this inspection type
-      const { data: planItems, error: planError } = await supabase
-        .from('inspection_plan_items')
-        .select('id, guid, guid_ifc, model_id, object_runtime_id, assembly_mark, object_name')
-        .eq('project_id', projectId)
-        .eq('inspection_type_id', inspectionTypeId);
-
-      if (planError) throw planError;
-
-      if (!planItems || planItems.length === 0) {
-        setMessage('ℹ️ Kavas pole ühtegi objekti');
-        setTimeout(() => setMessage(''), 3000);
-        setInspectionListLoading(false);
-        return;
-      }
-
-      // Get all inspected assembly GUIDs
-      const { data: resultsData } = await supabase
-        .from('inspection_results')
-        .select('assembly_guid')
-        .eq('project_id', projectId);
-
-      const inspectedGuids = new Set((resultsData || []).map(r => r.assembly_guid));
-
-      // Filter out inspected items
-      const todoItems = planItems.filter(item => {
-        const guid = item.guid || item.guid_ifc;
-        return guid && !inspectedGuids.has(guid);
-      });
-
-      if (todoItems.length === 0) {
-        setMessage('✅ Kõik objektid on inspekteeritud!');
-        setTimeout(() => setMessage(''), 3000);
-        setInspectionListLoading(false);
-        return;
-      }
-
-      // Transform to InspectionItem format (without inspector info since not inspected)
-      const inspectionItems: InspectionItem[] = todoItems.map(item => ({
-        id: item.id,
-        assembly_mark: item.assembly_mark || item.object_name || item.guid?.substring(0, 12) || 'N/A',
-        model_id: item.model_id,
-        object_runtime_id: item.object_runtime_id || 0,
-        inspector_name: '-',
-        inspected_at: '',
-        guid: item.guid,
-        guid_ifc: item.guid_ifc
-      }));
-
-      setInspectionListTotal(inspectionItems.length);
-      setInspectionListData(inspectionItems);
-      setInspectionListMode('todo');
-
-      // Color all objects light gray, then highlight todo items in orange/yellow
-      await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
-
-      const validItems = inspectionItems.filter(i => i.model_id && i.object_runtime_id);
-      if (validItems.length > 0) {
-        const byModel: Record<string, number[]> = {};
-        for (const item of validItems) {
-          if (!byModel[item.model_id]) byModel[item.model_id] = [];
-          byModel[item.model_id].push(item.object_runtime_id);
-        }
-        const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
-          modelId,
-          objectRuntimeIds: runtimeIds
-        }));
-        // Orange color for todo items
-        await api.viewer.setObjectState({ modelObjectIds }, { color: { r: 249, g: 115, b: 22, a: 255 } });
-      }
-    } catch (e: any) {
-      console.error('Failed to show todo items:', e);
-      setMessage('❌ Viga tegemata nimekirja laadimisel');
-    } finally {
-      setInspectionListLoading(false);
-    }
-  };
-
   // Load all plan items with status for inspection_type mode
   const loadPlanItemsWithStatus = useCallback(async () => {
     if (inspectionMode !== 'inspection_type' || !inspectionTypeId) return;
@@ -2229,22 +2141,6 @@ export default function InspectorScreen({
     }
   };
 
-  // Toggle assembly selection mode
-  const toggleAssemblySelection = async () => {
-    const newMode = !assemblySelectionEnabled;
-    try {
-      await (api.viewer as any).setSettings?.({ assemblySelection: newMode });
-      setAssemblySelectionEnabled(newMode);
-      setMessage(newMode ? '✓ Assembly selection SEES' : '✗ Assembly selection VÄLJAS');
-      setTimeout(() => setMessage(''), 2000);
-      console.log(`🔧 Assembly selection toggled to: ${newMode}`);
-    } catch (e) {
-      console.warn('Failed to toggle assembly selection:', e);
-      setMessage('❌ Viga assembly selection muutmisel');
-      setTimeout(() => setMessage(''), 3000);
-    }
-  };
-
   // Select single inspection in model (without zoom)
   const selectInspection = async (inspection: InspectionItem) => {
     try {
@@ -2482,52 +2378,6 @@ export default function InspectorScreen({
                 </span>
                 <span className="stat-lbl">insp.</span>
               </div>
-              {requiresAssemblySelection && (
-                <>
-                  <div className="stat-divider">|</div>
-                  <button
-                    className={`stat-item stat-toggle ${assemblySelectionEnabled ? 'on' : 'off'} ${planAssemblyModeRequired ? 'locked' : ''}`}
-                    onClick={planAssemblyModeRequired ? undefined : toggleAssemblySelection}
-                    title={planAssemblyModeRequired
-                      ? 'Assembly Selection on selle kava jaoks kohustuslik'
-                      : assemblySelectionEnabled
-                        ? 'Lülita Assembly Selection VÄLJA'
-                        : 'Lülita Assembly Selection SISSE'}
-                    disabled={planAssemblyModeRequired === true}
-                  >
-                    <span className={`stat-icon ${assemblySelectionEnabled ? 'on' : 'off'}`}>
-                      {planAssemblyModeRequired ? '🔒' : assemblySelectionEnabled ? '✓' : '✗'}
-                    </span>
-                    <span className="stat-lbl">asm</span>
-                  </button>
-                </>
-              )}
-            </div>
-            {/* Buttons row */}
-            <div className="buttons-row">
-              <button
-                onClick={showMyInspections}
-                disabled={inspectionListLoading}
-                className="inspection-view-btn mine"
-              >
-                {inspectionListLoading ? '...' : 'Minu'}
-              </button>
-              <button
-                onClick={showAllInspections}
-                disabled={inspectionListLoading}
-                className="inspection-view-btn all"
-              >
-                {inspectionListLoading ? '...' : 'Kõik'}
-              </button>
-              {inspectionMode === 'inspection_type' && (
-                <button
-                  onClick={showTodoItems}
-                  disabled={inspectionListLoading}
-                  className="inspection-view-btn todo"
-                >
-                  {inspectionListLoading ? '...' : 'Tegemata'}
-                </button>
-              )}
             </div>
           </>
         ) : (
@@ -2543,11 +2393,9 @@ export default function InspectorScreen({
               <FiArrowLeft size={18} />
             </button>
             <span className="list-title">
-              {inspectionListMode === 'mine' && 'Minu inspektsioonid'}
-              {inspectionListMode === 'all' && 'Kõik inspektsioonid'}
-              {inspectionListMode === 'todo' && (activeStatusFilter
+              {activeStatusFilter
                 ? INSPECTION_STATUS_COLORS[activeStatusFilter as keyof typeof INSPECTION_STATUS_COLORS]?.label || 'Nimekiri'
-                : 'Kõik objektid')}
+                : 'Kõik objektid'}
             </span>
             <span className="list-count">({inspectionListTotal})</span>
           </div>
@@ -2800,10 +2648,34 @@ export default function InspectorScreen({
           userEmail={tcUserEmail}
           existingResults={checkpointResults}
           api={api}
-          onComplete={(results) => {
+          onComplete={async (results) => {
             setCheckpointResults(results);
             setMessage(`✅ Kontrollpunktid salvestatud (${results.length})`);
             setTimeout(() => setMessage(''), 3000);
+
+            // Color the inspected item green (completed) in real-time
+            if (selectedObjects.length === 1) {
+              const obj = selectedObjects[0];
+              const completedColor = INSPECTION_STATUS_COLORS.completed;
+              try {
+                await api.viewer.setObjectState(
+                  { modelObjectIds: [{ modelId: obj.modelId, objectRuntimeIds: [obj.runtimeId] }] },
+                  { color: { r: completedColor.r, g: completedColor.g, b: completedColor.b, a: 255 } }
+                );
+              } catch (e) {
+                console.error('Failed to color completed item:', e);
+              }
+
+              // Update status counts in real-time (planned -> completed)
+              setStatusCounts(prev => ({
+                ...prev,
+                planned: Math.max(0, prev.planned - 1),
+                completed: prev.completed + 1
+              }));
+
+              // Update inspection count
+              setInspectionCount(prev => prev + 1);
+            }
           }}
           onCancel={() => { /* Form always visible when checkpoints exist */ }}
         />
