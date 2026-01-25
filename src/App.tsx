@@ -34,7 +34,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.953';
+export const APP_VERSION = '3.0.955';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -1004,8 +1004,19 @@ export default function App() {
             console.log('[QR Activation] Resetting model colors...');
             await api.viewer.setObjectState(undefined, { color: 'reset' });
 
-            // Try both lowercase and original case GUID
-            const guidsToTry = [updated.guid.toLowerCase(), updated.guid];
+            // QR codes store lowercase GUIDs, but Trimble API needs original case
+            // First find the object in trimble_model_objects to get original GUID
+            const { data: modelObj } = await supabase
+              .from('trimble_model_objects')
+              .select('guid_ifc')
+              .eq('trimble_project_id', projectId)
+              .ilike('guid_ifc', updated.guid) // Case-insensitive search
+              .limit(1)
+              .maybeSingle();
+
+            const guidsToTry = modelObj?.guid_ifc
+              ? [modelObj.guid_ifc, updated.guid] // Try original case first, then lowercase
+              : [updated.guid];
             console.log('[QR Activation] Searching for GUIDs:', guidsToTry);
 
             // Find and color this element green

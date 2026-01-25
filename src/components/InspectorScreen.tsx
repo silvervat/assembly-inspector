@@ -321,6 +321,43 @@ export default function InspectorScreen({
     }
   }, [assignedPlan, inspectionMode]);
 
+  // Load assembly mode from inspection plan when entering with inspectionTypeId
+  // This runs BEFORE any detail is selected to set up the correct assembly mode
+  useEffect(() => {
+    if (inspectionMode !== 'inspection_type' || !inspectionTypeId || !projectId) return;
+
+    const loadInspectionTypeAssemblyMode = async () => {
+      try {
+        // Get assembly_selection_mode from any plan item with this inspection type
+        const { data } = await supabase
+          .from('inspection_plan_items')
+          .select('assembly_selection_mode')
+          .eq('project_id', projectId)
+          .eq('inspection_type_id', inspectionTypeId)
+          .limit(1)
+          .maybeSingle();
+
+        if (data) {
+          const assemblyMode = data.assembly_selection_mode ?? true; // Default to true if not set
+          console.log(`🔧 Inspection type assembly mode from plan: ${assemblyMode ? 'ON' : 'OFF'}`);
+
+          // Apply the mode immediately
+          applyAssemblyMode(assemblyMode);
+          setAssemblySelectionEnabled(assemblyMode);
+          setAssemblyModeLocked(true);
+          setLockedAssemblyMode(assemblyMode);
+          setRequiresAssemblySelection(assemblyMode);
+        } else {
+          console.log('ℹ️ No inspection plan items found for this type, using default assembly mode');
+        }
+      } catch (e) {
+        console.warn('Failed to load inspection type assembly mode:', e);
+      }
+    };
+
+    loadInspectionTypeAssemblyMode();
+  }, [inspectionMode, inspectionTypeId, projectId]);
+
   // Poll to enforce locked assembly mode - re-apply if user changes it in Trimble UI
   useEffect(() => {
     if (!assemblyModeLocked || lockedAssemblyMode === null) return;
