@@ -1147,12 +1147,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
       }
 
-      setMessage('Muudatused salvestatud');
+      setMessage(t('messages.changesSaved'));
       setShowItemEditModal(false);
       await loadItems();
     } catch (e: any) {
       console.error('Error saving item:', e);
-      setMessage('Viga salvestamisel: ' + e.message);
+      setMessage(t('messages.saveError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2024,7 +2024,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   const createFactory = async () => {
     if (!newFactoryName.trim() || !newFactoryCode.trim()) {
-      setMessage('Sisesta tehase nimi ja kood');
+      setMessage(t('messages.enterFactoryDetails'));
       return;
     }
 
@@ -2043,14 +2043,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       if (error) throw error;
 
-      setMessage('Tehas lisatud');
+      setMessage(t('messages.factoryAdded'));
       setNewFactoryName('');
       setNewFactoryCode('');
       setNewFactorySeparator('.');
       await loadFactories();
     } catch (e: any) {
       console.error('Error creating factory:', e);
-      setMessage('Viga tehase loomisel: ' + e.message);
+      setMessage(t('messages.factoryCreateError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2058,7 +2058,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   const updateFactory = async () => {
     if (!editingFactoryId || !editFactoryName.trim() || !editFactoryCode.trim()) {
-      setMessage('Sisesta tehase nimi ja kood');
+      setMessage(t('messages.enterFactoryDetails'));
       return;
     }
 
@@ -2095,7 +2095,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         await loadVehicles();
       }
 
-      setMessage('Tehas uuendatud');
+      setMessage(t('messages.factoryUpdated'));
       setEditingFactoryId(null);
       setEditFactoryName('');
       setEditFactoryCode('');
@@ -2103,7 +2103,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       broadcastReload();
     } catch (e: any) {
       console.error('Error updating factory:', e);
-      setMessage('Viga tehase uuendamisel: ' + e.message);
+      setMessage(t('messages.factoryUpdateError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2113,11 +2113,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     // Check if factory has vehicles
     const factoryVehicles = vehicles.filter(v => v.factory_id === factoryId);
     if (factoryVehicles.length > 0) {
-      setMessage(`Ei saa kustutada - tehasel on ${factoryVehicles.length} veoki(t)`);
+      setMessage(t('messages.factoryHasVehicles', { count: factoryVehicles.length }));
       return;
     }
 
-    if (!confirm('Kas oled kindel, et soovid tehase kustutada?')) {
+    if (!confirm(t('factory.deleteConfirm'))) {
       return;
     }
 
@@ -2130,11 +2130,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       if (error) throw error;
 
-      setMessage('Tehas kustutatud');
+      setMessage(t('messages.factoryDeleted'));
       await loadFactories();
     } catch (e: any) {
       console.error('Error deleting factory:', e);
-      setMessage('Viga tehase kustutamisel: ' + e.message);
+      setMessage(t('messages.factoryDeleteError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2289,17 +2289,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       if (error) throw error;
       await loadVehicles();
       broadcastReload();
-      setMessage('Veok uuendatud');
+      setMessage(t('messages.vehicleUpdated'));
     } catch (e: any) {
       console.error('Error updating vehicle:', e);
-      setMessage('Viga veoki uuendamisel: ' + e.message);
+      setMessage(t('messages.vehicleUpdateError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
   };
 
   const deleteVehicle = async (vehicleId: string) => {
-    if (!confirm('Kas oled kindel? Veoki detailid jäävad alles, aga neil ei ole enam veoki seost.')) {
+    if (!confirm(t('vehicle.deleteConfirm'))) {
       return;
     }
 
@@ -2313,10 +2313,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       if (error) throw error;
       await Promise.all([loadVehicles(), loadItems()]);
       broadcastReload();
-      setMessage('Veok kustutatud');
+      setMessage(t('messages.vehicleDeleted'));
     } catch (e: any) {
       console.error('Error deleting vehicle:', e);
-      setMessage('Viga veoki kustutamisel: ' + e.message);
+      setMessage(t('messages.deleteError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
