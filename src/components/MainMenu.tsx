@@ -60,9 +60,31 @@ export default function MainMenu({
   const [exactMatch, setExactMatch] = useState(true);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
 
-  const changeLanguage = (lng: string) => {
+  // Set language from user preference on mount
+  useEffect(() => {
+    if (user.preferred_language && user.preferred_language !== i18n.language) {
+      i18n.changeLanguage(user.preferred_language);
+    }
+  }, [user.preferred_language, i18n]);
+
+  // Change language and save to database
+  const changeLanguage = async (lng: string) => {
     i18n.changeLanguage(lng);
     setShowLanguageMenu(false);
+
+    // Save to database
+    try {
+      const { error } = await supabase
+        .from('trimble_ex_users')
+        .update({ preferred_language: lng })
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('Failed to save language preference:', error);
+      }
+    } catch (e) {
+      console.error('Error saving language preference:', e);
+    }
   };
 
   // Quick search function

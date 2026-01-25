@@ -62,9 +62,10 @@ i18n
     },
 
     detection: {
-      order: ['localStorage', 'navigator'],
-      caches: ['localStorage'],
-      lookupLocalStorage: 'ai-language', // Assembly Inspector language key
+      // Language is loaded from user's database preference (trimble_ex_users.preferred_language)
+      // Navigator is used as fallback for initial load before user data is available
+      order: ['navigator'],
+      caches: [], // Don't cache - database is the source of truth
     },
   });
 
