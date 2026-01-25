@@ -5276,13 +5276,17 @@ export default function ArrivedDeliveriesScreen({
             setItemsListModelSelectedGuids(guids);
             setItemsListShowOnlyModelSelected(true);
 
-            // Auto-select matching items in the list
+            // Auto-select matching items in the list - check both guid and guid_ifc fields
             const matchingItemIds = items
-              .filter(item => item.guid_ifc && guids.has(item.guid_ifc.toLowerCase()))
+              .filter(item => {
+                const guidLower = item.guid?.toLowerCase();
+                const guidIfcLower = item.guid_ifc?.toLowerCase();
+                return (guidLower && guids.has(guidLower)) || (guidIfcLower && guids.has(guidIfcLower));
+              })
               .map(item => item.id);
             setItemsListSelectedIds(new Set(matchingItemIds));
 
-            setMessage(`✓ ${guids.size} objekti filtreeritud, ${matchingItemIds.length} leitud nimekirjast`);
+            setMessage(`✓ ${guids.size} objekti mudelist, ${matchingItemIds.length} leitud nimekirjast`);
           } catch (e: any) {
             setMessage('Viga: ' + e.message);
           }
@@ -5292,9 +5296,12 @@ export default function ArrivedDeliveriesScreen({
         const query = itemsListSearchQuery.toLowerCase().trim();
         const filteredItems = items
           .filter(item => {
-            // Model selection filter
+            // Model selection filter - check both guid and guid_ifc
             if (itemsListShowOnlyModelSelected && itemsListModelSelectedGuids.size > 0) {
-              if (!item.guid_ifc || !itemsListModelSelectedGuids.has(item.guid_ifc.toLowerCase())) {
+              const guidLower = item.guid?.toLowerCase();
+              const guidIfcLower = item.guid_ifc?.toLowerCase();
+              if (!(guidLower && itemsListModelSelectedGuids.has(guidLower)) &&
+                  !(guidIfcLower && itemsListModelSelectedGuids.has(guidIfcLower))) {
                 return false;
               }
             }
@@ -5845,13 +5852,17 @@ export default function ArrivedDeliveriesScreen({
                         setItemsListSaving(true);
                         try {
                           let updated = 0;
+                          let skippedNoVehicle = 0;
                           const newlyCreatedArrivals = new Map<string, ArrivedVehicle>();
 
                           for (const itemId of itemsListSelectedIds) {
                             const item = items.find(i => i.id === itemId);
                             if (!item) continue;
                             const vehicle = getVehicle(item.vehicle_id);
-                            if (!vehicle) continue;
+                            if (!vehicle) {
+                              skippedNoVehicle++;
+                              continue;
+                            }
 
                             let arrivedVehicle = getArrivedVehicle(vehicle.id) || newlyCreatedArrivals.get(vehicle.id);
 
@@ -5875,7 +5886,12 @@ export default function ArrivedDeliveriesScreen({
                                 .select()
                                 .single();
 
-                              if (!error && data) {
+                              if (error) {
+                                console.error('Error creating arrival record:', error);
+                                continue;
+                              }
+
+                              if (data) {
                                 arrivedVehicle = data;
                                 newlyCreatedArrivals.set(vehicle.id, data);
                                 // Create confirmation records for all vehicle items
@@ -5893,7 +5909,7 @@ export default function ArrivedDeliveriesScreen({
                             }
 
                             if (arrivedVehicle) {
-                              const { data: updateData } = await supabase
+                              const { data: updateData, error: updateError } = await supabase
                                 .from('trimble_arrival_confirmations')
                                 .update({
                                   status: 'confirmed',
@@ -5905,9 +5921,13 @@ export default function ArrivedDeliveriesScreen({
                                 .eq('item_id', itemId)
                                 .select();
 
+                              if (updateError) {
+                                console.error('Error updating confirmation:', updateError);
+                              }
+
                               // If update affected 0 rows, insert new confirmation record
                               if (!updateData || updateData.length === 0) {
-                                await supabase
+                                const { error: insertError } = await supabase
                                   .from('trimble_arrival_confirmations')
                                   .insert({
                                     trimble_project_id: projectId,
@@ -5918,6 +5938,11 @@ export default function ArrivedDeliveriesScreen({
                                     confirmed_at: new Date().toISOString(),
                                     confirmed_by: tcUserEmail
                                   });
+
+                                if (insertError) {
+                                  console.error('Error inserting confirmation:', insertError);
+                                  continue;
+                                }
                               }
                               updated++;
                             }
@@ -5928,8 +5953,14 @@ export default function ArrivedDeliveriesScreen({
                           setItemsListSelectedIds(new Set());
                           setMassArrivalComment('');
                           setMassArrivalDateMode('planned');
-                          setMessage(`✓ ${updated} detaili märgitud saabunuks`);
+
+                          if (skippedNoVehicle > 0) {
+                            setMessage(`✓ ${updated} detaili märgitud saabunuks. ${skippedNoVehicle} detaili jäeti vahele (pole veokile määratud)`);
+                          } else {
+                            setMessage(`✓ ${updated} detaili märgitud saabunuks`);
+                          }
                         } catch (e: any) {
+                          console.error('Mass arrival error:', e);
                           setMessage('Viga: ' + e.message);
                         } finally {
                           setItemsListSaving(false);
