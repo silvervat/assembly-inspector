@@ -2403,11 +2403,15 @@ export default function InspectorScreen({
       {/* Compact plan info for inspection_type mode */}
       {inspectionMode === 'inspection_type' && assignedPlan && (
         <div className="plan-info-compact">
-          {assignedPlan.category && (
-            <span className="plan-info-item">{assignedPlan.category.name}</span>
+          {assignedPlan.inspection_type && (
+            <span className="plan-info-item">{assignedPlan.inspection_type.name}</span>
           )}
           <span className="plan-info-divider">|</span>
-          <span className="plan-info-item">ASM: {assignedPlan.assembly_selection_mode ? 'SEES' : 'VÄLJAS'}</span>
+          <span className="plan-info-item">
+            {totalPlanItems > 0
+              ? `${Math.round((inspectionCount / totalPlanItems) * 100)}%`
+              : '0%'}
+          </span>
         </div>
       )}
 
@@ -2473,15 +2477,6 @@ export default function InspectorScreen({
                 </button>
               </div>
             )}
-            {/* Stats row */}
-            <div className="stats-row">
-              <div className="stat-item">
-                <span className="stat-num">
-                  {totalPlanItems > 0 ? `${inspectionCount}/${totalPlanItems}` : inspectionCount}
-                </span>
-                <span className="stat-lbl">insp.</span>
-              </div>
-            </div>
           </>
         ) : (
           /* List view header with back button and title */
