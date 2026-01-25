@@ -1,0 +1,84 @@
+{
+  "buttons": {
+    "save": "Salvesta",
+    "cancel": "Tühista",
+    "delete": "Kustuta",
+    "edit": "Muuda",
+    "add": "Lisa",
+    "close": "Sulge",
+    "confirm": "Kinnita",
+    "back": "Tagasi",
+    "refresh": "Värskenda",
+    "search": "Otsi",
+    "filter": "Filtreeri",
+    "export": "Ekspordi",
+    "import": "Impordi",
+    "select": "Vali",
+    "selectAll": "Vali kõik",
+    "deselectAll": "Tühista valik",
+    "apply": "Rakenda",
+    "reset": "Lähtesta",
+    "continue": "Jätka",
+    "finish": "Lõpeta",
+    "next": "Edasi",
+    "previous": "Tagasi",
+    "yes": "Jah",
+    "no": "Ei"
+  },
+  "status": {
+    "loading": "Laadimine...",
+    "saving": "Salvestamine...",
+    "deleting": "Kustutamine...",
+    "processing": "Töötlemine...",
+    "success": "Õnnestus!",
+    "error": "Viga!",
+    "saved": "Salvestatud",
+    "deleted": "Kustutatud",
+    "updated": "Uuendatud",
+    "noData": "Andmed puuduvad",
+    "noResults": "Tulemusi ei leitud"
+  },
+  "confirm": {
+    "delete": "Kas oled kindel, et soovid kustutada?",
+    "deleteItem": "Kas oled kindel, et soovid kustutada \"{{name}}\"?",
+    "unsavedChanges": "Sul on salvestamata muudatusi. Kas soovid lahkuda?",
+    "action": "Kas oled kindel?"
+  },
+  "validation": {
+    "required": "See väli on kohustuslik",
+    "invalidEmail": "Vigane e-posti aadress",
+    "invalidNumber": "Peab olema number",
+    "minLength": "Peab olema vähemalt {{min}} tähemärki",
+    "maxLength": "Maksimaalselt {{max}} tähemärki"
+  },
+  "time": {
+    "today": "Täna",
+    "yesterday": "Eile",
+    "tomorrow": "Homme",
+    "thisWeek": "See nädal",
+    "lastWeek": "Eelmine nädal",
+    "nextWeek": "Järgmine nädal",
+    "date": "Kuupäev",
+    "time": "Kellaaeg"
+  },
+  "navigation": {
+    "menu": "Menüü",
+    "home": "Avaleht",
+    "settings": "Seaded",
+    "help": "Abi",
+    "logout": "Logi välja"
+  },
+  "table": {
+    "noData": "Andmeid pole",
+    "rowsPerPage": "Ridu lehel",
+    "of": "/",
+    "showing": "Näitan"
+  },
+  "language": {
+    "label": "Keel",
+    "et": "Eesti",
+    "en": "English",
+    "ru": "Русский",
+    "fi": "Suomi"
+  }
+}

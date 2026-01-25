@@ -1,0 +1,12 @@
+/* Assembly Inspector - Main Stylesheet
+   Import order matters!
+   ============================================================ */
+
+/* 1. Design tokens (CSS variables) */
+@import './tokens/index.css';
+
+/* 2. Base styles (reset, global) */
+@import './base/reset.css';
+@import './base/global.css';
+
+/* Note: Component styles are in CSS Modules, not imported here */

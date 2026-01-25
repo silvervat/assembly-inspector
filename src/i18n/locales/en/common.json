@@ -1,0 +1,84 @@
+{
+  "buttons": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "close": "Close",
+    "confirm": "Confirm",
+    "back": "Back",
+    "refresh": "Refresh",
+    "search": "Search",
+    "filter": "Filter",
+    "export": "Export",
+    "import": "Import",
+    "select": "Select",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
+    "apply": "Apply",
+    "reset": "Reset",
+    "continue": "Continue",
+    "finish": "Finish",
+    "next": "Next",
+    "previous": "Previous",
+    "yes": "Yes",
+    "no": "No"
+  },
+  "status": {
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "deleting": "Deleting...",
+    "processing": "Processing...",
+    "success": "Success!",
+    "error": "Error!",
+    "saved": "Saved",
+    "deleted": "Deleted",
+    "updated": "Updated",
+    "noData": "No data",
+    "noResults": "No results found"
+  },
+  "confirm": {
+    "delete": "Are you sure you want to delete?",
+    "deleteItem": "Are you sure you want to delete \"{{name}}\"?",
+    "unsavedChanges": "You have unsaved changes. Do you want to leave?",
+    "action": "Are you sure?"
+  },
+  "validation": {
+    "required": "This field is required",
+    "invalidEmail": "Invalid email address",
+    "invalidNumber": "Must be a number",
+    "minLength": "Must be at least {{min}} characters",
+    "maxLength": "Maximum {{max}} characters"
+  },
+  "time": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "tomorrow": "Tomorrow",
+    "thisWeek": "This week",
+    "lastWeek": "Last week",
+    "nextWeek": "Next week",
+    "date": "Date",
+    "time": "Time"
+  },
+  "navigation": {
+    "menu": "Menu",
+    "home": "Home",
+    "settings": "Settings",
+    "help": "Help",
+    "logout": "Log out"
+  },
+  "table": {
+    "noData": "No data",
+    "rowsPerPage": "Rows per page",
+    "of": "of",
+    "showing": "Showing"
+  },
+  "language": {
+    "label": "Language",
+    "et": "Eesti",
+    "en": "English",
+    "ru": "Русский",
+    "fi": "Suomi"
+  }
+}
