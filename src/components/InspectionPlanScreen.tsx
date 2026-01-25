@@ -651,7 +651,7 @@ export default function InspectionPlanScreen({
         assembly_mark: obj.assemblyMark || null,
         object_name: obj.objectName || null,
         object_type: obj.objectType || null,
-        product_name: obj.productName || null,
+        product_name: obj.productName || obj.objectType || null,  // Fallback to IFC class
         inspection_type_id: selectedTypeId || null,
         category_id: selectedCategoryId || null,
         assembly_selection_mode: assemblyMode === 'on',

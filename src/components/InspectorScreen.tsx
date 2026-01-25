@@ -1863,7 +1863,7 @@ export default function InspectorScreen({
       // Get ALL plan items for this inspection type (including review_status)
       const { data: planItems, error: planError } = await supabase
         .from('inspection_plan_items')
-        .select('id, guid, guid_ifc, model_id, object_runtime_id, assembly_mark, object_name, product_name, review_status')
+        .select('id, guid, guid_ifc, model_id, object_runtime_id, assembly_mark, object_name, object_type, product_name, review_status')
         .eq('project_id', projectId)
         .eq('inspection_type_id', inspectionTypeId);
 
@@ -1902,6 +1902,7 @@ export default function InspectorScreen({
         object_runtime_id: number;
         assembly_mark: string | null;
         object_name: string | null;
+        object_type: string | null;
         product_name: string | null;
         review_status: string | null;
         actualStatus: string;
@@ -1950,7 +1951,7 @@ export default function InspectorScreen({
         inspected_at: '',
         guid: item.guid || undefined,
         guid_ifc: item.guid_ifc || undefined,
-        product_name: item.product_name || undefined
+        product_name: item.product_name || item.object_type || undefined  // Fallback to IFC class
       }));
 
       setInspectionListTotal(items.length);
