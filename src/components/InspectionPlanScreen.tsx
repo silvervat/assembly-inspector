@@ -7,6 +7,7 @@ import { InspectionMode } from './MainMenu';
 import { InspectionHistory } from './InspectionHistory';
 import InspectionConfigScreen from './InspectionConfigScreen';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
+import { findObjectsInLoadedModels } from '../utils/navigationHelper';
 
 // Checkpoint result data (from inspection_results table)
 interface CheckpointResultData {
@@ -612,12 +613,11 @@ export default function InspectionPlanScreen({
 
       showMessage(`✅ ${items.length} objekti lisatud kavasse!`, 'success');
 
-      // Color newly added items blue (planned)
-      const newItems = objectsToSave.map(obj => ({
-        model_id: obj.modelId,
-        object_runtime_id: obj.runtimeId
-      }));
-      await colorNewItems(newItems);
+      // Color newly added items blue (planned) using GUIDs
+      const newGuids = objectsToSave
+        .map(obj => obj.guidIfc || obj.guid)
+        .filter(Boolean) as string[];
+      await colorNewItems(newGuids);
 
       // Refresh data
       fetchPlanItems();
@@ -800,22 +800,26 @@ export default function InspectionPlanScreen({
     }
   };
 
-  // Color model based on plan items status
+  // Color model based on plan items status (using database GUIDs like ALT+SHIFT+W)
   const colorModelByPlanStatus = async (typeId?: string) => {
     try {
+      // First, reset model to white using onColorModelWhite callback
+      // This ensures proper assembly-level coloring
+      if (onColorModelWhite) {
+        await onColorModelWhite();
+      }
+
       // Get items to color - either for selected type or all items
       const itemsToColor = typeId
         ? planItems.filter(item => item.inspection_type_id === typeId)
         : planItems;
 
       if (itemsToColor.length === 0) {
-        // No items - just reset model to white
-        await api.viewer.setObjectState(undefined, { color: INSPECTION_STATUS_COLORS.background });
         return;
       }
 
-      // Group items by status
-      const statusGroups: Record<string, { model_id: string; object_runtime_id: number }[]> = {
+      // Group items by status with their GUIDs
+      const statusGroups: Record<string, string[]> = {
         planned: [],
         inProgress: [],
         completed: [],
@@ -824,32 +828,33 @@ export default function InspectionPlanScreen({
       };
 
       for (const item of itemsToColor) {
-        if (!item.model_id || !item.object_runtime_id) continue;
+        // Use guid_ifc or guid for finding objects
+        const guid = item.guid_ifc || item.guid;
+        if (!guid) continue;
 
         const status = item.inspection_status || 'planned';
         if (statusGroups[status]) {
-          statusGroups[status].push({
-            model_id: item.model_id,
-            object_runtime_id: item.object_runtime_id
-          });
+          statusGroups[status].push(guid);
         }
       }
 
-      // First, set all objects to white (background)
-      await api.viewer.setObjectState(undefined, { color: INSPECTION_STATUS_COLORS.background });
-
-      // Then color each status group
-      for (const [status, items] of Object.entries(statusGroups)) {
-        if (items.length === 0) continue;
+      // Find runtime IDs for each status group and color them
+      for (const [status, guids] of Object.entries(statusGroups)) {
+        if (guids.length === 0) continue;
 
         const color = INSPECTION_STATUS_COLORS[status as keyof typeof INSPECTION_STATUS_COLORS];
         if (!color) continue;
 
+        // Find objects in loaded models using GUIDs
+        const foundObjects = await findObjectsInLoadedModels(api, guids);
+
+        if (foundObjects.size === 0) continue;
+
         // Group by model
         const byModel: Record<string, number[]> = {};
-        for (const item of items) {
-          if (!byModel[item.model_id]) byModel[item.model_id] = [];
-          byModel[item.model_id].push(item.object_runtime_id);
+        for (const [, found] of foundObjects) {
+          if (!byModel[found.modelId]) byModel[found.modelId] = [];
+          byModel[found.modelId].push(found.runtimeId);
         }
 
         const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
@@ -875,16 +880,24 @@ export default function InspectionPlanScreen({
     }
   };
 
-  // Color newly added items immediately
-  const colorNewItems = async (items: { model_id: string; object_runtime_id: number }[]) => {
-    if (items.length === 0) return;
+  // Color newly added items immediately (using GUIDs)
+  const colorNewItems = async (guids: string[]) => {
+    if (guids.length === 0) return;
 
     try {
+      // Find objects in loaded models using GUIDs
+      const foundObjects = await findObjectsInLoadedModels(api, guids);
+
+      if (foundObjects.size === 0) {
+        console.log('⚠️ No objects found for coloring');
+        return;
+      }
+
+      // Group by model
       const byModel: Record<string, number[]> = {};
-      for (const item of items) {
-        if (!item.model_id || !item.object_runtime_id) continue;
-        if (!byModel[item.model_id]) byModel[item.model_id] = [];
-        byModel[item.model_id].push(item.object_runtime_id);
+      for (const [, found] of foundObjects) {
+        if (!byModel[found.modelId]) byModel[found.modelId] = [];
+        byModel[found.modelId].push(found.runtimeId);
       }
 
       const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
@@ -898,7 +911,7 @@ export default function InspectionPlanScreen({
         { color: INSPECTION_STATUS_COLORS.planned }
       );
 
-      console.log('🎨 Colored', items.length, 'new items blue');
+      console.log('🎨 Colored', foundObjects.size, 'new items blue');
     } catch (error) {
       console.error('Failed to color new items:', error);
     }

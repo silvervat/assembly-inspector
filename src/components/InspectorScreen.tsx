@@ -7,6 +7,7 @@ import { useEos2Navigation } from '../hooks/useEos2Navigation';
 import InspectionList, { InspectionItem } from './InspectionList';
 import CheckpointForm from './CheckpointForm';
 import PageHeader from './PageHeader';
+import { findObjectsInLoadedModels } from '../utils/navigationHelper';
 
 // Inspection plan with joined type and category
 interface PlanWithDetails extends InspectionPlanItem {
@@ -299,10 +300,16 @@ export default function InspectorScreen({
       try {
         console.log('🎨 Auto-coloring model for inspection type:', inspectionTypeId);
 
+        // First, reset model to white using onColorModelWhite callback
+        // This ensures proper assembly-level coloring
+        if (onColorModelWhite) {
+          await onColorModelWhite();
+        }
+
         // Fetch all plan items for this inspection type with their status
         const { data: planItems, error } = await supabase
           .from('inspection_plan_items')
-          .select('id, guid, guid_ifc, model_id, object_runtime_id, inspection_status')
+          .select('id, guid, guid_ifc, inspection_status')
           .eq('project_id', projectId)
           .eq('inspection_type_id', inspectionTypeId);
 
@@ -311,8 +318,8 @@ export default function InspectorScreen({
           return;
         }
 
-        // Group items by status
-        const statusGroups: Record<string, { model_id: string; object_runtime_id: number }[]> = {
+        // Group items by status with their GUIDs
+        const statusGroups: Record<string, string[]> = {
           planned: [],
           inProgress: [],
           completed: [],
@@ -323,14 +330,13 @@ export default function InspectorScreen({
         let completedCount = 0;
 
         for (const item of planItems) {
-          if (!item.model_id || !item.object_runtime_id) continue;
+          // Use guid_ifc or guid for finding objects
+          const guid = item.guid_ifc || item.guid;
+          if (!guid) continue;
 
           const status = item.inspection_status || 'planned';
           if (statusGroups[status]) {
-            statusGroups[status].push({
-              model_id: item.model_id,
-              object_runtime_id: item.object_runtime_id
-            });
+            statusGroups[status].push(guid);
           }
 
           // Count completed (completed + approved)
@@ -343,21 +349,23 @@ export default function InspectorScreen({
         setInspectionCount(completedCount);
         setTotalPlanItems(planItems.length);
 
-        // Color all objects white (background) first
-        await api.viewer.setObjectState(undefined, { color: INSPECTION_STATUS_COLORS.background });
-
         // Color each status group with their respective colors
-        for (const [status, items] of Object.entries(statusGroups)) {
-          if (items.length === 0) continue;
+        for (const [status, guids] of Object.entries(statusGroups)) {
+          if (guids.length === 0) continue;
 
           const color = INSPECTION_STATUS_COLORS[status as keyof typeof INSPECTION_STATUS_COLORS];
           if (!color) continue;
 
+          // Find objects in loaded models using GUIDs
+          const foundObjects = await findObjectsInLoadedModels(api, guids);
+
+          if (foundObjects.size === 0) continue;
+
           // Group by model
           const byModel: Record<string, number[]> = {};
-          for (const item of items) {
-            if (!byModel[item.model_id]) byModel[item.model_id] = [];
-            byModel[item.model_id].push(item.object_runtime_id);
+          for (const [, found] of foundObjects) {
+            if (!byModel[found.modelId]) byModel[found.modelId] = [];
+            byModel[found.modelId].push(found.runtimeId);
           }
 
           const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
