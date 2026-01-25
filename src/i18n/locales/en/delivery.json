@@ -1,1 +1,197 @@
-{}
+{
+  "title": "Delivery Schedule",
+  "weekdays": {
+    "sunday": "Sunday",
+    "monday": "Monday",
+    "tuesday": "Tuesday",
+    "wednesday": "Wednesday",
+    "thursday": "Thursday",
+    "friday": "Friday",
+    "saturday": "Saturday"
+  },
+  "weekdaysShort": {
+    "mon": "M",
+    "tue": "T",
+    "wed": "W",
+    "thu": "T",
+    "fri": "F",
+    "sat": "S",
+    "sun": "S"
+  },
+  "months": {
+    "january": "January",
+    "february": "February",
+    "march": "March",
+    "april": "April",
+    "may": "May",
+    "june": "June",
+    "july": "July",
+    "august": "August",
+    "september": "September",
+    "october": "October",
+    "november": "November",
+    "december": "December"
+  },
+  "vehicleStatus": {
+    "planned": "Planned",
+    "loading": "Loading",
+    "transit": "In Transit",
+    "arrived": "Arrived",
+    "unloading": "Unloading",
+    "completed": "Completed",
+    "cancelled": "Cancelled"
+  },
+  "itemStatus": {
+    "planned": "Planned",
+    "loaded": "Loaded",
+    "in_transit": "In Transit",
+    "delivered": "Delivered",
+    "cancelled": "Cancelled"
+  },
+  "unloadMethods": {
+    "crane": "Crane",
+    "telescopic": "Telehandler",
+    "manual": "Manual",
+    "poomtostuk": "Boom Lift",
+    "toojoud": "Workers"
+  },
+  "vehicleTypes": {
+    "haagis": "Trailer",
+    "kinni": "Fully Enclosed",
+    "lahti": "Open Trailer",
+    "extralong": "Extra Long Trailer"
+  },
+  "columns": {
+    "nr": "No",
+    "date": "Date",
+    "day": "Day",
+    "time": "Time",
+    "duration": "Duration",
+    "vehicle": "Vehicle",
+    "factory": "Factory",
+    "product": "Product",
+    "status": "Status",
+    "crane": "Crane",
+    "telescopic": "Telehandler",
+    "manual": "Manual",
+    "poomtostuk": "Boom Lift",
+    "taasnik": "Rigger",
+    "keevitaja": "Welder",
+    "comments": "Comments",
+    "mark": "Mark",
+    "weight": "Weight",
+    "elevation": "Elevation"
+  },
+  "vehicle": {
+    "add": "Add Vehicle",
+    "new": "New Vehicle",
+    "name": "Vehicle Name",
+    "code": "Vehicle Code",
+    "date": "Date",
+    "time": "Time",
+    "weight": "Weight",
+    "maxWeight": "Max Weight",
+    "items": "Items",
+    "empty": "Vehicle is empty",
+    "noVehicles": "No vehicles",
+    "delete": "Delete Vehicle",
+    "deleteConfirm": "Are you sure you want to delete this vehicle?",
+    "duplicate": "Duplicate Vehicle",
+    "moveItems": "Move Items",
+    "selectTarget": "Select Target Vehicle",
+    "type": "Vehicle Type",
+    "driver": "Driver",
+    "phone": "Phone",
+    "notes": "Notes"
+  },
+  "factory": {
+    "add": "Add Factory",
+    "new": "New Factory",
+    "name": "Factory Name",
+    "code": "Code",
+    "noFactories": "No factories",
+    "delete": "Delete Factory",
+    "deleteConfirm": "Are you sure you want to delete this factory?"
+  },
+  "item": {
+    "add": "Add Item",
+    "addSelected": "Add Selected",
+    "remove": "Remove",
+    "removeSelected": "Remove Selected",
+    "noItems": "No items",
+    "unknown": "Unknown",
+    "duplicate": "Duplicate",
+    "duplicatesFound": "Duplicates found"
+  },
+  "actions": {
+    "sendToDb": "Send to Database",
+    "exportExcel": "Export Excel",
+    "importExcel": "Import Excel",
+    "colorByDate": "Color by Date",
+    "colorByVehicle": "Color by Vehicle",
+    "colorWhite": "Color White",
+    "selectInModel": "Select in Model",
+    "zoomTo": "Zoom To",
+    "refresh": "Refresh",
+    "sync": "Sync",
+    "play": "Play",
+    "pause": "Pause",
+    "stop": "Stop",
+    "settings": "Settings",
+    "filter": "Filter",
+    "search": "Search",
+    "copy": "Copy",
+    "paste": "Paste",
+    "undo": "Undo",
+    "redo": "Redo"
+  },
+  "messages": {
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "saved": "Saved",
+    "error": "Error",
+    "success": "Success",
+    "noData": "No data",
+    "selectVehicle": "Select Vehicle",
+    "selectFactory": "Select Factory",
+    "selectDate": "Select Date",
+    "confirmDelete": "Are you sure?",
+    "itemsAdded": "{{count}} items added",
+    "itemsRemoved": "{{count}} items removed",
+    "syncComplete": "Sync completed",
+    "syncFailed": "Sync failed",
+    "exportComplete": "Export completed",
+    "importComplete": "Import completed",
+    "noSelection": "Nothing selected",
+    "invalidData": "Invalid data"
+  },
+  "excel": {
+    "sheetName": "Delivery Schedule",
+    "vehiclesSheet": "Vehicles",
+    "itemsSheet": "Items"
+  },
+  "calendar": {
+    "today": "Today",
+    "week": "Week",
+    "month": "Month",
+    "previousWeek": "Previous Week",
+    "nextWeek": "Next Week",
+    "previousMonth": "Previous Month",
+    "nextMonth": "Next Month"
+  },
+  "resources": {
+    "title": "Resources",
+    "crane": "Crane",
+    "telehandler": "Telehandler",
+    "manual": "Manual",
+    "boomLift": "Boom Lift",
+    "rigger": "Rigger",
+    "welder": "Welder",
+    "workers": "Workers"
+  },
+  "playback": {
+    "speed": "Speed",
+    "playing": "Playing",
+    "paused": "Paused"
+  }
+}
