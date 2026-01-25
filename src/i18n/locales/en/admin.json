@@ -1,1 +1,139 @@
-{}
+{
+  "title": "Administration",
+  "tabs": {
+    "viewer": "Viewer functions",
+    "database": "Database",
+    "users": "Users",
+    "settings": "Settings"
+  },
+  "viewer": {
+    "title": "Viewer functions",
+    "modelObjects": "Model objects",
+    "selectDetail": "Select detail from model",
+    "selectOneDetail": "Select one detail",
+    "selectDetails": "Select details from model",
+    "noObjectsFound": "No objects found",
+    "noAssembliesFound": "No assemblies found! Check if Assembly Selection is enabled.",
+    "noCastUnitMarks": "No Cast Unit Mark values found!",
+    "noModelsLoaded": "No models loaded!",
+    "loadingModelObjects": "Loading model objects...",
+    "loadingData": "Loading data...",
+    "objectSelected": "Selected: {{name}} (Assembly Selection OFF)",
+    "copiedToClipboard": "Copied to clipboard!",
+    "boltSummaryCopied": "Bolt summary copied!",
+    "noBoltsFound": "No bolts found (or washer count = 0)",
+    "selectAndZoom": "Select and zoom",
+    "selectThisDetail": "Select this detail in model",
+    "enterMark": "Enter mark (e.g. S-101, B-22...)",
+    "enterGuids": "Enter GUID(s)...",
+    "guidsPlaceholder": "Enter GUID(s)...\\n\\nExamples:\\n3cUkl00wxCuAr0f8gkqJbz (IFC GUID)\\n3f2504e0-4f89-11d3-9a0c-0305e82c3301 (MS GUID)"
+  },
+  "database": {
+    "title": "Database",
+    "sendToDatabase": "Send to database",
+    "deleteAllData": "Delete all data",
+    "confirmDeleteAll": "Are you sure you want to delete ALL records?",
+    "allDataDeleted": "All delivery schedule data deleted!",
+    "orphanedItems": "Orphaned items",
+    "confirmDeleteOrphaned": "Delete {{count}} orphaned items?",
+    "orphanedDeleted": "{{count}} orphaned items deleted",
+    "deleteAll": "Delete all",
+    "noOrphanedItems": "No orphaned items",
+    "exportSuccess": "Export successful: {{fileName}}",
+    "allData": "All data"
+  },
+  "users": {
+    "title": "Users",
+    "teamLoadError": "Failed to load team",
+    "allTeamMembersInDb": "All team members are already in the database",
+    "teamSyncError": "Error syncing team: {{error}}",
+    "resourceUpdated": "Resource updated",
+    "resourceUpdateFailed": "Resource updated (installation update failed)",
+    "permissions": "Permissions by module",
+    "saving": "Saving...",
+    "save": "Save",
+    "updateName": "Update name",
+    "add": "Add",
+    "edit": "Edit",
+    "editName": "Edit name"
+  },
+  "settings": {
+    "title": "Settings",
+    "teklaPropertySettings": "Tekla property settings",
+    "resetToDefaults": "Reset to default settings",
+    "propertyMapped": "Mapped: {{setName}}.{{propName}}",
+    "views": {
+      "title": "Views",
+      "save": "Save view",
+      "saving": "Saving...",
+      "resetting": "Resetting...",
+      "updateWithCurrent": "Update with current view",
+      "editView": "Edit view",
+      "delete": "Delete"
+    },
+    "visibility": {
+      "title": "Visibility / Colors"
+    },
+    "measurement": {
+      "title": "Measurement"
+    },
+    "background": {
+      "title": "Background color"
+    },
+    "moreColors": {
+      "title": "More colors"
+    },
+    "cameraMode": {
+      "title": "Camera modes"
+    },
+    "clipPlanes": {
+      "title": "Clip planes"
+    },
+    "gantt": {
+      "open": "Open Gantt Timeline"
+    }
+  },
+  "qrScanner": {
+    "notSupported": "QR scanner is not supported in this browser. Use Chrome.",
+    "videoError": "Video not starting. Check camera permissions.",
+    "cameraAccessDenied": "Camera access denied. Allow camera use in browser settings.",
+    "detected": "Detected {{mark}}. Requesting GPS location...",
+    "gpsNotSupported": "GPS is not supported on this device",
+    "positionSaved": "Position saved: {{lat}}, {{lng}} (accuracy: {{accuracy}}m)",
+    "popupBlocked": "Popup blocked. Enter coordinates manually.",
+    "processingError": "Error processing QR",
+    "coordinatesOutOfRange": "Coordinates out of range",
+    "openGoogleMaps": "Open Google Maps, long press your location and copy coordinates",
+    "resetError": "Error resetting",
+    "findingReset": "Finding reset - can scan again"
+  },
+  "guid": {
+    "enterAtLeastOne": "Enter at least one GUID!",
+    "enterAtLeastOneMs": "Enter at least one GUID (MS)",
+    "noValidMsFound": "No valid GUID (MS) found"
+  },
+  "popupBlocked": "Popup blocker may block window opening. Allow popups for this page.",
+  "error": "Error",
+  "accessDenied": "Access denied",
+  "copy": "Copy",
+  "linkInvalidOrExpired": "Link is invalid or expired",
+  "connectionError": "Connection error with Trimble Connect",
+  "loadingInspectionData": "Loading inspection data...",
+  "exportAll": "Export all",
+  "openInGoogleMaps": "Open in Google Maps",
+  "scriptCopied": "Script copied to clipboard!",
+  "selectDetailInModel": "Select detail in model",
+  "noPositionedDetails": "No positioned details...",
+  "loading": "Loading...",
+  "yes": "Yes",
+  "no": "No",
+  "selectTwoObjects": "Select two objects!",
+  "selectAtLeastTwoObjects": "Select at least 2 objects!",
+  "selectObjectFirst": "Select object first!",
+  "selectObjectsFirst": "Select objects first!",
+  "allEdges": "All 12 edges",
+  "selectFirstDetailFromModel": "Select one detail from model first!",
+  "basePointSet": "Base point set:\\nX: {{x}}mm\\nY: {{y}}mm\\nZ: {{z}}mm",
+  "basePointCleared": "Base point cleared",
+  "enterShapeCode": "Enter shape code!"
+}

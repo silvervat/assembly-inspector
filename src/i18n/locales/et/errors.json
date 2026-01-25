@@ -1,1 +1,55 @@
-{}
+{
+  "general": {
+    "error": "Viga",
+    "unknown": "Tundmatu viga",
+    "tryAgain": "Proovi uuesti",
+    "connectionError": "Ühenduse viga",
+    "networkError": "Võrgu viga",
+    "serverError": "Serveri viga",
+    "timeout": "Päring aegus",
+    "unauthorized": "Sul pole õigust seda teha",
+    "forbidden": "Ligipääs keelatud",
+    "notFound": "Ei leitud"
+  },
+  "model": {
+    "noModelsLoaded": "Ühtegi mudelit pole laaditud",
+    "objectNotFound": "Objekti ei leitud mudelist",
+    "noSelection": "Midagi pole valitud",
+    "selectFirst": "Vali esmalt mudelist",
+    "selectDetails": "Vali mudelist detailid!",
+    "selectDetail": "Vali mudelist detail",
+    "selectOneDetail": "Vali üks detail",
+    "selectObjects": "Vali esmalt objektid!",
+    "noObjectsFound": "Ühtegi objekti ei leitud",
+    "noAssembliesFound": "Ühtegi assembly-t ei leitud",
+    "objectIdMissing": "Objekti identifikaator puudub"
+  },
+  "data": {
+    "loadError": "Viga andmete laadimisel",
+    "saveError": "Viga salvestamisel",
+    "deleteError": "Viga kustutamisel",
+    "updateError": "Viga uuendamisel",
+    "exportError": "Viga eksportimisel",
+    "importError": "Viga importimisel",
+    "invalidData": "Vigased andmed",
+    "noGuids": "GUID-e ei leitud"
+  },
+  "file": {
+    "readError": "Viga faili lugemisel",
+    "openError": "Viga faili avamisel",
+    "uploadError": "Viga faili üleslaadimisel",
+    "downloadError": "Viga allalaadimisel",
+    "fileEmpty": "Fail on tühi",
+    "invalidFormat": "Vigane faili formaat"
+  },
+  "photo": {
+    "uploadError": "Viga foto üleslaadimisel",
+    "deleteError": "Foto kustutamine ebaõnnestus",
+    "copyError": "Pildi kopeerimine ebaõnnestus",
+    "sizeLimit": "Pilt peab olema väiksem kui {{size}}MB!"
+  },
+  "color": {
+    "error": "Viga värvimisel",
+    "dbError": "Viga Supabase lugemisel"
+  }
+}

@@ -1,1 +1,111 @@
-{}
+{
+  "title": "Organizer",
+  "group": {
+    "new": "New group",
+    "edit": "Edit group",
+    "delete": "Delete group",
+    "deleteConfirm": "Are you sure you want to delete this group?",
+    "save": "Save",
+    "saving": "Saving...",
+    "create": "Create group",
+    "deleting": "Deleting...",
+    "settings": "Edit group settings",
+    "maxDepth": "Maximum group depth is 3 levels",
+    "moveExceedsDepth": "Moving would exceed maximum depth (3 levels)",
+    "locked": "Group is locked",
+    "lockedBy": "Group is locked ({{user}})",
+    "colorLocked": "Cannot change group color - group is locked",
+    "allItemsAlreadyInGroup": "All selected items are already in this group",
+    "noPermissionDelete": "You do not have permission to delete items",
+    "noPermissionDeleteOthers": "You do not have permission to delete items added by others ({{count}} items)"
+  },
+  "field": {
+    "new": "Add field",
+    "edit": "Edit field",
+    "delete": "Delete field",
+    "deleteConfirm": "Are you sure you want to delete this field?",
+    "save": "Save",
+    "saving": "Saving...",
+    "saveError": "Error saving field",
+    "updateError": "Error updating field",
+    "enterValue": "Enter at least one value or select files"
+  },
+  "item": {
+    "add": "Add items",
+    "remove": "Remove",
+    "moveUp": "Move up",
+    "selectInModel": "Select in model",
+    "requiredFieldsMissing": "Group has required fields ({{fields}}). Use regular add from model.",
+    "emptyInput": "Input is empty",
+    "noMatchingElements": "No matching elements found ({{format}})",
+    "allAlreadyInGroup": "All found elements are already in group",
+    "updateCount": "{{count}} items updated, {{uploadCount}} files uploaded",
+    "existingValuesOverwrite": "{{count}} items already have values. Overwrite?"
+  },
+  "search": {
+    "placeholder": "Search all groups...",
+    "all": "All"
+  },
+  "excel": {
+    "fileEmpty": "Excel file is empty",
+    "missingRequiredValues": "Warning: {{count}} rows with missing required values ({{fields}})",
+    "guidColumnNotFound": "GUID column not found or all rows are empty",
+    "loadingPropertyValues": "Loading property values from model...",
+    "groupHeader": "Group",
+    "parentGroupHeader": "Parent group",
+    "descriptionHeader": "Description",
+    "itemsHeader": "Items",
+    "weightHeader": "Weight (t)",
+    "missingDetailsSheet": "File is missing \"Details\" sheet",
+    "hierarchyHelp": "Hierarchy: \"Parent > Child > Grandchild\""
+  },
+  "color": {
+    "coloringProgress": "Coloring {{mode}}... Reading from database...",
+    "readObjects": "Coloring... Read {{count}} objects",
+    "searchingModels": "Coloring... Searching models...",
+    "resetPreviousGroup": "Resetting previous group colors...",
+    "coloringWhite": "Coloring white... {{current}}/{{total}}",
+    "coloringGroups": "Coloring groups... {{current}}/{{total}}",
+    "coloringSubDetails": "Coloring sub-details...",
+    "done": "Colored! White={{white}}, Grouped={{colored}}{{subInfo}}",
+    "error": "Error coloring",
+    "reset": "Colors reset",
+    "coloringSelected": "Coloring {{count}} selected items...",
+    "selectedColored": "{{count}} items colored",
+    "selectColor": "Select color",
+    "selectMarkupColor": "Select markup color"
+  },
+  "heights": {
+    "calculating": "Calculating automatic heights..."
+  },
+  "order": {
+    "processing": "Processing... {{current}}/{{total}}",
+    "error": "Error changing order",
+    "saved": "Order saved",
+    "saveError": "Error saving order"
+  },
+  "columns": {
+    "selectAtLeastOne": "Select at least one visible column"
+  },
+  "link": {
+    "copied": "Link copied ({{count}} items, valid for {{days}} days)"
+  },
+  "upload": {
+    "progress": "Uploading...",
+    "connectionRestored": "Connection restored, retrying..."
+  },
+  "saveError": "Error saving - refresh page",
+  "fileUploadError": "Error uploading files",
+  "sourceGroupLocked": "Source group is locked ({{user}})",
+  "download": "Download",
+  "delete": "Delete",
+  "edit": "Edit",
+  "remove": "Remove",
+  "selectPhotos": "Select photos",
+  "selectFiles": "Select files",
+  "updateAll": "Update all",
+  "loading": "Loading...",
+  "keywordsPlaceholder": "keywords, comma separated",
+  "dragFieldsPlaceholder": "Drag fields here or type text...",
+  "guidExamplePlaceholder": "Example:\\n3f2504e0-4f89-11d3-9a0c-0305e82c3301\\n..."
+}
