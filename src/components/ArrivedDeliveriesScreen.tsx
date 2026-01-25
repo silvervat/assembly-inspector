@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   supabase, DeliveryVehicle, DeliveryItem, DeliveryFactory,
   ArrivedVehicle, ArrivalItemConfirmation, ArrivalPhoto,
@@ -109,15 +110,16 @@ const formatDateFull = (dateStr: string) => {
 // ============================================
 
 // Memoized StatusBadge component
-const StatusBadge = memo(({ status }: { status: ArrivalItemStatus }) => {
-  const config: Record<ArrivalItemStatus, { label: string; color: string; bg: string }> = {
-    pending: { label: 'Ootel', color: '#6b7280', bg: '#f3f4f6' },
-    confirmed: { label: 'Kinnitatud', color: '#059669', bg: '#d1fae5' },
-    missing: { label: 'Puudub', color: '#dc2626', bg: '#fee2e2' },
-    wrong_vehicle: { label: 'Vale veok', color: '#d97706', bg: '#fef3c7' },
-    added: { label: 'Lisatud', color: '#2563eb', bg: '#dbeafe' }
+const StatusBadge = memo(({ status, t }: { status: ArrivalItemStatus; t: (key: string) => string }) => {
+  const config: Record<ArrivalItemStatus, { labelKey: string; color: string; bg: string }> = {
+    pending: { labelKey: 'common:arrivals.pending', color: '#6b7280', bg: '#f3f4f6' },
+    confirmed: { labelKey: 'common:arrivals.confirmed', color: '#059669', bg: '#d1fae5' },
+    missing: { labelKey: 'common:arrivals.missing', color: '#dc2626', bg: '#fee2e2' },
+    wrong_vehicle: { labelKey: 'delivery:itemStatus.wrong_vehicle', color: '#d97706', bg: '#fef3c7' },
+    added: { labelKey: 'delivery:itemStatus.added', color: '#2563eb', bg: '#dbeafe' }
   };
   const c = config[status];
+  const label = t(c.labelKey);
   return (
     <span
       className="status-badge"
@@ -129,9 +131,9 @@ const StatusBadge = memo(({ status }: { status: ArrivalItemStatus }) => {
         color: c.color,
         background: c.bg
       }}
-      title={c.label}
+      title={label}
     >
-      {c.label}
+      {label}
     </span>
   );
 });
@@ -150,6 +152,7 @@ interface ItemRowProps {
   itemCommentValue: string;
   itemPhotos: ArrivalPhoto[];
   vehicleCode: string;
+  t: (key: string) => string;
   onToggleSelect: (itemId: string, shiftKey: boolean) => void;
   onToggleExpand: (itemId: string) => void;
   onConfirmItem: (itemId: string, status: ArrivalItemStatus) => void;
@@ -174,6 +177,7 @@ const ItemRow = memo(({
   itemCommentValue,
   itemPhotos,
   vehicleCode,
+  t,
   onToggleSelect,
   onToggleExpand,
   onConfirmItem,
@@ -213,7 +217,7 @@ const ItemRow = memo(({
                 onSelectInModel(item.guid_ifc);
               }
             }}
-            title="Klõpsa mudelis valimiseks"
+            title={t('common:model.clickToSelectInModel')}
           >
             {item.assembly_mark}
           </span>
@@ -237,7 +241,7 @@ const ItemRow = memo(({
               e.stopPropagation();
               onToggleExpand(item.id);
             }}
-            title={itemCommentValue || 'Lisa kommentaar'}
+            title={itemCommentValue || t('delivery:actions.addComment')}
           >
             <FiMessageCircle size={12} />
           </button>
@@ -255,14 +259,14 @@ const ItemRow = memo(({
               <span className="photo-count">{itemPhotos.length}</span>
             </button>
           )}
-          <StatusBadge status={status} />
+          <StatusBadge status={status} t={t} />
           {status === 'pending' ? (
             <>
               <button
                 className="action-btn confirm"
                 onClick={() => onConfirmItem(item.id, 'confirmed')}
                 disabled={!isEditing}
-                title={isEditing ? "Kinnita" : "Aktiveeri redigeerimise režiim"}
+                title={isEditing ? t('common:buttons.confirm') : t('common:actions.activateEditMode')}
               >
                 <FiCheck size={12} />
               </button>
@@ -270,7 +274,7 @@ const ItemRow = memo(({
                 className="action-btn missing"
                 onClick={() => onConfirmItem(item.id, 'missing')}
                 disabled={!isEditing}
-                title={isEditing ? "Puudub" : "Aktiveeri redigeerimise režiim"}
+                title={isEditing ? t('common:arrivals.missing') : t('common:actions.activateEditMode')}
               >
                 <FiX size={12} />
               </button>
@@ -280,7 +284,7 @@ const ItemRow = memo(({
               className="action-btn reset"
               onClick={() => onConfirmItem(item.id, 'pending')}
               disabled={!isEditing}
-              title={isEditing ? "Muuda staatust" : "Aktiveeri redigeerimise režiim"}
+              title={isEditing ? t('common:actions.changeStatus') : t('common:actions.activateEditMode')}
             >
               <FiRefreshCw size={12} />
             </button>
@@ -295,7 +299,7 @@ const ItemRow = memo(({
               key={`comment-${item.id}`}
               type="text"
               className="item-comment-input"
-              placeholder="Lisa kommentaar..."
+              placeholder={t('common:placeholders.addNotes')}
               defaultValue={itemCommentValue}
               onBlur={(e) => {
                 const newValue = e.target.value;
@@ -402,6 +406,8 @@ export default function ArrivedDeliveriesScreen({
   onColorModelWhite,
   onOpenPartDatabase
 }: ArrivedDeliveriesScreenProps) {
+  const { t } = useTranslation(['common', 'delivery']);
+
   // User email
   const tcUserEmail = user?.email || 'unknown';
 
@@ -1005,7 +1011,7 @@ export default function ArrivedDeliveriesScreen({
         }
 
         if (selectedObjects.length === 0) {
-          setMessage('Valitud objektidel pole GUID-i');
+          setMessage(t('delivery:messages.noGuids'));
           return;
         }
 
@@ -1050,11 +1056,11 @@ export default function ArrivedDeliveriesScreen({
           setModelSelectionMode(false);
           setMessage('');
         } else {
-          setMessage('Valitud objektid ei ole tarnegraafikus');
+          setMessage(t('delivery:messages.noSelection'));
         }
       } catch (e) {
         console.error('Error handling model selection:', e);
-        setMessage('Viga mudeli valiku töötlemisel');
+        setMessage(t('common:arrivals.modelSelectionError'));
       }
     };
 
@@ -1187,10 +1193,10 @@ export default function ArrivedDeliveriesScreen({
       setEditingArrivalId(data.id);
       originalArrivalDataRef.current = data;
       setHasUnsavedChanges(false);
-      setMessage('Saabumise registreerimine alustatud - täida andmed ja salvesta');
+      setMessage(t('common:arrivals.registrationStarted'));
     } catch (e: any) {
       console.error('Error starting arrival:', e);
-      setMessage('Viga: ' + e.message);
+      setMessage(t('delivery:messages.genericError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -1216,7 +1222,7 @@ export default function ArrivedDeliveriesScreen({
     setEditingArrivalId(null);
     setHasUnsavedChanges(false);
     originalArrivalDataRef.current = null;
-    setMessage('Muudatused tühistatud');
+    setMessage(t('common:arrivals.changesCancelled'));
   };
 
   // Save current arrival edits
@@ -1251,10 +1257,10 @@ export default function ArrivedDeliveriesScreen({
       setEditingArrivalId(null);
       setHasUnsavedChanges(false);
       originalArrivalDataRef.current = null;
-      setMessage('Andmed salvestatud');
+      setMessage(t('delivery:messages.saved'));
     } catch (e: any) {
       console.error('Error saving arrival:', e);
-      setMessage('Viga salvestamisel: ' + e.message);
+      setMessage(t('delivery:messages.saveError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -1319,7 +1325,7 @@ export default function ArrivedDeliveriesScreen({
   // Create unplanned vehicle (not in original schedule)
   const createUnplannedVehicle = async () => {
     if (!unplannedVehicleCode.trim()) {
-      setMessage('Sisesta veoki kood');
+      setMessage(t('common:arrivals.enterVehicleCode'));
       return;
     }
 
@@ -1369,10 +1375,10 @@ export default function ArrivedDeliveriesScreen({
       setUnplannedVehicleCode('');
       setUnplannedFactoryId('');
       setUnplannedNotes('');
-      setMessage('Planeerimata veok lisatud');
+      setMessage(t('delivery:messages.success'));
     } catch (e: any) {
       console.error('Error creating unplanned vehicle:', e);
-      setMessage('Viga: ' + e.message);
+      setMessage(t('delivery:messages.genericError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -1477,7 +1483,7 @@ export default function ArrivedDeliveriesScreen({
       }
     } catch (e: any) {
       console.error('Error confirming item:', e);
-      setMessage('Viga: ' + e.message);
+      setMessage(t('delivery:messages.genericError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -1544,7 +1550,7 @@ export default function ArrivedDeliveriesScreen({
       setMessage(`${itemsToConfirm.length} detaili kinnitatud`);
     } catch (e: any) {
       console.error('Error confirming all items:', e);
-      setMessage('Viga: ' + e.message);
+      setMessage(t('delivery:messages.genericError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -1618,7 +1624,7 @@ export default function ArrivedDeliveriesScreen({
       setMessage(`${selectedItemIds.length} detaili ${statusLabels[status]}`);
     } catch (e: any) {
       console.error('Error confirming selected items:', e);
-      setMessage('Viga: ' + e.message);
+      setMessage(t('delivery:messages.genericError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -1674,7 +1680,7 @@ export default function ArrivedDeliveriesScreen({
         if (error) throw error;
       } catch (e: any) {
         console.error('Error updating arrival:', e);
-        setMessage('Viga: ' + e.message);
+        setMessage(t('delivery:messages.genericError') + ': ' + e.message);
       }
     };
 
@@ -1903,7 +1909,7 @@ export default function ArrivedDeliveriesScreen({
       setMessage('Detail lisatud');
     } catch (e: any) {
       console.error('Error adding item:', e);
-      setMessage('Viga: ' + e.message);
+      setMessage(t('delivery:messages.genericError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2157,7 +2163,7 @@ export default function ArrivedDeliveriesScreen({
       setMessage('Foto kustutatud');
     } catch (e: any) {
       console.error('Error deleting photo:', e);
-      setMessage('Viga: ' + e.message);
+      setMessage(t('delivery:messages.genericError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -2267,7 +2273,7 @@ export default function ArrivedDeliveriesScreen({
       setMessage('Kommentaar salvestatud');
     } catch (e: any) {
       console.error('Error updating item comment:', e);
-      setMessage('Viga: ' + e.message);
+      setMessage(t('delivery:messages.genericError') + ': ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -4811,6 +4817,7 @@ export default function ArrivedDeliveriesScreen({
                                   itemCommentValue={itemCommentValue}
                                   itemPhotos={itemPhotos}
                                   vehicleCode={vehicle.vehicle_code || 'veok'}
+                                  t={t}
                                   onToggleSelect={handleToggleSelect(arrivedVehicle.id, filteredItems)}
                                   onToggleExpand={handleToggleExpand}
                                   onConfirmItem={handleConfirmItem(arrivedVehicle.id)}
@@ -5288,7 +5295,7 @@ export default function ArrivedDeliveriesScreen({
 
             setMessage(`✓ ${guids.size} objekti mudelist, ${matchingItemIds.length} leitud nimekirjast`);
           } catch (e: any) {
-            setMessage('Viga: ' + e.message);
+            setMessage(t('delivery:messages.genericError') + ': ' + e.message);
           }
         };
 
@@ -5456,7 +5463,7 @@ export default function ArrivedDeliveriesScreen({
             setItemsListSelectedIds(new Set());
             setMessage(`✓ ${updated} staatust uuendatud`);
           } catch (e: any) {
-            setMessage('Viga: ' + e.message);
+            setMessage(t('delivery:messages.genericError') + ': ' + e.message);
           } finally {
             setItemsListSaving(false);
           }
@@ -5747,7 +5754,7 @@ export default function ArrivedDeliveriesScreen({
                           setItemsListEditMode(false);
                           setMessage(`✓ ${updated} staatust salvestatud`);
                         } catch (e: any) {
-                          setMessage('Viga: ' + e.message);
+                          setMessage(t('delivery:messages.genericError') + ': ' + e.message);
                         } finally {
                           setItemsListSaving(false);
                         }
@@ -5961,7 +5968,7 @@ export default function ArrivedDeliveriesScreen({
                           }
                         } catch (e: any) {
                           console.error('Mass arrival error:', e);
-                          setMessage('Viga: ' + e.message);
+                          setMessage(t('delivery:messages.genericError') + ': ' + e.message);
                         } finally {
                           setItemsListSaving(false);
                         }

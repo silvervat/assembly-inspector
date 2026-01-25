@@ -156,7 +156,8 @@
     "cancel": "Tühista",
     "play": "Käivita taasesitus",
     "pause": "Paus",
-    "resume": "Jätka"
+    "resume": "Jätka",
+    "skipped": "jäeti vahele"
   },
   "placeholders": {
     "searchByMark": "Otsi märgi või veoki järgi...",

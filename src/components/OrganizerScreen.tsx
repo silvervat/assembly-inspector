@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import {
   supabase,
@@ -452,6 +453,7 @@ export default function OrganizerScreen({
   onGroupExpanded,
   onOpenPartDatabase
 }: OrganizerScreenProps) {
+  const { t } = useTranslation(['common', 'organizer']);
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
   const { getCachedData, setCachedData, isCacheValid } = useOrganizerCache(projectId);
 
@@ -483,7 +485,7 @@ export default function OrganizerScreen({
   const performUndo = async () => {
     const action = undoStackRef.current.pop();
     if (!action) {
-      showToast('Pole midagi tagasi võtta');
+      showToast(t('organizer:undo.nothingToUndo'));
       return;
     }
 
@@ -504,7 +506,7 @@ export default function OrganizerScreen({
             updatedItems.set(action.groupId, existing.filter(i => !action.itemIds.includes(i.id)));
             return buildGroupTree(groups, updatedItems);
           });
-          showToast('Detailide lisamine tagasi võetud');
+          showToast(t('organizer:undo.itemsAddUndone'));
           break;
         }
 
@@ -529,7 +531,7 @@ export default function OrganizerScreen({
               });
             }
           }
-          showToast('Detailide eemaldamine tagasi võetud');
+          showToast(t('organizer:undo.itemsRemoveUndone'));
           break;
         }
 
@@ -537,7 +539,7 @@ export default function OrganizerScreen({
           // Undo: move items back to original group
           await supabase.from('organizer_group_items').update({ group_id: action.fromGroupId }).in('id', action.itemIds);
           await refreshData();
-          showToast('Detailide liigutamine tagasi võetud');
+          showToast(t('organizer:undo.itemsMoveUndone'));
           break;
         }
 
@@ -556,7 +558,7 @@ export default function OrganizerScreen({
             updatedItems.delete(action.groupId);
             return buildGroupTree(filteredGroups, updatedItems);
           });
-          showToast('Grupi loomine tagasi võetud');
+          showToast(t('organizer:undo.groupCreateUndone'));
           break;
         }
 
@@ -572,7 +574,7 @@ export default function OrganizerScreen({
             await supabase.from('organizer_group_items').insert(itemsToInsert);
           }
           await refreshData();
-          showToast('Grupi kustutamine tagasi võetud');
+          showToast(t('organizer:undo.groupDeleteUndone'));
           break;
         }
 
@@ -584,7 +586,7 @@ export default function OrganizerScreen({
             const filteredGroups = groups.filter(g => g.id !== action.groupId);
             return buildGroupTree(filteredGroups, groupItems);
           });
-          showToast('Grupi kloonimine tagasi võetud');
+          showToast(t('organizer:undo.groupCloneUndone'));
           break;
         }
 
@@ -600,7 +602,7 @@ export default function OrganizerScreen({
             );
             return buildGroupTree(updatedGroups, groupItems);
           });
-          showToast('Grupi muutmine tagasi võetud');
+          showToast(t('organizer:undo.groupEditUndone'));
           break;
         }
 
@@ -626,13 +628,13 @@ export default function OrganizerScreen({
               return newMap;
             });
           }
-          showToast('Välja muutmine tagasi võetud');
+          showToast(t('organizer:undo.fieldEditUndone'));
           break;
         }
       }
     } catch (e) {
       console.error('Undo error:', e);
-      showToast('Viga tagasivõtmisel');
+      showToast(t('organizer:undo.undoError'));
     }
   };
 

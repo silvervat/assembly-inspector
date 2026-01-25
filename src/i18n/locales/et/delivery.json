@@ -46,7 +46,9 @@
     "loaded": "Laetud",
     "in_transit": "Teel",
     "delivered": "Tarnitud",
-    "cancelled": "Tühistatud"
+    "cancelled": "Tühistatud",
+    "wrong_vehicle": "Vale veok",
+    "added": "Lisatud"
   },
   "unloadMethods": {
     "crane": "Kraana",

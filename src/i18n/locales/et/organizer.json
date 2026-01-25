@@ -107,5 +107,39 @@
   "loading": "Laadin...",
   "keywordsPlaceholder": "märksõnad, komaga eraldatud",
   "dragFieldsPlaceholder": "Lohista siia välju või kirjuta tekst...",
-  "guidExamplePlaceholder": "Näiteks:\\n3f2504e0-4f89-11d3-9a0c-0305e82c3301\\n..."
+  "guidExamplePlaceholder": "Näiteks:\\n3f2504e0-4f89-11d3-9a0c-0305e82c3301\\n...",
+  "undo": {
+    "nothingToUndo": "Pole midagi tagasi võtta",
+    "itemsAddUndone": "Detailide lisamine tagasi võetud",
+    "itemsRemoveUndone": "Detailide eemaldamine tagasi võetud",
+    "itemsMoveUndone": "Detailide liigutamine tagasi võetud",
+    "groupCreateUndone": "Grupi loomine tagasi võetud",
+    "groupDeleteUndone": "Grupi kustutamine tagasi võetud",
+    "groupCloneUndone": "Grupi kloonimine tagasi võetud",
+    "groupEditUndone": "Grupi muutmine tagasi võetud",
+    "fieldEditUndone": "Välja muutmine tagasi võetud",
+    "undoError": "Viga tagasivõtmisel"
+  },
+  "toast": {
+    "photoUploadError": "Pildi üleslaadimine ebaõnnestus",
+    "fileUploadError": "Faili üleslaadimine ebaõnnestus",
+    "fileUploadedInBackground": "Taustal laeti fail üles",
+    "photoDeleteError": "Pildi kustutamine ebaõnnestus",
+    "urlCopied": "URL kopeeritud lõikelauale",
+    "urlCopyError": "URL-i kopeerimine ebaõnnestus",
+    "colorUpdateError": "Viga värvi uuendamisel",
+    "subgroupCreateError": "Alamgrupi loomine ebaõnnestus",
+    "fieldNameRequired": "Välja nimi on kohustuslik",
+    "fieldAdded": "Väli lisatud",
+    "fieldAddError": "Viga välja lisamisel",
+    "fieldUpdated": "Väli uuendatud",
+    "fieldUpdateError": "Viga välja uuendamisel",
+    "fieldDeleted": "Väli kustutatud",
+    "fieldAndFilesDeleted": "Väli ja seotud failid kustutatud",
+    "fieldDeleteError": "Viga välja kustutamisel",
+    "fieldOrderError": "Viga väljade järjestamisel",
+    "noPermissionAdd": "Sul pole õigust sellesse gruppi detaile lisada",
+    "lockedItems": "{{type}} on lukustatud ({{user}})",
+    "lockedItemsMultiple": "Mõned valitud detailid on lukustatud ({{user}})"
+  }
 }
