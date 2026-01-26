@@ -73,7 +73,9 @@
     "noResults": "Tulemusi ei leitud",
     "loadError": "Viga andmete laadimisel",
     "saveError": "Viga salvestamisel",
-    "changesSaved": "{{count}} muudatust salvestatud"
+    "changesSaved": "{{count}} muudatust salvestatud",
+    "itemCount": "Detailide arv",
+    "totalWeight": "Kogukaal"
   },
   "confirm": {
     "delete": "Kas oled kindel, et soovid kustutada?",
@@ -209,6 +211,9 @@
     "additionalInfo": "Lisainfo või märkmed...",
     "exampleVehicleCode": "Nt. V99, SEGAPUDU, ÜLLATUS...",
     "exampleLocation": "nt. Telg 2, laoala põhjapool, teise veoki kastis..."
+  },
+  "columns": {
+    "whereElse": "Mitu korda / Kus veel"
   },
   "excel": {
     "exportDaySummary": "Ekspordi päeva kokkuvõte",

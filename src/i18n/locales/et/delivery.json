@@ -236,6 +236,7 @@
   "calendar": {
     "today": "Täna",
     "week": "Nädal",
+    "weekPrefix": "N",
     "month": "Kuu",
     "previousWeek": "Eelmine nädal",
     "nextWeek": "Järgmine nädal",

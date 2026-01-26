@@ -4917,7 +4917,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
           switch (col.id) {
             case 'nr': row.push(idx + 1); break;
-            case 'date': row.push(item.scheduled_date ? formatDateDisplay(item.scheduled_date) : (isEnglish ? 'UNASSIGNED' : 'MÄÄRAMATA')); break;
+            case 'date': row.push(item.scheduled_date ? formatDateDisplay(item.scheduled_date) : t('unassigned')); break;
             case 'day': row.push(item.scheduled_date ? exportWeekdays[new Date(item.scheduled_date).getDay()] : '-'); break;
             case 'time': row.push(formatTimeDisplay(vehicle?.unload_start_time)); break;
             case 'duration': {
@@ -5139,19 +5139,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       // Headers for vehicle info section
       const vehicleInfoRows = [
-        ['VEOK', vehicle.vehicle_code],
-        ['Tehas', factory?.factory_name || '-'],
-        ['Kuupäev', vehicle.scheduled_date ? formatDateDisplay(vehicle.scheduled_date) : 'MÄÄRAMATA'],
-        ['Kellaaeg', vehicle.unload_start_time?.slice(0, 5) || '-'],
-        ['Kestus', durationStr],
-        ['Ressursid', resourceStr],
-        ['Detailide arv', vehicleItems.length],
-        ['Kogukaal', `${vehicleItems.reduce((sum, i) => sum + (parseFloat(i.cast_unit_weight || '0') || 0), 0).toFixed(0)} kg`],
+        [t('vehicle.name').toUpperCase(), vehicle.vehicle_code],
+        [t('factory.name'), factory?.factory_name || '-'],
+        [t('columns.date'), vehicle.scheduled_date ? formatDateDisplay(vehicle.scheduled_date) : t('unassigned')],
+        [t('columns.time'), vehicle.unload_start_time?.slice(0, 5) || '-'],
+        [t('columns.duration'), durationStr],
+        [t('resources.title'), resourceStr],
+        [t('common:status.itemCount'), vehicleItems.length],
+        [t('common:status.totalWeight'), `${vehicleItems.reduce((sum, i) => sum + (parseFloat(i.cast_unit_weight || '0') || 0), 0).toFixed(0)} kg`],
         [], // Empty row
       ];
 
       // Data headers
-      const dataHeaders = ['Nr', 'Märk', 'Toode', 'Kaal (kg)', 'GUID', 'Teleskoop', 'Mitu korda / Kus veel'];
+      const dataHeaders = [t('columns.nr'), t('columns.mark'), t('columns.product'), `${t('columns.weight')} (kg)`, 'GUID', t('columns.telescopic'), t('common:columns.whereElse')];
 
       // Data rows
       const dataRows = vehicleItems.map((item, idx) => {
@@ -5551,7 +5551,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           }
         }
 
-        setMessage(`Kuupäev ${dateIndex + 1}/${sortedDatesForPlayback.length}: ${date === UNASSIGNED_DATE ? 'MÄÄRAMATA' : date}`);
+        setMessage(`${t('common:time.date')} ${dateIndex + 1}/${sortedDatesForPlayback.length}: ${date === UNASSIGNED_DATE ? t('unassigned') : date}`);
         playbackRef.current = setTimeout(() => playDate(dateIndex + 1), playbackSpeed);
       };
 
@@ -6240,11 +6240,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     const todayStr = formatDateForDB(new Date());
-    const dayNames = ['E', 'T', 'K', 'N', 'R', 'L', 'P'];
-    const monthNames = [
-      'Jaanuar', 'Veebruar', 'Märts', 'Aprill', 'Mai', 'Juuni',
-      'Juuli', 'August', 'September', 'Oktoober', 'November', 'Detsember'
-    ];
+    const dayNames = t('common:time.weekdaysMinMon', { returnObjects: true }) as string[];
+    const monthNames = t('common:time.months', { returnObjects: true }) as string[];
 
     return (
       <div className={`schedule-calendar ${calendarCollapsed ? 'collapsed' : ''}`}>
@@ -6310,7 +6307,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 <span key={idx} style={{ display: 'contents' }}>
                   {isStartOfWeek && (
                     <div className="calendar-week-num">
-                      N{String(weekNum).padStart(2, '0')}
+                      {t('calendar.weekPrefix')}{String(weekNum).padStart(2, '0')}
                     </div>
                   )}
                   <div
@@ -6579,13 +6576,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 {/* Vehicles and week section */}
                 <div className="date-vehicles-section">
                   <span className="vehicles-primary">{dateVehicleList.length === 1 ? t('stats.vehicleCountSingular', { count: 1 }) : t('stats.vehicleCount', { count: dateVehicleList.length })}</span>
-                  {!isUnassignedDate && <span className="vehicles-secondary">N{getISOWeek(new Date(date))}</span>}
+                  {!isUnassignedDate && <span className="vehicles-secondary">{t('calendar.weekPrefix')}{getISOWeek(new Date(date))}</span>}
                 </div>
 
                 {/* Stats section */}
                 <div className="date-stats-section">
-                  <span className="stats-primary">{dateItemCount} {dateItemCount === 1 ? 'detail' : 'detaili'}</span>
-                  <span className="stats-secondary">{timeRange || 'Aeg määramata'}</span>
+                  <span className="stats-primary">{t('stats.totalItems', { count: dateItemCount })}</span>
+                  <span className="stats-secondary">{timeRange || t('common:model.timeUnassigned')}</span>
                 </div>
 
                 <button
@@ -7611,7 +7608,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                         <span
                                           className="item-sequence"
                                           title={seqInfo.otherLocations.map(loc =>
-                                            `${loc.seq}/${seqInfo.total}: ${loc.vehicleCode} (${loc.date ? formatDateShort(loc.date) : 'MÄÄRAMATA'})`
+                                            `${loc.seq}/${seqInfo.total}: ${loc.vehicleCode} (${loc.date ? formatDateShort(loc.date) : t('unassigned')})`
                                           ).join('\n')}
                                         >
                                           {seqInfo.seq}/{seqInfo.total}
@@ -7841,7 +7838,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             }}
                             title="Märgista mudelis"
                           >{vehicle.vehicle_code}</span>
-                          <span className="vehicle-date">{vehicle.scheduled_date ? formatDateWithWeekday(vehicle.scheduled_date) : 'MÄÄRAMATA'}</span>
+                          <span className="vehicle-date">{vehicle.scheduled_date ? formatDateWithWeekday(vehicle.scheduled_date) : t('unassigned')}</span>
                           <span className="vehicle-stats">
                             <span className="item-badge">{vehicleItems.length} tk</span>
                             <span className="weight-badge">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
@@ -7943,7 +7940,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                         <span
                                           className="item-sequence"
                                           title={seqInfo.otherLocations.map(loc =>
-                                            `${loc.seq}/${seqInfo.total}: ${loc.vehicleCode} (${loc.date ? formatDateShort(loc.date) : 'MÄÄRAMATA'})`
+                                            `${loc.seq}/${seqInfo.total}: ${loc.vehicleCode} (${loc.date ? formatDateShort(loc.date) : t('unassigned')})`
                                           ).join('\n')}
                                         >
                                           {seqInfo.seq}/{seqInfo.total}
@@ -11028,7 +11025,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                       })
                       .map(v => (
                         <option key={v.id} value={v.id}>
-                          {v.scheduled_date ? formatDateShort(v.scheduled_date) : 'MÄÄRAMATA'} - {v.vehicle_code}
+                          {v.scheduled_date ? formatDateShort(v.scheduled_date) : t('unassigned')} - {v.vehicle_code}
                         </option>
                       ))}
                   </select>

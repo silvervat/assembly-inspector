@@ -63,7 +63,9 @@
     "deleted": "Deleted",
     "updated": "Updated",
     "noData": "No data",
-    "noResults": "No results found"
+    "noResults": "No results found",
+    "itemCount": "Item count",
+    "totalWeight": "Total weight"
   },
   "confirm": {
     "delete": "Are you sure you want to delete?",
@@ -199,6 +201,9 @@
     "additionalInfo": "Additional info or notes...",
     "exampleVehicleCode": "e.g. V99, MIXED, SURPRISE...",
     "exampleLocation": "e.g. Axis 2, north storage area, in second vehicle box..."
+  },
+  "columns": {
+    "whereElse": "Count / Where else"
   },
   "excel": {
     "exportDaySummary": "Export day summary",
