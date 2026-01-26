@@ -3355,7 +3355,7 @@ export default function AdminScreen({
         .single();
 
       if (insertError) {
-        setMessage('Viga QR koodi loomisel');
+        setMessage(t('errors.qrCreateError'));
         setQrGenerating(false);
         return;
       }
@@ -3380,7 +3380,7 @@ export default function AdminScreen({
 
     } catch (e) {
       console.error('Error generating QR:', e);
-      setMessage('Viga QR genereerimisel');
+      setMessage(t('errors.qrGenerateError'));
     } finally {
       setQrGenerating(false);
     }
@@ -3424,7 +3424,7 @@ export default function AdminScreen({
       }
     } catch (e) {
       console.error('Error selecting object:', e);
-      setMessage('Viga detaili valimisel');
+      setMessage(t('errors.selectDetailError'));
     }
   }, [api, projectId]);
 
@@ -3437,7 +3437,7 @@ export default function AdminScreen({
         .eq('id', id);
 
       if (error) {
-        setMessage('Viga kustutamisel');
+        setMessage(t('errors.deleteError'));
         return;
       }
 
@@ -3445,7 +3445,7 @@ export default function AdminScreen({
       setMessage('QR kood kustutatud');
     } catch (e) {
       console.error('Error deleting QR:', e);
-      setMessage('Viga kustutamisel');
+      setMessage(t('errors.deleteError'));
     }
   }, []);
 
@@ -3463,7 +3463,7 @@ export default function AdminScreen({
         .eq('id', qr.id);
 
       if (error) {
-        setMessage('Viga lähtestamisel');
+        setMessage(t('errors.resetError'));
         return;
       }
 
@@ -3479,7 +3479,7 @@ export default function AdminScreen({
       setMessage('Leidmine lähtestatud - saab uuesti skännida');
     } catch (e) {
       console.error('Error resetting QR:', e);
-      setMessage('Viga lähtestamisel');
+      setMessage(t('errors.resetError'));
     }
   }, []);
 
@@ -3719,7 +3719,7 @@ export default function AdminScreen({
       // Extract QR ID from URL (format: https://silvervat.github.io/assembly-inspector/qr/{id})
       const match = qrData.match(/\/qr\/([a-f0-9-]+)/i);
       if (!match) {
-        setMessage('Tundmatu QR kood');
+        setMessage(t('errors.unknownQrCode'));
         setPositionCapturing(false);
         return;
       }
@@ -3772,7 +3772,7 @@ export default function AdminScreen({
 
           if (saveError) {
             console.error('Error saving position:', saveError);
-            setMessage('Viga positsiooni salvestamisel');
+            setMessage(t('errors.positionSaveError'));
           } else {
             setMessage(`✅ Positsioon salvestatud: ${latitude.toFixed(6)}, ${longitude.toFixed(6)} (täpsus: ${accuracy?.toFixed(1)}m)`);
             loadPositions(); // Refresh list
@@ -3812,7 +3812,7 @@ export default function AdminScreen({
       );
     } catch (e: any) {
       console.error('QR processing error:', e);
-      setMessage('Viga QR töötlemisel');
+      setMessage(t('errors.qrProcessError'));
       setPositionCapturing(false);
     }
   }, [projectId, user, stopScanner, loadPositions]);
@@ -3825,7 +3825,7 @@ export default function AdminScreen({
     const lng = parseFloat(manualLng.replace(',', '.'));
 
     if (isNaN(lat) || isNaN(lng)) {
-      setMessage('Vigased koordinaadid. Formaat: 59.123456, 24.123456');
+      setMessage(t('errors.invalidCoordinates'));
       return;
     }
 
@@ -3854,7 +3854,7 @@ export default function AdminScreen({
 
     if (saveError) {
       console.error('Error saving position:', saveError);
-      setMessage('Viga positsiooni salvestamisel');
+      setMessage(t('errors.positionSaveError'));
     } else {
       setMessage(`✅ Positsioon salvestatud: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
       loadPositions();
@@ -4024,7 +4024,7 @@ export default function AdminScreen({
       setMessage('Markup eemaldatud');
     } catch (e: any) {
       console.error('Error removing markup:', e);
-      setMessage('Viga markupi eemaldamisel');
+      setMessage(t('errors.markupRemoveError'));
     }
   }, [api]);
 
@@ -4135,7 +4135,7 @@ export default function AdminScreen({
       }
     } catch (e) {
       console.error('Error selecting detail:', e);
-      setMessage('Viga detaili valimisel');
+      setMessage(t('errors.selectDetailError'));
     }
   }, [api, projectId]);
 
@@ -4154,7 +4154,7 @@ export default function AdminScreen({
       setMessage('Positsioon kustutatud');
     } catch (e) {
       console.error('Error deleting position:', e);
-      setMessage('Viga kustutamisel');
+      setMessage(t('errors.deleteError'));
     }
   }, []);
 
@@ -16396,7 +16396,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     }}
                   >
                     <FiSave size={14} />
-                    {usersLoading ? 'Salvestan...' : 'Salvesta'}
+                    {usersLoading ? t('users.saving') : t('users.save')}
                   </button>
                 </div>
               </div>
