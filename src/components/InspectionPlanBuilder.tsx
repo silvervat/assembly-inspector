@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   FiPlus, FiEdit2, FiTrash2, FiChevronDown, FiChevronRight, FiX, FiSave,
   FiEye, FiSettings, FiCamera, FiMessageSquare,
@@ -80,6 +81,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
   user: _user,
   onClose
 }) => {
+  const { t } = useTranslation('inspection');
   // Data state
   const [types, setTypes] = useState<InspectionTypeRef[]>([]);
   const [categories, setCategories] = useState<InspectionCategory[]>([]);
@@ -142,7 +144,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
 
     } catch (e) {
       console.error('Error loading data:', e);
-      setMessage({ type: 'error', text: 'Viga andmete laadimisel' });
+      setMessage({ type: 'error', text: t('config.errorLoadingData') });
     } finally {
       setLoading(false);
     }

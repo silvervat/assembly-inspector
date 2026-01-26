@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 import { FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiInfo, FiChevronLeft, FiEdit2, FiSave, FiTrash2 } from 'react-icons/fi';
 import { supabase, InspectionResult, InspectionCheckpoint, TrimbleExUser } from '../supabase';
@@ -184,6 +185,7 @@ export default function InspectionList({
   onClose,
   onRefresh
 }: InspectionListProps) {
+  const { t } = useTranslation('common');
   void _onSelectInspection; // Suppress unused warning
   // Permission helpers
   const isAdminOrModerator = checkIsAdminOrModerator(currentUser);
@@ -432,7 +434,7 @@ export default function InspectionList({
 
   // Delete a single result
   const deleteResult = async (resultId: string) => {
-    if (!confirm('Kas oled kindel, et soovid selle tulemuse kustutada?')) {
+    if (!confirm(t('inspectionList.deleteResultConfirm'))) {
       return;
     }
 
