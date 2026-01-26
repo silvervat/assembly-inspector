@@ -1,5 +1,24 @@
 {
   "title": "Administration",
+  "menu": {
+    "discoverProperties": "Discover properties",
+    "functionTester": "Function tester",
+    "assemblyListBolts": "Assembly list & Bolts",
+    "importGuidMs": "Import GUID (MS)",
+    "sendToDatabase": "Send to database",
+    "deliveryNewWindow": "Delivery schedule in new window",
+    "deliveryOrphans": "Delivery schedule orphans",
+    "teklaPropertySettings": "Tekla property settings",
+    "userPermissions": "User permissions",
+    "resourceManagement": "Resource management",
+    "cameraPositions": "Camera positions",
+    "craneDatabase": "Crane database",
+    "qrActivator": "QR Activator",
+    "positioner": "Positioner",
+    "exportData": "Export data",
+    "fontTester": "Font tester",
+    "deliverySchedules": "Delivery schedules"
+  },
   "tabs": {
     "viewer": "Viewer functions",
     "database": "Database",
@@ -62,6 +81,12 @@
     "teklaPropertySettings": "Tekla property settings",
     "resetToDefaults": "Reset to default settings",
     "propertyMapped": "Mapped: {{setName}}.{{propName}}",
+    "usingDefaultSettings": "Using default settings (not yet saved)",
+    "noViewsSaved": "No views saved yet.",
+    "definePropertyLocations": "Define which Tekla property sets and properties to read data from.",
+    "loadingSettings": "Loading settings...",
+    "clickSaveCurrentView": "Click \"Save current view\".",
+    "saveCurrentView": "Save current view",
     "views": {
       "title": "Views",
       "save": "Save view",
