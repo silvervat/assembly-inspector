@@ -18,6 +18,7 @@ import QRActivationPage from './components/QRActivationPage';
 import DeliverySpreadsheetEditor from './components/DeliverySpreadsheetEditor';
 import PositionerPopupPage from './components/PositionerPopupPage';
 import GpsFixerPopupPage from './components/admin/GpsFixerPopupPage';
+import GpsLocationSearchModal from './components/GpsLocationSearchModal';
 import CranePlannerScreen from './components/CranePlannerScreen';
 import CraneLibraryScreen from './components/CraneLibraryScreen';
 import KeyboardShortcutsScreen from './components/KeyboardShortcutsScreen';
@@ -60,9 +61,12 @@ const isPopupMode = popupType === 'delivery';
 const isSpreadsheetMode = popupType === 'spreadsheet';
 const isPositionerMode = popupType === 'positioner';
 const isGpsFixerMode = popupType === 'gpsfixer';
+const isGpsSearchMode = popupType === 'gpssearch';
 const popupProjectId = new URLSearchParams(window.location.search).get('projectId') || '';
 const popupGuid = new URLSearchParams(window.location.search).get('guid') || '';
 const popupMark = new URLSearchParams(window.location.search).get('mark') || '';
+const popupUserEmail = new URLSearchParams(window.location.search).get('userEmail') || '';
+const popupUserName = new URLSearchParams(window.location.search).get('userName') || '';
 
 // Check if this is a share gallery page
 // Path can be: /share/token OR /assembly-inspector/share/token (with base path)
@@ -2617,6 +2621,20 @@ export default function App() {
   // GPS Fixer popup mode - standalone GPS capture window for calibration
   if (isGpsFixerMode) {
     return <GpsFixerPopupPage />;
+  }
+
+  // GPS Search popup mode - standalone GPS location search window
+  if (isGpsSearchMode && popupProjectId) {
+    return (
+      <GpsLocationSearchModal
+        api={null}
+        projectId={popupProjectId}
+        userEmail={popupUserEmail}
+        userName={popupUserName}
+        onClose={() => window.close()}
+        isPopupMode={true}
+      />
+    );
   }
 
   // Popup mode - show only delivery schedule
