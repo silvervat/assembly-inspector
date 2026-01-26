@@ -71,6 +71,9 @@ export default function GpsLocationSearchModal({
   const [searchQuery, setSearchQuery] = useState('');
   const [items, setItems] = useState<DetailWithGps[]>([]);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [isIframeBlocked, setIsIframeBlocked] = useState(false);
+  const [manualCoords, setManualCoords] = useState({ lat: '', lng: '' });
+  const [showManualInput, setShowManualInput] = useState(false);
 
   // Load delivery items that are not yet installed
   const loadItems = useCallback(async () => {
@@ -123,7 +126,32 @@ export default function GpsLocationSearchModal({
   // Start GPS tracking and load items on mount
   useEffect(() => {
     loadItems();
-    startTracking();
+
+    // Try to start tracking, detect iframe restriction
+    try {
+      // Check if geolocation is available and not blocked by permissions policy
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          () => {
+            // Success - GPS is available, start tracking
+            startTracking();
+          },
+          (error) => {
+            console.warn('GPS error:', error);
+            // Check for permissions policy violation (code 1 is PERMISSION_DENIED)
+            if (error.code === 1 || error.message.includes('permissions policy')) {
+              setIsIframeBlocked(true);
+              setShowManualInput(true);
+            }
+          },
+          { timeout: 5000 }
+        );
+      }
+    } catch (e) {
+      console.warn('Geolocation check failed:', e);
+      setIsIframeBlocked(true);
+      setShowManualInput(true);
+    }
 
     return () => {
       stopTracking();
@@ -142,10 +170,26 @@ export default function GpsLocationSearchModal({
     );
   }, [items, searchQuery]);
 
+  // Get effective position (from GPS or manual input)
+  const getEffectivePosition = useCallback((): { latitude: number; longitude: number; accuracy: number } | null => {
+    if (position) {
+      return { latitude: position.latitude, longitude: position.longitude, accuracy: position.accuracy };
+    }
+    if (showManualInput && manualCoords.lat && manualCoords.lng) {
+      const lat = parseFloat(manualCoords.lat);
+      const lng = parseFloat(manualCoords.lng);
+      if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return { latitude: lat, longitude: lng, accuracy: 10 }; // Manual entry assumed 10m accuracy
+      }
+    }
+    return null;
+  }, [position, showManualInput, manualCoords]);
+
   // Save GPS position for an item
   const savePosition = useCallback(async (item: DetailWithGps) => {
-    if (!position) {
-      setMessage('GPS positsioon pole saadaval');
+    const effectivePosition = getEffectivePosition();
+    if (!effectivePosition) {
+      setMessage('GPS positsioon pole saadaval. Sisesta koordinaadid käsitsi.');
       return;
     }
 
@@ -157,14 +201,14 @@ export default function GpsLocationSearchModal({
           project_id: projectId,
           guid: item.guid || item.guid_ifc,
           assembly_mark: item.assembly_mark,
-          latitude: position.latitude,
-          longitude: position.longitude,
-          altitude: position.altitude,
-          accuracy: position.accuracy,
+          latitude: effectivePosition.latitude,
+          longitude: effectivePosition.longitude,
+          altitude: position?.altitude || null,
+          accuracy: effectivePosition.accuracy,
           positioned_at: new Date().toISOString(),
           positioned_by: userEmail,
           positioned_by_name: userName || userEmail,
-          source: 'gps_search'
+          source: isIframeBlocked ? 'manual_entry' : 'gps_search'
         }, {
           onConflict: 'project_id,guid'
         });
@@ -176,23 +220,23 @@ export default function GpsLocationSearchModal({
         i.id === item.id
           ? {
               ...i,
-              gps_latitude: position.latitude,
-              gps_longitude: position.longitude,
-              gps_accuracy: position.accuracy,
+              gps_latitude: effectivePosition.latitude,
+              gps_longitude: effectivePosition.longitude,
+              gps_accuracy: effectivePosition.accuracy,
               gps_positioned_at: new Date().toISOString(),
               gps_positioned_by: userEmail
             }
           : i
       ));
 
-      setMessage(`✅ ${item.assembly_mark} positsioon salvestatud (±${position.accuracy.toFixed(0)}m)`);
+      setMessage(`✅ ${item.assembly_mark} positsioon salvestatud (±${effectivePosition.accuracy.toFixed(0)}m)`);
     } catch (e: any) {
       console.error('Error saving position:', e);
       setMessage(`Viga salvestamisel: ${e.message}`);
     } finally {
       setSaving(null);
     }
-  }, [position, projectId, userEmail, userName]);
+  }, [getEffectivePosition, position, projectId, userEmail, userName, isIframeBlocked]);
 
   // Create text markup on model for selected items
   const createMarkups = useCallback(async () => {
@@ -302,57 +346,133 @@ export default function GpsLocationSearchModal({
         {/* GPS Status Bar */}
         <div style={{
           display: 'flex',
-          alignItems: 'center',
-          gap: 16,
+          flexDirection: 'column',
+          gap: 8,
           padding: '12px 20px',
-          background: signalInfo.bg,
+          background: isIframeBlocked ? '#fef3c7' : signalInfo.bg,
           borderBottom: '1px solid #e5e7eb'
         }}>
-          {/* Signal indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <FiNavigation style={{ color: signalInfo.text }} />
-            <span style={{ fontWeight: 500, color: signalInfo.text }}>
-              {signalInfo.label}
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            {/* Signal indicator */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <FiNavigation style={{ color: isIframeBlocked ? '#92400e' : signalInfo.text }} />
+              <span style={{ fontWeight: 500, color: isIframeBlocked ? '#92400e' : signalInfo.text }}>
+                {isIframeBlocked ? 'Manuaalne sisestus' : signalInfo.label}
+              </span>
+            </div>
+
+            {/* Coordinates */}
+            {isIframeBlocked ? (
+              <div style={{ fontSize: 13, color: '#92400e' }}>
+                GPS blokeeritud Trimble poolt. Kasuta manuaalset sisestust.
+              </div>
+            ) : position ? (
+              <>
+                <div style={{ fontSize: 13, color: signalInfo.text }}>
+                  {position.latitude.toFixed(6)}, {position.longitude.toFixed(6)}
+                </div>
+                <div style={{ fontSize: 12, color: signalInfo.text, opacity: 0.8 }}>
+                  ±{position.accuracy.toFixed(0)}m
+                </div>
+                {lastUpdateAge > 0 && (
+                  <div style={{ fontSize: 12, color: signalInfo.text, opacity: 0.6 }}>
+                    {lastUpdateAge}s tagasi
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ fontSize: 13, color: signalInfo.text }}>
+                {gpsError || 'Ootan GPS signaali...'}
+              </div>
+            )}
+
+            {/* Permission button */}
+            {permissionStatus === 'denied' && !isIframeBlocked && (
+              <button
+                onClick={requestPermission}
+                style={{
+                  marginLeft: 'auto',
+                  padding: '6px 12px',
+                  background: '#fff',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  cursor: 'pointer'
+                }}
+              >
+                Luba GPS
+              </button>
+            )}
+
+            {/* Toggle manual input */}
+            {!position && (
+              <button
+                onClick={() => setShowManualInput(!showManualInput)}
+                style={{
+                  marginLeft: 'auto',
+                  padding: '6px 12px',
+                  background: showManualInput ? '#2563eb' : '#fff',
+                  color: showManualInput ? '#fff' : '#374151',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  cursor: 'pointer'
+                }}
+              >
+                {showManualInput ? 'Peida sisestus' : 'Manuaalne sisestus'}
+              </button>
+            )}
           </div>
 
-          {/* Coordinates */}
-          {position ? (
-            <>
-              <div style={{ fontSize: 13, color: signalInfo.text }}>
-                {position.latitude.toFixed(6)}, {position.longitude.toFixed(6)}
-              </div>
-              <div style={{ fontSize: 12, color: signalInfo.text, opacity: 0.8 }}>
-                ±{position.accuracy.toFixed(0)}m
-              </div>
-              {lastUpdateAge > 0 && (
-                <div style={{ fontSize: 12, color: signalInfo.text, opacity: 0.6 }}>
-                  {lastUpdateAge}s tagasi
-                </div>
+          {/* Manual coordinate input */}
+          {showManualInput && !position && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '8px 0',
+              borderTop: '1px solid rgba(0,0,0,0.1)'
+            }}>
+              <span style={{ fontSize: 12, color: '#6b7280', minWidth: 100 }}>
+                Koordinaadid (WGS84):
+              </span>
+              <input
+                type="text"
+                value={manualCoords.lat}
+                onChange={e => setManualCoords(prev => ({ ...prev, lat: e.target.value }))}
+                placeholder="Lat (nt 50.8503)"
+                style={{
+                  padding: '6px 10px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 6,
+                  fontSize: 13,
+                  width: 130
+                }}
+              />
+              <input
+                type="text"
+                value={manualCoords.lng}
+                onChange={e => setManualCoords(prev => ({ ...prev, lng: e.target.value }))}
+                placeholder="Lng (nt 4.3517)"
+                style={{
+                  padding: '6px 10px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 6,
+                  fontSize: 13,
+                  width: 130
+                }}
+              />
+              {manualCoords.lat && manualCoords.lng && (
+                <a
+                  href={googleMapsUrl({ latitude: parseFloat(manualCoords.lat), longitude: parseFloat(manualCoords.lng) })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: 12, color: '#2563eb' }}
+                >
+                  <FiMap size={14} /> Vaata kaardil
+                </a>
               )}
-            </>
-          ) : (
-            <div style={{ fontSize: 13, color: signalInfo.text }}>
-              {gpsError || 'Ootan GPS signaali...'}
             </div>
-          )}
-
-          {/* Permission button */}
-          {permissionStatus === 'denied' && (
-            <button
-              onClick={requestPermission}
-              style={{
-                marginLeft: 'auto',
-                padding: '6px 12px',
-                background: '#fff',
-                border: '1px solid #d1d5db',
-                borderRadius: 6,
-                fontSize: 12,
-                cursor: 'pointer'
-              }}
-            >
-              Luba GPS
-            </button>
           )}
         </div>
 
@@ -553,7 +673,7 @@ export default function GpsLocationSearchModal({
                       <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                         <button
                           onClick={() => savePosition(item)}
-                          disabled={saving === item.id || !position || signalQuality === 'none'}
+                          disabled={saving === item.id || (!position && !getEffectivePosition())}
                           style={{
                             padding: '6px 12px',
                             background: item.gps_latitude ? '#f3f4f6' : '#16a34a',
@@ -561,8 +681,8 @@ export default function GpsLocationSearchModal({
                             border: 'none',
                             borderRadius: 6,
                             fontSize: 12,
-                            cursor: saving === item.id || !position ? 'not-allowed' : 'pointer',
-                            opacity: saving === item.id || !position ? 0.6 : 1,
+                            cursor: saving === item.id || (!position && !getEffectivePosition()) ? 'not-allowed' : 'pointer',
+                            opacity: saving === item.id || (!position && !getEffectivePosition()) ? 0.6 : 1,
                             display: 'flex',
                             alignItems: 'center',
                             gap: 4,
