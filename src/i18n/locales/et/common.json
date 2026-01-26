@@ -482,7 +482,8 @@
     "delete": "Kustuta",
     "deleteConfirm": "Kas oled kindel, et soovid selle foto kustutada?",
     "deleteError": "Foto kustutamine ebaõnnestus",
-    "loadError": "Viga galerii laadimisel"
+    "loadError": "Viga galerii laadimisel",
+    "image": "Pilt"
   },
   "checkpoint": {
     "inspected": "Inspekteeritud",
@@ -544,7 +545,13 @@
     "axisLocation": "Telje asukoht",
     "lowerHeight": "Alumine kõrgus",
     "upperHeight": "Ülemine kõrgus",
-    "parentMark": "Ema detaili mark"
+    "parentMark": "Ema detaili mark",
+    "showDetails": "Näita detaile",
+    "detail": "Detail",
+    "checkpoint": "Kontrollpunkt",
+    "deletePhoto": "Kustuta foto",
+    "comment": "Kommentaar:",
+    "inspectionPhoto": "Inspektsiooni foto"
   },
   "bulkAction": {
     "selected": "{{count}} valitud",
@@ -607,7 +614,8 @@
     "gpsNotSupported": "GPS pole toetatud",
     "saveError": "Viga salvestamisel",
     "cameraError": "Kaamera viga: {{message}}",
-    "gpsError": "GPS viga: {{message}}"
+    "gpsError": "GPS viga: {{message}}",
+    "saved": "Salvestatud"
   },
   "crane": {
     "loadingCranes": "Laadin kraanasid...",

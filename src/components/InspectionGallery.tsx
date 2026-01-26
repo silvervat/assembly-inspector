@@ -321,7 +321,7 @@ export const InspectionGallery: React.FC<InspectionGalleryProps> = ({
                 >
                   <img
                     src={photo.thumbnail_url || photo.url}
-                    alt={photo.assembly_mark || 'Pilt'}
+                    alt={photo.assembly_mark || t('gallery.image')}
                     style={{
                       width: '100%',
                       height: '100%',
@@ -395,7 +395,7 @@ export const InspectionGallery: React.FC<InspectionGalleryProps> = ({
           >
             <div style={{ color: 'white' }}>
               <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
-                {selectedPhoto.assembly_mark || 'Pilt'}
+                {selectedPhoto.assembly_mark || t('gallery.image')}
               </div>
               <div style={{ fontSize: '12px', color: '#9CA3AF' }}>
                 {selectedPhoto.category_name && `${selectedPhoto.category_name} • `}
@@ -451,7 +451,7 @@ export const InspectionGallery: React.FC<InspectionGalleryProps> = ({
           >
             <img
               src={selectedPhoto.url}
-              alt={selectedPhoto.assembly_mark || 'Pilt'}
+              alt={selectedPhoto.assembly_mark || t('gallery.image')}
               style={{
                 maxWidth: '100%',
                 maxHeight: '100%',
