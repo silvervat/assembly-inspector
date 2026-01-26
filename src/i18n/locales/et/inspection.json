@@ -81,5 +81,53 @@
     "saving": "Salvestan...",
     "remove": "Eemalda",
     "editComment": "Muuda kommentaari"
+  },
+  "types": {
+    "installedDetails": "Paigaldatud detailide inspektsioon",
+    "bolts": "Poltide inspektsioon",
+    "other": "Muu inspektsioon",
+    "paintRepairs": "Värviparandused inspektsioon",
+    "welds": "Keeviste inspektsioon",
+    "precast": "Montaažieelsete elementide inspektsioon"
+  },
+  "tabs": {
+    "myInspections": "Minu inspektsioonid",
+    "incomplete": "Tegemata",
+    "all": "Kõik inspektsioonid"
+  },
+  "checkpoint": {
+    "title": "Kontrollpunkt",
+    "new": "Uus kontrollpunkt",
+    "edit": "Muuda kontrollpunkti",
+    "addPhotos": "Lisa vähemalt {{count}} foto(t)",
+    "addComment": "Lisa kommentaar",
+    "incomplete": "Täitmata",
+    "complete": "Täidetud",
+    "saveResponses": "Salvesta vastused",
+    "guideMaterials": "Juhendmaterjalid:",
+    "view3d": "3D vaade",
+    "viewTop": "Pealtvaade",
+    "response": "Vastus",
+    "noResponse": "Ei vasta"
+  },
+  "bulkActions": {
+    "confirm": "Kinnita",
+    "confirmCheckpoints": "Kinnita kontrollpunktid",
+    "return": "Suuna tagasi",
+    "returnForFix": "Suuna tagasi parandamiseks",
+    "reject": "Lükka tagasi",
+    "assign": "Määra",
+    "export": "Ekspordi",
+    "commentOptional": "Kommentaar (valikuline)",
+    "commentRequired": "Kommentaar (kohustuslik)",
+    "commentRequiredError": "Kommentaar on kohustuslik tagasi suunamisel/lükkamisel"
+  },
+  "history": {
+    "title": "Ajalugu",
+    "noHistory": "Ajalugu puudub"
+  },
+  "category": {
+    "new": "Uus inspektsiooni kategooria",
+    "edit": "Muuda kategooriat"
   }
 }

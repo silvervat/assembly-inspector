@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import { WorkspaceAPI } from 'trimble-connect-workspace-api';
 import {
   supabase, TrimbleExUser, DeliveryFactory, DeliveryVehicle, DeliveryItem,
@@ -71,36 +72,24 @@ const PLAYBACK_SPEEDS = [
   { label: '4x', value: 100 }
 ];
 
-// Estonian weekday names
-const WEEKDAY_NAMES = ['Pühapäev', 'Esmaspäev', 'Teisipäev', 'Kolmapäev', 'Neljapäev', 'Reede', 'Laupäev'];
-
-// Short day names for calendar
-const DAY_NAMES = ['E', 'T', 'K', 'N', 'R', 'L', 'P'];
-
-// Estonian month names
-const MONTH_NAMES = [
-  'Jaanuar', 'Veebruar', 'Märts', 'Aprill', 'Mai', 'Juuni',
-  'Juuli', 'August', 'September', 'Oktoober', 'November', 'Detsember'
-];
-
-// Vehicle status labels and colors - solid backgrounds with white text for better readability
-const VEHICLE_STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
-  planned: { label: 'Planeeritud', color: '#ffffff', bgColor: '#6b7280' },
-  loading: { label: 'Laadimisel', color: '#ffffff', bgColor: '#f59e0b' },
-  transit: { label: 'Teel', color: '#ffffff', bgColor: '#3b82f6' },
-  arrived: { label: 'Kohal', color: '#ffffff', bgColor: '#8b5cf6' },
-  unloading: { label: 'Mahalaadimas', color: '#ffffff', bgColor: '#ec4899' },
-  completed: { label: 'Lõpetatud', color: '#ffffff', bgColor: '#10b981' },
-  cancelled: { label: 'Tühistatud', color: '#ffffff', bgColor: '#ef4444' }
+// Vehicle status colors only - labels come from translations
+const VEHICLE_STATUS_COLORS: Record<string, { color: string; bgColor: string }> = {
+  planned: { color: '#ffffff', bgColor: '#6b7280' },
+  loading: { color: '#ffffff', bgColor: '#f59e0b' },
+  transit: { color: '#ffffff', bgColor: '#3b82f6' },
+  arrived: { color: '#ffffff', bgColor: '#8b5cf6' },
+  unloading: { color: '#ffffff', bgColor: '#ec4899' },
+  completed: { color: '#ffffff', bgColor: '#10b981' },
+  cancelled: { color: '#ffffff', bgColor: '#ef4444' }
 };
 
-// Item status labels
-const ITEM_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  planned: { label: 'Planeeritud', color: '#6b7280' },
-  loaded: { label: 'Laetud', color: '#f59e0b' },
-  in_transit: { label: 'Teel', color: '#3b82f6' },
-  delivered: { label: 'Tarnitud', color: '#10b981' },
-  cancelled: { label: 'Tühistatud', color: '#ef4444' }
+// Item status colors only - labels come from translations
+const ITEM_STATUS_COLORS: Record<string, { color: string }> = {
+  planned: { color: '#6b7280' },
+  loaded: { color: '#f59e0b' },
+  in_transit: { color: '#3b82f6' },
+  delivered: { color: '#10b981' },
+  cancelled: { color: '#ef4444' }
 };
 
 // ============================================
@@ -118,24 +107,21 @@ interface UnloadMethodConfig {
   defaultCount: number;
 }
 
-const UNLOAD_METHODS: UnloadMethodConfig[] = [
-  { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 2, defaultCount: 1 },
-  { key: 'telescopic', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, defaultCount: 1 },
-  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 1, defaultCount: 1 },
-  { key: 'poomtostuk', label: 'Poomtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 2, defaultCount: 1 },
-  { key: 'toojoud', label: 'Tööjõud', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 6, defaultCount: 1 }
+// Labels come from translations via getUnloadMethodLabel()
+const UNLOAD_METHODS_BASE: Omit<UnloadMethodConfig, 'label'>[] = [
+  { key: 'crane', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 2, defaultCount: 1 },
+  { key: 'telescopic', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, defaultCount: 1 },
+  { key: 'manual', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 1, defaultCount: 1 },
+  { key: 'poomtostuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 2, defaultCount: 1 },
+  { key: 'toojoud', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 6, defaultCount: 1 }
 ];
 
 // ============================================
 // VEHICLE TYPE CONFIG
 // ============================================
 
-const VEHICLE_TYPES = [
-  { key: 'haagis', label: 'Haagis' },
-  { key: 'kinni', label: 'Täiesti kinni' },
-  { key: 'lahti', label: 'Lahti haagis' },
-  { key: 'extralong', label: 'Ekstra pikk haagis' }
-];
+// Vehicle type keys - labels come from translations
+const VEHICLE_TYPE_KEYS = ['haagis', 'kinni', 'lahti', 'extralong'] as const;
 
 // Natural sort helper for vehicle codes (EBE-8, EBE-9, EBE-10 instead of EBE-10, EBE-8, EBE-9)
 const naturalSortVehicleCode = (a: string | undefined, b: string | undefined): number => {
@@ -243,14 +229,14 @@ const msToIfcGuid = (msGuid: string): string => {
   return ifcGuid;
 };
 
-// Format date as DD.MM.YY Day
-const formatDateEstonian = (dateStr: string): string => {
+// Format date as DD.MM.YY Day - weekdayNames should be an array from translations
+const formatDateWithDay = (dateStr: string, weekdayNames: string[]): string => {
   const [year, month, day] = dateStr.split('-').map(Number);
   const date = new Date(year, month - 1, day);
   const dayStr = String(day).padStart(2, '0');
   const monthStr = String(month).padStart(2, '0');
   const yearStr = String(year).slice(-2);
-  const weekday = WEEKDAY_NAMES[date.getDay()];
+  const weekday = weekdayNames[date.getDay()];
   return `${dayStr}.${monthStr}.${yearStr} ${weekday}`;
 };
 
@@ -285,11 +271,11 @@ const formatDuration = (minutes: number | null | undefined): string => {
   return `${hours}h ${mins.toString().padStart(2, '0')}min`;
 };
 
-// Get day name only
-const getDayName = (dateStr: string): string => {
+// Get day name only - weekdayNames should be an array from translations
+const getDayNameFromDate = (dateStr: string, weekdayNames: string[]): string => {
   const [year, month, day] = dateStr.split('-').map(Number);
   const date = new Date(year, month - 1, day);
-  return WEEKDAY_NAMES[date.getDay()];
+  return weekdayNames[date.getDay()];
 };
 
 // Format date as DD.MM.YY only (without day name)
@@ -389,6 +375,61 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // i18n translations
   const { t } = useTranslation('delivery');
+
+  // Translated date arrays
+  const weekdaysList = useMemo(() => t('weekdaysList', { returnObjects: true }) as string[], [t]);
+  const weekdaysMinMon = useMemo(() => t('weekdaysMinMon', { returnObjects: true }) as string[], [t]);
+  const monthsList = useMemo(() => t('monthsList', { returnObjects: true }) as string[], [t]);
+
+  // Helper functions using translations
+  const formatDateWithWeekday = useCallback((dateStr: string) => formatDateWithDay(dateStr, weekdaysList), [weekdaysList]);
+  const getDayName = useCallback((dateStr: string) => getDayNameFromDate(dateStr, weekdaysList), [weekdaysList]);
+
+  // Get translated vehicle status config
+  const getVehicleStatusConfig = useCallback((status: string) => ({
+    label: t(`vehicleStatus.${status}`),
+    ...VEHICLE_STATUS_COLORS[status]
+  }), [t]);
+
+  // Get translated item status config
+  const getItemStatusConfig = useCallback((status: string) => ({
+    label: t(`itemStatus.${status}`),
+    ...ITEM_STATUS_COLORS[status]
+  }), [t]);
+
+  // Get translated unload methods
+  const UNLOAD_METHODS = useMemo(() =>
+    UNLOAD_METHODS_BASE.map(method => ({
+      ...method,
+      label: t(`unloadMethods.${method.key}`)
+    })),
+  [t]);
+
+  // Get translated vehicle types
+  const VEHICLE_TYPES = useMemo(() =>
+    VEHICLE_TYPE_KEYS.map(key => ({
+      key,
+      label: t(`vehicleTypes.${key}`)
+    })),
+  [t]);
+
+  // Vehicle status options for dropdowns
+  const vehicleStatusOptions = useMemo(() =>
+    Object.keys(VEHICLE_STATUS_COLORS).map(key => ({
+      key,
+      label: t(`vehicleStatus.${key}`),
+      ...VEHICLE_STATUS_COLORS[key]
+    })),
+  [t]);
+
+  // Item status options for dropdowns
+  const itemStatusOptions = useMemo(() =>
+    Object.keys(ITEM_STATUS_COLORS).map(key => ({
+      key,
+      label: t(`itemStatus.${key}`),
+      ...ITEM_STATUS_COLORS[key]
+    })),
+  [t]);
 
   // Property mappings for reading Tekla properties
   const { mappings: propertyMappings, isLoading: mappingsLoading } = useProjectPropertyMappings(projectId);
@@ -4835,17 +4876,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const enabledColumns = exportColumns.filter(c => c.enabled);
       const isEnglish = exportLanguage === 'en';
 
-      // English weekday names
-      const WEEKDAY_NAMES_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-      // English status labels
-      const ITEM_STATUS_EN: Record<string, string> = {
-        planned: 'Planned',
-        loaded: 'Loaded',
-        in_transit: 'In Transit',
-        delivered: 'Delivered',
-        cancelled: 'Cancelled'
-      };
+      // Get translations for selected export language
+      const exportT = i18n.getFixedT(isEnglish ? 'en' : 'et', 'delivery');
+      const exportWeekdays = exportT('weekdaysList', { returnObjects: true }) as string[];
+      const getExportItemStatus = (status: string) => exportT(`itemStatus.${status}`);
 
       // Sort items by date and vehicle
       const sortedItems = [...items].sort((a, b) => {
@@ -4884,7 +4918,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           switch (col.id) {
             case 'nr': row.push(idx + 1); break;
             case 'date': row.push(item.scheduled_date ? formatDateDisplay(item.scheduled_date) : (isEnglish ? 'UNASSIGNED' : 'MÄÄRAMATA')); break;
-            case 'day': row.push(item.scheduled_date ? (isEnglish ? WEEKDAY_NAMES_EN : WEEKDAY_NAMES)[new Date(item.scheduled_date).getDay()] : '-'); break;
+            case 'day': row.push(item.scheduled_date ? exportWeekdays[new Date(item.scheduled_date).getDay()] : '-'); break;
             case 'time': row.push(formatTimeDisplay(vehicle?.unload_start_time)); break;
             case 'duration': {
               const mins = vehicle?.unload_duration_minutes || 90;
@@ -4907,7 +4941,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               row.push(isNaN(w) ? '' : w.toFixed(1));
               break;
             }
-            case 'status': row.push(isEnglish ? (ITEM_STATUS_EN[item.status] || item.status) : (ITEM_STATUS_CONFIG[item.status]?.label || item.status)); break;
+            case 'status': row.push(getExportItemStatus(item.status)); break;
             case 'crane': row.push(itemMethods?.crane || ''); break;
             case 'telescopic': row.push(itemMethods?.telescopic || ''); break;
             case 'manual': row.push(itemMethods?.manual || ''); break;
@@ -4991,36 +5025,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         return (a.unload_start_time || '99:99').localeCompare(b.unload_start_time || '99:99');
       });
 
-      // English vehicle status labels
-      const VEHICLE_STATUS_EN: Record<string, string> = {
-        planned: 'Planned',
-        loading: 'Loading',
-        transit: 'In Transit',
-        arrived: 'Arrived',
-        unloading: 'Unloading',
-        completed: 'Completed',
-        cancelled: 'Cancelled'
-      };
-
-      // English unload method labels
-      const UNLOAD_METHODS_EN: Record<string, string> = {
-        crane: 'Crane',
-        telescopic: 'Telehandler',
-        manual: 'Manual',
-        poomtostuk: 'Boom Lift'
-      };
+      // Translation helpers for export
+      const getExportVehicleStatus = (status: string) => exportT(`vehicleStatus.${status}`);
+      const getExportUnloadMethod = (method: string) => exportT(`unloadMethods.${method}`);
 
       const vehicleRows = sortedVehicles.map(v => {
         const vehicleItems = items.filter(i => i.vehicle_id === v.id);
         const vehicleWeight = vehicleItems.reduce((sum, i) => sum + (parseFloat(i.cast_unit_weight || '0') || 0), 0);
         const resources = UNLOAD_METHODS
           .filter(m => v.unload_methods?.[m.key])
-          .map(m => `${isEnglish ? UNLOAD_METHODS_EN[m.key] || m.label : m.label}: ${v.unload_methods?.[m.key]}`)
+          .map(m => `${getExportUnloadMethod(m.key)}: ${v.unload_methods?.[m.key]}`)
           .join(', ') || '-';
         const durationStr = v.unload_duration_minutes ? `${(v.unload_duration_minutes / 60).toFixed(1)}h` : '-';
-        const statusLabel = isEnglish
-          ? VEHICLE_STATUS_EN[v.status] || v.status
-          : VEHICLE_STATUS_CONFIG[v.status]?.label || v.status;
+        const statusLabel = getExportVehicleStatus(v.status);
 
         return [
           v.vehicle_code,
@@ -5221,7 +5238,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     const vehicleItems = items.filter(i => i.vehicle_id === vehicleId).sort((a, b) => a.sort_order - b.sort_order);
     const marks = vehicleItems.map(i => i.assembly_mark).join('\n');
     navigator.clipboard.writeText(marks);
-    setMessage(`${vehicleItems.length} märki kopeeritud`);
+    setMessage(t('messages.marksCopied'));
   };
 
   // Export single date to Excel
@@ -5243,7 +5260,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       });
 
       // Headers
-      const headers = ['Nr', 'Veok', 'Aeg', 'Kestus', 'Märk', 'Toode', 'Kaal (kg)', 'Staatus'];
+      const headers = [
+        t('columns.nr'),
+        t('columns.vehicle'),
+        t('columns.time'),
+        t('columns.duration'),
+        t('columns.mark'),
+        t('columns.product'),
+        t('columns.weight'),
+        t('columns.status')
+      ];
 
       // Data rows
       const rows = sortedItems.map((item, idx) => {
@@ -5260,7 +5286,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           item.assembly_mark,
           item.product_name || '',
           isNaN(weightVal) ? '' : weightVal.toFixed(1),
-          ITEM_STATUS_CONFIG[item.status]?.label || item.status
+          getItemStatusConfig(item.status)?.label || item.status
         ];
       });
 
@@ -6545,14 +6571,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     />
                   ) : null}
                   <div className="date-text-wrapper">
-                    <span className="date-primary">{isUnassignedDate ? 'MÄÄRAMATA' : formatDateShort(date)}</span>
+                    <span className="date-primary">{isUnassignedDate ? t('unassigned') : formatDateShort(date)}</span>
                     {!isUnassignedDate && <span className="date-secondary">{getDayName(date)}</span>}
                   </div>
                 </div>
 
                 {/* Vehicles and week section */}
                 <div className="date-vehicles-section">
-                  <span className="vehicles-primary">{dateVehicleList.length} {dateVehicleList.length === 1 ? 'veok' : 'veokit'}</span>
+                  <span className="vehicles-primary">{dateVehicleList.length === 1 ? t('stats.vehicleCountSingular', { count: 1 }) : t('stats.vehicleCount', { count: dateVehicleList.length })}</span>
                   {!isUnassignedDate && <span className="vehicles-secondary">N{getISOWeek(new Date(date))}</span>}
                 </div>
 
@@ -6651,7 +6677,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       (sum, item) => sum + (parseFloat(item.cast_unit_weight || '0') || 0), 0
                     );
                     const isVehicleCollapsed = collapsedVehicles.has(vehicleId);
-                    const statusConfig = vehicle ? VEHICLE_STATUS_CONFIG[vehicle.status] : null;
+                    const statusConfig = vehicle ? getVehicleStatusConfig(vehicle.status) : null;
 
                     const isVehicleDragging = isDragging && draggedVehicle?.id === vehicleId;
                     const showDropBefore = dragOverDate === date && dragOverVehicleIndex === vehicleIndex && draggedVehicle;
@@ -6772,8 +6798,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                   }}
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  {Object.entries(VEHICLE_STATUS_CONFIG).map(([key, config]) => (
-                                    <option key={key} value={key}>{config.label}</option>
+                                  {vehicleStatusOptions.map(({ key, label }) => (
+                                    <option key={key} value={key}>{label}</option>
                                   ))}
                                 </select>
                               ) : statusConfig && (
@@ -7756,7 +7782,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       (sum, item) => sum + (parseFloat(item.cast_unit_weight || '0') || 0), 0
                     );
                     const isVehicleCollapsed = collapsedVehicles.has(vehicleId);
-                    const statusConfig = VEHICLE_STATUS_CONFIG[vehicle.status];
+                    const statusConfig = getVehicleStatusConfig(vehicle.status);
                     const isVehicleDragging = isDragging && draggedVehicle?.id === vehicleId;
 
                     return (
@@ -7815,7 +7841,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             }}
                             title="Märgista mudelis"
                           >{vehicle.vehicle_code}</span>
-                          <span className="vehicle-date">{vehicle.scheduled_date ? formatDateEstonian(vehicle.scheduled_date) : 'MÄÄRAMATA'}</span>
+                          <span className="vehicle-date">{vehicle.scheduled_date ? formatDateWithWeekday(vehicle.scheduled_date) : 'MÄÄRAMATA'}</span>
                           <span className="vehicle-stats">
                             <span className="item-badge">{vehicleItems.length} tk</span>
                             <span className="weight-badge">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
@@ -8379,8 +8405,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         .eq('id', activeVehicleId);
                     }}
                   >
-                    {Object.entries(VEHICLE_STATUS_CONFIG).map(([key, config]) => (
-                      <option key={key} value={key}>{config.label}</option>
+                    {vehicleStatusOptions.map(({ key, label }) => (
+                      <option key={key} value={key}>{label}</option>
                     ))}
                   </select>
                 </div>
@@ -8713,7 +8739,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                           prev.setMonth(prev.getMonth() - 1);
                           setAddModalCalendarMonth(prev);
                         }}><FiChevronLeft /></button>
-                        <span>{MONTH_NAMES[addModalCalendarMonth.getMonth()]} {addModalCalendarMonth.getFullYear()}</span>
+                        <span>{monthsList[addModalCalendarMonth.getMonth()]} {addModalCalendarMonth.getFullYear()}</span>
                         <button type="button" onClick={() => {
                           const next = new Date(addModalCalendarMonth);
                           next.setMonth(next.getMonth() + 1);
@@ -8721,7 +8747,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         }}><FiChevronRight /></button>
                       </div>
                       <div className="mini-calendar-grid">
-                        {DAY_NAMES.map(d => <div key={d} className="mini-day-name">{d}</div>)}
+                        {weekdaysMinMon.map(d => <div key={d} className="mini-day-name">{d}</div>)}
                         {getDaysForMonth(addModalCalendarMonth).map((date, idx) => {
                           const dateStr = formatDateForDB(date);
                           const isCurrentMonth = date.getMonth() === addModalCalendarMonth.getMonth();
@@ -9232,8 +9258,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       status: e.target.value as any
                     })}
                   >
-                    {Object.entries(VEHICLE_STATUS_CONFIG).map(([key, config]) => (
-                      <option key={key} value={key}>{config.label}</option>
+                    {vehicleStatusOptions.map(({ key, label }) => (
+                      <option key={key} value={key}>{label}</option>
                     ))}
                   </select>
                 </div>
@@ -9507,7 +9533,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     const vehicleWeight = vehicleItems.reduce((sum, i) => sum + (parseFloat(i.cast_unit_weight || '0') || 0), 0);
                     return (
                       <option key={v.id} value={v.id}>
-                        {v.vehicle_code} - {factory?.factory_name} ({v.scheduled_date ? formatDateEstonian(v.scheduled_date) : 'MÄÄRAMATA'}) | {vehicleItems.length} tk, {Math.round(vehicleWeight)} kg
+                        {v.vehicle_code} - {factory?.factory_name} ({v.scheduled_date ? formatDateWithWeekday(v.scheduled_date) : 'MÄÄRAMATA'}) | {vehicleItems.length} tk, {Math.round(vehicleWeight)} kg
                       </option>
                     );
                   })}
@@ -9603,7 +9629,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       </div>
                       <div>
                         <span style={{ color: '#6b7280' }}>Saabumise kuupäev:</span>{' '}
-                        <strong>{arrivedVehicleModalData.arrivedVehicle?.arrival_date ? formatDateEstonian(arrivedVehicleModalData.arrivedVehicle.arrival_date) : '-'}</strong>
+                        <strong>{arrivedVehicleModalData.arrivedVehicle?.arrival_date ? formatDateWithWeekday(arrivedVehicleModalData.arrivedVehicle.arrival_date) : '-'}</strong>
                       </div>
                       <div>
                         <span style={{ color: '#6b7280' }}>Saabumise aeg:</span>{' '}
@@ -11008,13 +11034,13 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label><FiPackage style={{ marginRight: 4 }} />Staatus</label>
+                  <label><FiPackage style={{ marginRight: 4 }} />{t('columns.status')}</label>
                   <select
                     value={itemEditStatus}
                     onChange={(e) => setItemEditStatus(e.target.value)}
                   >
-                    {Object.entries(ITEM_STATUS_CONFIG).map(([key, config]) => (
-                      <option key={key} value={key}>{config.label}</option>
+                    {itemStatusOptions.map(({ key, label }) => (
+                      <option key={key} value={key}>{label}</option>
                     ))}
                   </select>
                 </div>

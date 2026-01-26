@@ -1,37 +1,11 @@
 {
   "title": "Paigaldusgraafik",
-  "weekdays": {
-    "sunday": "Pühapäev",
-    "monday": "Esmaspäev",
-    "tuesday": "Teisipäev",
-    "wednesday": "Kolmapäev",
-    "thursday": "Neljapäev",
-    "friday": "Reede",
-    "saturday": "Laupäev"
-  },
-  "weekdaysShort": {
-    "sun": "Püh",
-    "mon": "Esm",
-    "tue": "Tei",
-    "wed": "Kol",
-    "thu": "Nel",
-    "fri": "Ree",
-    "sat": "Lau"
-  },
-  "months": {
-    "january": "Jaanuar",
-    "february": "Veebruar",
-    "march": "Märts",
-    "april": "Aprill",
-    "may": "Mai",
-    "june": "Juuni",
-    "july": "Juuli",
-    "august": "August",
-    "september": "September",
-    "october": "Oktoober",
-    "november": "November",
-    "december": "Detsember"
-  },
+  "weekdaysList": ["Pühapäev", "Esmaspäev", "Teisipäev", "Kolmapäev", "Neljapäev", "Reede", "Laupäev"],
+  "weekdaysShortList": ["Püh", "Esm", "Tei", "Kol", "Nel", "Ree", "Lau"],
+  "weekdaysMinMon": ["E", "T", "K", "N", "R", "L", "P"],
+  "monthsList": ["Jaanuar", "Veebruar", "Märts", "Aprill", "Mai", "Juuni", "Juuli", "August", "September", "Oktoober", "November", "Detsember"],
+  "monthsShortList": ["Jaan", "Veebr", "Märts", "Apr", "Mai", "Juuni", "Juuli", "Aug", "Sept", "Okt", "Nov", "Dets"],
+  "unassigned": "MÄÄRAMATA",
   "resources": {
     "crane": "Kraana",
     "forklift": "Teleskooplaadur",

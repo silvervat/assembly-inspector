@@ -81,5 +81,53 @@
     "saving": "Saving...",
     "remove": "Remove",
     "editComment": "Edit comment"
+  },
+  "types": {
+    "installedDetails": "Installed details inspection",
+    "bolts": "Bolts inspection",
+    "other": "Other inspection",
+    "paintRepairs": "Paint repairs inspection",
+    "welds": "Welds inspection",
+    "precast": "Precast elements inspection"
+  },
+  "tabs": {
+    "myInspections": "My inspections",
+    "incomplete": "Incomplete",
+    "all": "All inspections"
+  },
+  "checkpoint": {
+    "title": "Checkpoint",
+    "new": "New checkpoint",
+    "edit": "Edit checkpoint",
+    "addPhotos": "Add at least {{count}} photo(s)",
+    "addComment": "Add comment",
+    "incomplete": "Incomplete",
+    "complete": "Complete",
+    "saveResponses": "Save responses",
+    "guideMaterials": "Guide materials:",
+    "view3d": "3D view",
+    "viewTop": "Top view",
+    "response": "Response",
+    "noResponse": "No response"
+  },
+  "bulkActions": {
+    "confirm": "Confirm",
+    "confirmCheckpoints": "Confirm checkpoints",
+    "return": "Return",
+    "returnForFix": "Return for fix",
+    "reject": "Reject",
+    "assign": "Assign",
+    "export": "Export",
+    "commentOptional": "Comment (optional)",
+    "commentRequired": "Comment (required)",
+    "commentRequiredError": "Comment is required when returning/rejecting"
+  },
+  "history": {
+    "title": "History",
+    "noHistory": "No history"
+  },
+  "category": {
+    "new": "New inspection category",
+    "edit": "Edit category"
   }
 }

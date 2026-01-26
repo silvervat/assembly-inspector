@@ -1,5 +1,15 @@
 {
   "title": "Organiseerija",
+  "fieldTypes": {
+    "text": "Tekst",
+    "number": "Number",
+    "currency": "Valuuta (€)",
+    "date": "Kuupäev",
+    "tags": "Sildid",
+    "dropdown": "Valik",
+    "photo": "Foto",
+    "attachment": "Manus"
+  },
   "group": {
     "new": "Uus grupp",
     "edit": "Muuda gruppi",
@@ -28,7 +38,14 @@
     "saving": "Salvestan...",
     "saveError": "Viga välja salvestamisel",
     "updateError": "Viga välja uuendamisel",
-    "enterValue": "Sisesta vähemalt üks väärtus või vali failid"
+    "enterValue": "Sisesta vähemalt üks väärtus või vali failid",
+    "noFieldsYet": "Lisavälju pole veel lisatud",
+    "type": "Tüüp",
+    "decimals": "Komakohti",
+    "dropdownOptions": "Valikud (üks rea kohta)"
+  },
+  "bulkEdit": {
+    "hint": "Täida väljad, mida soovid muuta. Tühjad väljad jäetakse vahele."
   },
   "item": {
     "add": "Lisa detailid",

@@ -1,6 +1,7 @@
 {
   "buttons": {
     "save": "Save",
+    "saving": "Saving...",
     "cancel": "Cancel",
     "delete": "Delete",
     "edit": "Edit",
@@ -23,7 +24,33 @@
     "next": "Next",
     "previous": "Previous",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "reject": "Reject",
+    "return": "Return",
+    "assign": "Assign",
+    "addSignature": "Add signature",
+    "editSignature": "Edit signature",
+    "login": "Log in",
+    "checking": "Checking...",
+    "download": "Download",
+    "upload": "Upload",
+    "copy": "Copy",
+    "paste": "Paste",
+    "undo": "Undo",
+    "redo": "Redo",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "open": "Open",
+    "create": "Create",
+    "update": "Update",
+    "remove": "Remove",
+    "view": "View",
+    "preview": "Preview",
+    "send": "Send",
+    "submit": "Submit",
+    "approve": "Approve",
+    "decline": "Decline",
+    "archive": "Archive"
   },
   "status": {
     "loading": "Loading...",
@@ -59,7 +86,13 @@
     "lastWeek": "Last week",
     "nextWeek": "Next week",
     "date": "Date",
-    "time": "Time"
+    "time": "Time",
+    "weekdays": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+    "weekdaysShort": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    "weekdaysMin": ["S", "M", "T", "W", "T", "F", "S"],
+    "weekdaysMinMon": ["M", "T", "W", "T", "F", "S", "S"],
+    "months": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+    "monthsShort": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
   },
   "navigation": {
     "menu": "Menu",
@@ -317,7 +350,57 @@
     "historyTitle": "Date change history"
   },
   "userProfile": {
-    "titlePlaceholder": "e.g. Quality Controller"
+    "title": "User Profile",
+    "titlePlaceholder": "e.g. Quality Controller",
+    "phone": "Phone",
+    "phonePlaceholder": "+372 5XX XXXX",
+    "jobTitle": "Job title",
+    "company": "Company",
+    "signature": "Signature",
+    "saveSuccess": "Profile saved",
+    "saveError": "Failed to save profile",
+    "signatureSaveError": "Failed to save signature",
+    "signatureSaved": "Signature saved"
+  },
+  "login": {
+    "title": "Login",
+    "pinCode": "PIN code",
+    "pinPlaceholder": "Enter your PIN code",
+    "pinMinLength": "PIN code must be at least 4 digits",
+    "loginFailed": "Login failed",
+    "invalidCredentials": "Invalid credentials",
+    "sessionExpired": "Session expired, please log in again"
+  },
+  "roles": {
+    "admin": "Admin",
+    "moderator": "Moderator",
+    "inspector": "Inspector",
+    "viewer": "Viewer",
+    "superAdmin": "Super Admin"
+  },
+  "equipment": {
+    "crane": "Crane",
+    "telescopic": "Telehandler",
+    "manual": "Manual",
+    "boomLift": "Boom Lift",
+    "scissorLift": "Scissor Lift",
+    "rigger": "Rigger",
+    "installer": "Installer",
+    "welder": "Welder"
+  },
+  "auditActions": {
+    "created": "Created",
+    "updated": "Updated",
+    "deleted": "Deleted",
+    "statusChanged": "Status changed",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "returned": "Returned",
+    "assigned": "Assigned",
+    "unassigned": "Unassigned",
+    "exported": "Exported",
+    "imported": "Imported",
+    "commented": "Commented"
   },
   "positioner": {
     "qrScannerNotSupported": "QR scanner not supported. Use Chrome.",

@@ -1,6 +1,7 @@
 {
   "buttons": {
     "save": "Salvesta",
+    "saving": "Salvestan...",
     "cancel": "Tühista",
     "delete": "Kustuta",
     "edit": "Muuda",
@@ -23,7 +24,33 @@
     "next": "Edasi",
     "previous": "Tagasi",
     "yes": "Jah",
-    "no": "Ei"
+    "no": "Ei",
+    "reject": "Lükka tagasi",
+    "return": "Suuna tagasi",
+    "assign": "Määra",
+    "addSignature": "Lisa allkiri",
+    "editSignature": "Muuda allkirja",
+    "login": "Logi sisse",
+    "checking": "Kontrollin...",
+    "download": "Lae alla",
+    "upload": "Lae üles",
+    "copy": "Kopeeri",
+    "paste": "Kleebi",
+    "undo": "Võta tagasi",
+    "redo": "Tee uuesti",
+    "zoomIn": "Suurenda",
+    "zoomOut": "Vähenda",
+    "open": "Ava",
+    "create": "Loo",
+    "update": "Uuenda",
+    "remove": "Eemalda",
+    "view": "Vaata",
+    "preview": "Eelvaade",
+    "send": "Saada",
+    "submit": "Esita",
+    "approve": "Kinnita",
+    "decline": "Keeldu",
+    "archive": "Arhiveeri"
   },
   "status": {
     "loading": "Laadimine...",
@@ -59,7 +86,13 @@
     "lastWeek": "Eelmine nädal",
     "nextWeek": "Järgmine nädal",
     "date": "Kuupäev",
-    "time": "Kellaaeg"
+    "time": "Kellaaeg",
+    "weekdays": ["Pühapäev", "Esmaspäev", "Teisipäev", "Kolmapäev", "Neljapäev", "Reede", "Laupäev"],
+    "weekdaysShort": ["Püh", "Esm", "Tei", "Kol", "Nel", "Ree", "Lau"],
+    "weekdaysMin": ["P", "E", "T", "K", "N", "R", "L"],
+    "weekdaysMinMon": ["E", "T", "K", "N", "R", "L", "P"],
+    "months": ["Jaanuar", "Veebruar", "Märts", "Aprill", "Mai", "Juuni", "Juuli", "August", "September", "Oktoober", "November", "Detsember"],
+    "monthsShort": ["Jaan", "Veebr", "Märts", "Apr", "Mai", "Juuni", "Juuli", "Aug", "Sept", "Okt", "Nov", "Dets"]
   },
   "navigation": {
     "menu": "Menüü",
@@ -317,7 +350,57 @@
     "historyTitle": "Kuupäeva muutuste ajalugu"
   },
   "userProfile": {
-    "titlePlaceholder": "nt. Kvaliteedikontrolör"
+    "title": "Kasutaja profiil",
+    "titlePlaceholder": "nt. Kvaliteedikontrolör",
+    "phone": "Telefon",
+    "phonePlaceholder": "+372 5XX XXXX",
+    "jobTitle": "Ametinimetus",
+    "company": "Ettevõte",
+    "signature": "Allkiri",
+    "saveSuccess": "Profiil salvestatud",
+    "saveError": "Profiili salvestamine ebaõnnestus",
+    "signatureSaveError": "Allkirja salvestamine ebaõnnestus",
+    "signatureSaved": "Allkiri salvestatud"
+  },
+  "login": {
+    "title": "Sisselogimine",
+    "pinCode": "PIN kood",
+    "pinPlaceholder": "Sisesta oma PIN kood",
+    "pinMinLength": "PIN kood peab olema vähemalt 4 numbrit",
+    "loginFailed": "Sisselogimine ebaõnnestus",
+    "invalidCredentials": "Vigased sisselogimise andmed",
+    "sessionExpired": "Sessioon aegus, palun logi uuesti sisse"
+  },
+  "roles": {
+    "admin": "Admin",
+    "moderator": "Moderaator",
+    "inspector": "Inspektor",
+    "viewer": "Vaataja",
+    "superAdmin": "Superadmin"
+  },
+  "equipment": {
+    "crane": "Kraana",
+    "telescopic": "Teleskooplaadur",
+    "manual": "Käsitsi",
+    "boomLift": "Korvtõstuk",
+    "scissorLift": "Käärtõstuk",
+    "rigger": "Troppija",
+    "installer": "Monteerija",
+    "welder": "Keevitaja"
+  },
+  "auditActions": {
+    "created": "Loodud",
+    "updated": "Uuendatud",
+    "deleted": "Kustutatud",
+    "statusChanged": "Staatus muudetud",
+    "approved": "Kinnitatud",
+    "rejected": "Tagasi lükatud",
+    "returned": "Tagasi suunatud",
+    "assigned": "Määratud",
+    "unassigned": "Määramine eemaldatud",
+    "exported": "Eksporditud",
+    "imported": "Imporditud",
+    "commented": "Kommenteeritud"
   },
   "positioner": {
     "qrScannerNotSupported": "QR skänner pole toetatud. Kasuta Chrome.",
