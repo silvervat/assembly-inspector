@@ -356,11 +356,16 @@
     "phonePlaceholder": "+372 5XX XXXX",
     "jobTitle": "Job title",
     "company": "Company",
+    "companyPlaceholder": "e.g. Construction Company Ltd",
     "signature": "Signature",
     "saveSuccess": "Profile saved",
     "saveError": "Failed to save profile",
     "signatureSaveError": "Failed to save signature",
-    "signatureSaved": "Signature saved"
+    "signatureSaved": "Signature saved",
+    "deleteSignatureConfirm": "Are you sure you want to delete your signature?",
+    "addSignature": "Add signature",
+    "editSignature": "Edit signature",
+    "defaultUser": "User"
   },
   "login": {
     "title": "Login",

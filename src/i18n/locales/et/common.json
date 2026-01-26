@@ -356,11 +356,16 @@
     "phonePlaceholder": "+372 5XX XXXX",
     "jobTitle": "Ametinimetus",
     "company": "Ettevõte",
+    "companyPlaceholder": "nt. AS Ehitusfirma",
     "signature": "Allkiri",
     "saveSuccess": "Profiil salvestatud",
     "saveError": "Profiili salvestamine ebaõnnestus",
     "signatureSaveError": "Allkirja salvestamine ebaõnnestus",
-    "signatureSaved": "Allkiri salvestatud"
+    "signatureSaved": "Allkiri salvestatud",
+    "deleteSignatureConfirm": "Kas oled kindel, et soovid allkirja kustutada?",
+    "addSignature": "Lisa allkiri",
+    "editSignature": "Muuda allkirja",
+    "defaultUser": "Kasutaja"
   },
   "login": {
     "title": "Sisselogimine",
