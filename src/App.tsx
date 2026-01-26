@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import MainMenu, { InspectionMode } from './components/MainMenu';
 import InspectorScreen from './components/InspectorScreen';
@@ -36,7 +37,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.1.1';
+export const APP_VERSION = '3.1.2';
 
 // Trimble Connect kasutaja info
 interface TrimbleConnectUser {
@@ -124,14 +125,14 @@ if (zoomId && !isPopupMode) {
 
     if (error || !zoomTarget) {
       console.error('🔗 [ZOOM] Zoom target not found:', error);
-      alert('Link ei ole kehtiv või on aegunud');
+      alert('Link is invalid or expired / Link ei ole kehtiv või on aegunud');
       return;
     }
 
     // Check if expired
     if (new Date(zoomTarget.expires_at) < new Date()) {
       console.log('🔗 [ZOOM] Zoom target expired');
-      alert('See link on aegunud');
+      alert('This link has expired / See link on aegunud');
       // Mark as consumed
       await supabase.from('zoom_targets').update({ consumed: true }).eq('id', zoomId);
       return;
@@ -195,6 +196,7 @@ interface GlobalSearchModalProps {
 }
 
 function GlobalSearchModalComponent({ api, projectId, onClose }: GlobalSearchModalProps) {
+  const { t } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [exactMatch, setExactMatch] = useState(true);
   const [searching, setSearching] = useState(false);
@@ -245,7 +247,7 @@ function GlobalSearchModalComponent({ api, projectId, onClose }: GlobalSearchMod
       if (error) throw error;
 
       if (!data || data.length === 0) {
-        setSearchResult({ count: 0, message: `"${query}" - ei leitud` });
+        setSearchResult({ count: 0, message: t('globalShortcuts.notFound', { query }) });
         setSearching(false);
         return;
       }
@@ -253,7 +255,7 @@ function GlobalSearchModalComponent({ api, projectId, onClose }: GlobalSearchMod
       const guids = data.map(d => d.guid_ifc).filter(Boolean) as string[];
 
       if (guids.length === 0) {
-        setSearchResult({ count: 0, message: `"${query}" - GUID puudub` });
+        setSearchResult({ count: 0, message: t('globalShortcuts.guidMissing', { query }) });
         setSearching(false);
         return;
       }
@@ -261,7 +263,7 @@ function GlobalSearchModalComponent({ api, projectId, onClose }: GlobalSearchMod
       const foundObjects = await findObjectsInLoadedModels(api, guids);
 
       if (foundObjects.size === 0) {
-        setSearchResult({ count: data.length, message: `${data.length} leitud andmebaasist, mudel pole laaditud` });
+        setSearchResult({ count: data.length, message: t('globalShortcuts.foundInDbNoModel', { count: data.length }) });
         setSearching(false);
         return;
       }
@@ -286,15 +288,15 @@ function GlobalSearchModalComponent({ api, projectId, onClose }: GlobalSearchMod
 
       setSearchResult({
         count: foundObjects.size,
-        message: `${foundObjects.size} detaili valitud mudelis`
+        message: t('globalShortcuts.selectedInModel', { count: foundObjects.size })
       });
     } catch (e) {
       console.error('Global search error:', e);
-      setSearchResult({ count: 0, message: 'Otsingu viga' });
+      setSearchResult({ count: 0, message: t('globalShortcuts.searchError') });
     } finally {
       setSearching(false);
     }
-  }, [api, projectId, exactMatch]);
+  }, [api, projectId, exactMatch, t]);
 
   // Handle input change with debounce
   const handleInputChange = (value: string) => {
@@ -343,7 +345,7 @@ function GlobalSearchModalComponent({ api, projectId, onClose }: GlobalSearchMod
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
           <span style={{ fontSize: '24px' }}>🔍</span>
-          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#1f2937' }}>Kiirotsing</h2>
+          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#1f2937' }}>{t('globalShortcuts.quickSearch')}</h2>
           <button
             onClick={onClose}
             style={{
@@ -365,7 +367,7 @@ function GlobalSearchModalComponent({ api, projectId, onClose }: GlobalSearchMod
           type="text"
           value={searchQuery}
           onChange={(e) => handleInputChange(e.target.value)}
-          placeholder="Otsi assembly marki..."
+          placeholder={t('globalShortcuts.searchPlaceholder')}
           style={{
             width: '100%',
             padding: '12px 16px',
@@ -399,12 +401,12 @@ function GlobalSearchModalComponent({ api, projectId, onClose }: GlobalSearchMod
             }}
             style={{ width: '16px', height: '16px' }}
           />
-          Täpne vaste
+          {t('globalShortcuts.exactMatch')}
         </label>
 
         {searching && (
           <div style={{ marginTop: '12px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
-            ⏳ Otsin...
+            ⏳ {t('globalShortcuts.searching')}
           </div>
         )}
 
@@ -422,7 +424,7 @@ function GlobalSearchModalComponent({ api, projectId, onClose }: GlobalSearchMod
         )}
 
         <div style={{ marginTop: '16px', fontSize: '11px', color: '#9ca3af', textAlign: 'center' }}>
-          ESC sulgemiseks • Sisesta vähemalt 2 märki
+          {t('globalShortcuts.escToClose')}
         </div>
       </div>
     </div>
@@ -430,6 +432,7 @@ function GlobalSearchModalComponent({ api, projectId, onClose }: GlobalSearchMod
 }
 
 export default function App() {
+  const { t } = useTranslation();
   const [api, setApi] = useState<WorkspaceAPI.WorkspaceAPI | null>(null);
   const [user, setUser] = useState<TrimbleExUser | null>(null);
   const [tcUser, setTcUser] = useState<TrimbleConnectUser | null>(null);
@@ -982,7 +985,7 @@ export default function App() {
         // If activated, color the detail green
         if (updated.status === 'activated' && updated.guid) {
           console.log('[QR Activation] Realtime event received! Status:', updated.status, 'GUID:', updated.guid);
-          showGlobalToast(`${updated.assembly_mark || 'Detail'} leitud platsilt!`, 'success');
+          showGlobalToast(t('globalShortcuts.foundOnSite', { mark: updated.assembly_mark || t('globalShortcuts.detail') }), 'success');
 
           try {
             // First color entire model white
@@ -1090,7 +1093,7 @@ export default function App() {
           if (vehicleError) throw vehicleError;
 
           if (!arrivedVehicles || arrivedVehicles.length === 0) {
-            showGlobalToast('Saabunud veokeid ei leitud', 'info');
+            showGlobalToast(t('globalShortcuts.noArrivedVehicles'), 'info');
             setShortcutLoading(null);
             return;
           }
@@ -1106,7 +1109,7 @@ export default function App() {
           if (confError) throw confError;
 
           if (!confirmations || confirmations.length === 0) {
-            showGlobalToast('Kinnitatud saabumisi ei leitud', 'info');
+            showGlobalToast(t('globalShortcuts.noConfirmedArrivals'), 'info');
             setShortcutLoading(null);
             return;
           }
@@ -1121,7 +1124,7 @@ export default function App() {
           if (itemError) throw itemError;
 
           if (!deliveryItems || deliveryItems.length === 0) {
-            showGlobalToast('Saabunud detaile ei leitud', 'info');
+            showGlobalToast(t('globalShortcuts.noArrivedItems'), 'info');
             setShortcutLoading(null);
             return;
           }
@@ -1142,7 +1145,7 @@ export default function App() {
           const foundObjects = await findObjectsInLoadedModels(api, allGuids);
 
           if (foundObjects.size === 0) {
-            showGlobalToast('Mudel pole laaditud', 'error');
+            showGlobalToast(t('globalShortcuts.modelNotLoaded'), 'error');
             setShortcutLoading(null);
             return;
           }
@@ -1198,10 +1201,10 @@ export default function App() {
             }
           }
 
-          showGlobalToast(`${greenObjects.length} saabunud detaili roheliseks`, 'success');
+          showGlobalToast(t('globalShortcuts.arrivedItemsGreen', { count: greenObjects.length }), 'success');
         } catch (err) {
           console.error('CTRL+SHIFT+A error:', err);
-          showGlobalToast('Viga värvimisel', 'error');
+          showGlobalToast(t('globalShortcuts.colorError'), 'error');
         } finally {
           setShortcutLoading(null);
         }
@@ -1218,7 +1221,7 @@ export default function App() {
         try {
           const selected = await api.viewer.getSelection();
           if (!selected || selected.length === 0) {
-            showGlobalToast('Vali mudelist detailid!', 'error');
+            showGlobalToast(t('globalShortcuts.selectDetailsFromModel'), 'error');
             setShortcutLoading(null);
             return;
           }
@@ -1234,7 +1237,7 @@ export default function App() {
           }
 
           if (!modelId || allRuntimeIds.length === 0) {
-            showGlobalToast('Valitud objektidel puudub info', 'error');
+            showGlobalToast(t('globalShortcuts.selectedObjectsMissingInfo'), 'error');
             setShortcutLoading(null);
             return;
           }
@@ -1286,7 +1289,7 @@ export default function App() {
           }
 
           if (markupsToCreate.length === 0) {
-            showGlobalToast('Markupe ei saanud luua', 'error');
+            showGlobalToast(t('globalShortcuts.couldNotCreateMarkups'), 'error');
             setShortcutLoading(null);
             return;
           }
@@ -1349,10 +1352,10 @@ export default function App() {
             }
           }
 
-          showGlobalToast(`${markupsToCreate.length} markupit loodud`, 'success');
+          showGlobalToast(t('globalShortcuts.markupsCreated', { count: markupsToCreate.length }), 'success');
         } catch (err) {
           console.error('ALT+SHIFT+M error:', err);
-          showGlobalToast('Viga markupite loomisel', 'error');
+          showGlobalToast(t('globalShortcuts.markupCreateError'), 'error');
         } finally {
           setShortcutLoading(null);
         }
@@ -1369,7 +1372,7 @@ export default function App() {
         try {
           const selected = await api.viewer.getSelection();
           if (!selected || selected.length === 0) {
-            showGlobalToast('Vali mudelist detailid!', 'error');
+            showGlobalToast(t('globalShortcuts.selectDetailsFromModel'), 'error');
             setShortcutLoading(null);
             return;
           }
@@ -1384,7 +1387,7 @@ export default function App() {
           }
 
           if (!modelId || allRuntimeIds.length === 0) {
-            showGlobalToast('Valitud objektidel puudub info', 'error');
+            showGlobalToast(t('globalShortcuts.selectedObjectsMissingInfo'), 'error');
             setShortcutLoading(null);
             return;
           }
@@ -1452,7 +1455,7 @@ export default function App() {
           }
 
           if (markupsToCreate.length === 0) {
-            showGlobalToast('Polte ei leitud', 'error');
+            showGlobalToast(t('globalShortcuts.noBoltsFound'), 'error');
             setShortcutLoading(null);
             return;
           }
@@ -1495,10 +1498,10 @@ export default function App() {
           // Create markups (color is already included in markup data)
           await (api.markup as any)?.addTextMarkup?.(markupsToCreate);
 
-          showGlobalToast(`${markupsToCreate.length} poltide markupit loodud`, 'success');
+          showGlobalToast(t('globalShortcuts.boltMarkupsCreated', { count: markupsToCreate.length }), 'success');
         } catch (err) {
           console.error('CTRL+SHIFT+B error:', err);
-          showGlobalToast('Viga poltide markupite loomisel', 'error');
+          showGlobalToast(t('globalShortcuts.boltMarkupCreateError'), 'error');
         } finally {
           setShortcutLoading(null);
         }
@@ -1515,7 +1518,7 @@ export default function App() {
         try {
           const selected = await api.viewer.getSelection();
           if (!selected || selected.length === 0) {
-            showGlobalToast('Vali mudelist detailid!', 'error');
+            showGlobalToast(t('globalShortcuts.selectDetailsFromModel'), 'error');
             setShortcutLoading(null);
             return;
           }
@@ -1530,7 +1533,7 @@ export default function App() {
           }
 
           if (!modelId || allRuntimeIds.length === 0) {
-            showGlobalToast('Valitud objektidel puudub info', 'error');
+            showGlobalToast(t('globalShortcuts.selectedObjectsMissingInfo'), 'error');
             setShortcutLoading(null);
             return;
           }
@@ -1540,7 +1543,7 @@ export default function App() {
           const guidsToQuery = (externalIds || []).filter(Boolean) as string[];
 
           if (guidsToQuery.length === 0) {
-            showGlobalToast('Ei leidnud GUID-e', 'error');
+            showGlobalToast(t('globalShortcuts.noGuidsFound'), 'error');
             setShortcutLoading(null);
             return;
           }
@@ -1561,7 +1564,7 @@ export default function App() {
             .in('guid_ifc', guidsToQuery);
 
           if (!deliveryItems || deliveryItems.length === 0) {
-            showGlobalToast('Valitud detailid pole tarnegraafikus', 'info');
+            showGlobalToast(t('globalShortcuts.notInDeliverySchedule'), 'info');
             setShortcutLoading(null);
             return;
           }
@@ -1609,7 +1612,7 @@ export default function App() {
           }
 
           if (markupsToCreate.length === 0) {
-            showGlobalToast('Markupe ei saanud luua', 'error');
+            showGlobalToast(t('globalShortcuts.couldNotCreateMarkups'), 'error');
             setShortcutLoading(null);
             return;
           }
@@ -1672,10 +1675,10 @@ export default function App() {
             }
           }
 
-          showGlobalToast(`${markupsToCreate.length} tarne markupit loodud`, 'success');
+          showGlobalToast(t('globalShortcuts.deliveryMarkupsCreated', { count: markupsToCreate.length }), 'success');
         } catch (err) {
           console.error('ALT+SHIFT+D error:', err);
-          showGlobalToast('Viga tarne markupite loomisel', 'error');
+          showGlobalToast(t('globalShortcuts.deliveryMarkupCreateError'), 'error');
         } finally {
           setShortcutLoading(null);
         }
@@ -1692,14 +1695,14 @@ export default function App() {
         try {
           const allMarkups = await (api.markup as any)?.getTextMarkups?.();
           if (!allMarkups || allMarkups.length === 0) {
-            showGlobalToast('Markupe pole', 'info');
+            showGlobalToast(t('globalShortcuts.noMarkups'), 'info');
             setShortcutLoading(null);
             return;
           }
 
           const allIds = allMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
           if (allIds.length === 0) {
-            showGlobalToast('Markupe pole', 'info');
+            showGlobalToast(t('globalShortcuts.noMarkups'), 'info');
             setShortcutLoading(null);
             return;
           }
@@ -1711,10 +1714,10 @@ export default function App() {
             await api.markup?.removeMarkups?.(batch);
           }
 
-          showGlobalToast(`${allIds.length} markupit eemaldatud`, 'success');
+          showGlobalToast(t('globalShortcuts.markupsRemoved', { count: allIds.length }), 'success');
         } catch (err) {
           console.error('ALT+SHIFT+R error:', err);
-          showGlobalToast('Viga markupite eemaldamisel', 'error');
+          showGlobalToast(t('globalShortcuts.markupRemoveError'), 'error');
         } finally {
           setShortcutLoading(null);
         }
@@ -1763,13 +1766,13 @@ export default function App() {
                 );
               }
             }
-            showGlobalToast(`Mudel valge, ${totalSelected} detaili tumeroheliseks`, 'success');
+            showGlobalToast(t('globalShortcuts.modelWhiteSelectedGreen', { count: totalSelected }), 'success');
           } else {
-            showGlobalToast('Mudel värvitud valgeks (valik puudub)', 'info');
+            showGlobalToast(t('globalShortcuts.modelColoredWhite'), 'info');
           }
         } catch (err) {
           console.error('ALT+SHIFT+C error:', err);
-          showGlobalToast('Viga värvimisel', 'error');
+          showGlobalToast(t('globalShortcuts.colorError'), 'error');
         } finally {
           setShortcutLoading(null);
         }
@@ -1798,7 +1801,7 @@ export default function App() {
           if (vError) throw vError;
 
           if (!todayVehicles || todayVehicles.length === 0) {
-            showGlobalToast('Täna pole tarneid planeeritud', 'info');
+            showGlobalToast(t('globalShortcuts.noDeliveriesPlannedToday'), 'info');
             setCurrentMode('delivery_schedule');
             setShortcutLoading(null);
             return;
@@ -1815,7 +1818,7 @@ export default function App() {
           if (iError) throw iError;
 
           if (!todayItems || todayItems.length === 0) {
-            showGlobalToast('Tänastes veokites pole detaile', 'info');
+            showGlobalToast(t('globalShortcuts.noItemsInTodayVehicles'), 'info');
             setCurrentMode('delivery_schedule');
             setShortcutLoading(null);
             return;
@@ -1893,10 +1896,10 @@ export default function App() {
 
           // Navigate to delivery schedule
           setCurrentMode('delivery_schedule');
-          showGlobalToast(`Täna ${todayVehicles.length} veoki, ${coloredCount} detaili värvitud`, 'success');
+          showGlobalToast(t('globalShortcuts.todayDeliveriesColored', { vehicleCount: todayVehicles.length, itemCount: coloredCount }), 'success');
         } catch (err) {
           console.error('ALT+SHIFT+T error:', err);
-          showGlobalToast('Viga tarnete laadimisel', 'error');
+          showGlobalToast(t('globalShortcuts.deliveryLoadError'), 'error');
         } finally {
           setShortcutLoading(null);
         }
@@ -1911,7 +1914,7 @@ export default function App() {
         try {
           const selection = await api.viewer.getSelection();
           if (!selection || selection.length === 0) {
-            showGlobalToast('Vali mudelist detailid', 'info');
+            showGlobalToast(t('globalShortcuts.selectDetailsInfo'), 'info');
             return;
           }
 
@@ -1972,7 +1975,7 @@ export default function App() {
           }
 
           if (results.length === 0) {
-            showGlobalToast('Andmeid ei leitud', 'info');
+            showGlobalToast(t('globalShortcuts.noDataFound'), 'info');
             return;
           }
 
@@ -1982,10 +1985,10 @@ export default function App() {
           const text = [header, ...rows].join('\n');
 
           await navigator.clipboard.writeText(text);
-          showGlobalToast(`${results.length} detaili kopeeritud (Excel)`, 'success');
+          showGlobalToast(t('globalShortcuts.copiedToExcel', { count: results.length }), 'success');
         } catch (err) {
           console.error('ALT+SHIFT+1 error:', err);
-          showGlobalToast('Viga kopeerimisel', 'error');
+          showGlobalToast(t('globalShortcuts.copyError'), 'error');
         }
         return;
       }
@@ -1998,7 +2001,7 @@ export default function App() {
         try {
           const selection = await api.viewer.getSelection();
           if (!selection || selection.length === 0) {
-            showGlobalToast('Vali mudelist detailid', 'info');
+            showGlobalToast(t('globalShortcuts.selectDetailsInfo'), 'info');
             return;
           }
 
@@ -2057,7 +2060,7 @@ export default function App() {
           }
 
           if (marks.length === 0) {
-            showGlobalToast('Marke ei leitud', 'info');
+            showGlobalToast(t('globalShortcuts.noMarksFound'), 'info');
             return;
           }
 
@@ -2065,10 +2068,10 @@ export default function App() {
           const text = marks.join('\n');
 
           await navigator.clipboard.writeText(text);
-          showGlobalToast(`${marks.length} marki kopeeritud`, 'success');
+          showGlobalToast(t('globalShortcuts.marksCopied', { count: marks.length }), 'success');
         } catch (err) {
           console.error('ALT+SHIFT+2 error:', err);
-          showGlobalToast('Viga kopeerimisel', 'error');
+          showGlobalToast(t('globalShortcuts.copyError'), 'error');
         }
         return;
       }
@@ -2091,7 +2094,7 @@ export default function App() {
           if (instError) throw instError;
 
           if (!installations || installations.length === 0) {
-            showGlobalToast('Paigaldatud detaile ei leitud', 'info');
+            showGlobalToast(t('globalShortcuts.noInstalledItemsFound'), 'info');
             setShortcutLoading(null);
             return;
           }
@@ -2129,7 +2132,7 @@ export default function App() {
           console.log(`[ALT+SHIFT+3] Total GUIDs from DB: ${allGuids.length}`);
 
           if (allGuids.length === 0) {
-            showGlobalToast('Andmebaasis pole objekte', 'error');
+            showGlobalToast(t('globalShortcuts.noDatabaseObjects'), 'error');
             setShortcutLoading(null);
             return;
           }
@@ -2139,7 +2142,7 @@ export default function App() {
           console.log(`[ALT+SHIFT+3] Found ${foundObjects.size} objects in model`);
 
           if (foundObjects.size === 0) {
-            showGlobalToast('Mudel pole laaditud', 'error');
+            showGlobalToast(t('globalShortcuts.modelNotLoaded'), 'error');
             setShortcutLoading(null);
             return;
           }
@@ -2198,10 +2201,10 @@ export default function App() {
           }
 
           console.log(`[ALT+SHIFT+3] Colored ${installedObjects.length} installed (blue), ${whiteObjects.length} not installed (white)`);
-          showGlobalToast(`${installedObjects.length} paigaldatud detaili tumesiniseks`, 'success');
+          showGlobalToast(t('globalShortcuts.installedItemsDarkBlue', { count: installedObjects.length }), 'success');
         } catch (err) {
           console.error('ALT+SHIFT+3 error:', err);
-          showGlobalToast('Viga värvimisel', 'error');
+          showGlobalToast(t('globalShortcuts.colorError'), 'error');
         } finally {
           setShortcutLoading(null);
         }
@@ -2225,7 +2228,7 @@ export default function App() {
           if (instError) throw instError;
 
           if (!installations || installations.length === 0) {
-            showGlobalToast('Paigaldatud detaile ei leitud', 'info');
+            showGlobalToast(t('globalShortcuts.noInstalledItemsFound'), 'info');
             setShortcutLoading(null);
             return;
           }
@@ -2276,14 +2279,14 @@ export default function App() {
           }
 
           if (totalSelected === 0) {
-            showGlobalToast('Paigaldatud detaile mudelis ei leitud', 'info');
+            showGlobalToast(t('globalShortcuts.installedItemsNotFoundInModel'), 'info');
           } else {
             console.log(`[ALT+SHIFT+4] Total selected: ${totalSelected} objects`);
-            showGlobalToast(`${totalSelected} paigaldatud detaili valitud`, 'success');
+            showGlobalToast(t('globalShortcuts.installedItemsSelected', { count: totalSelected }), 'success');
           }
         } catch (err) {
           console.error('ALT+SHIFT+4 error:', err);
-          showGlobalToast('Viga valimisel', 'error');
+          showGlobalToast(t('globalShortcuts.selectionError'), 'error');
         } finally {
           setShortcutLoading(null);
         }
@@ -2294,7 +2297,7 @@ export default function App() {
     // Use capture phase to intercept events before they reach Trimble viewer
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [api, projectId, shortcutLoading, handleColorModelWhite, showGlobalToast]);
+  }, [api, projectId, shortcutLoading, handleColorModelWhite, showGlobalToast, t]);
 
   // Helper: normalize GUID
   const normalizeGuid = (s: string): string => {

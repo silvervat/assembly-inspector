@@ -1942,18 +1942,18 @@ export default function IssuesScreen({
         <FiSearch size={16} />
         <input
           type="text"
-          placeholder="Otsi numbri, pealkirja, detaili järgi..."
+          placeholder={t('issues:searchPlaceholder')}
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
         />
         {searchQuery && (
-          <button onClick={() => setSearchQuery('')} title="Tühjenda otsing">
+          <button onClick={() => setSearchQuery('')} title={t('issues:clearSearch')}>
             <FiX size={14} />
           </button>
         )}
         <button
           onClick={() => setShowFilters(!showFilters)}
-          title="Filtrid"
+          title={t('issues:filters')}
           style={{
             background: showFilters ? '#2563eb' : '#f1f5f9',
             color: showFilters ? 'white' : '#64748b'
@@ -2358,7 +2358,7 @@ export default function IssuesScreen({
                                 alignItems: 'center',
                                 gap: '3px'
                               }}
-                              title="Vali alamdetailid"
+                              title={t('issues:selectSubDetails')}
                             >
                               <FiLink size={10} />
                               Alamd.
@@ -2378,7 +2378,7 @@ export default function IssuesScreen({
                     type="text"
                     value={formData.title}
                     onChange={e => setFormData(f => ({ ...f, title: e.target.value }))}
-                    placeholder="Kirjelda mittevastavust lühidalt"
+                    placeholder={t('issues:describeBriefly')}
                   />
                 </div>
               </div>
@@ -2903,21 +2903,21 @@ export default function IssuesScreen({
                     setShowDetail(false);
                     setShowForm(true);
                   }}
-                  title="Muuda"
+                  title={t('buttons.edit')}
                 >
                   <FiEdit2 size={14} />
                 </button>
                 <button
                   className="icon-action-btn danger"
                   onClick={() => handleDeleteIssue(detailIssue.id)}
-                  title="Kustuta"
+                  title={t('buttons.delete')}
                 >
                   <FiTrash2 size={14} />
                 </button>
                 <button
                   className="icon-action-btn primary"
                   onClick={() => selectIssueInModel(detailIssue)}
-                  title="Näita mudelis"
+                  title={t('issues:showInModel')}
                 >
                   <FiEye size={14} />
                 </button>
@@ -2958,7 +2958,7 @@ export default function IssuesScreen({
                                     cursor: 'pointer',
                                     color: '#64748b'
                                   }}
-                                  title="Muuda"
+                                  title={t('buttons.edit')}
                                 >
                                   <FiEdit2 size={12} />
                                 </button>
@@ -2971,7 +2971,7 @@ export default function IssuesScreen({
                                     cursor: 'pointer',
                                     color: '#ef4444'
                                   }}
-                                  title="Kustuta"
+                                  title={t('buttons.delete')}
                                 >
                                   <FiTrash2 size={12} />
                                 </button>

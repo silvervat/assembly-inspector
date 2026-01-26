@@ -125,6 +125,7 @@ function FunctionButton({
   result?: FunctionTestResult;
   onClick: () => void;
 }) {
+  const { t } = useTranslation();
   const status = result?.status || 'idle';
 
   const copyCode = (e: React.MouseEvent) => {
@@ -143,7 +144,7 @@ function FunctionButton({
           {status === 'idle' && <FiZap size={14} />}
         </span>
       </button>
-      <button className="function-copy-btn" onClick={copyCode} title="Kopeeri">
+      <button className="function-copy-btn" onClick={copyCode} title={t('common:buttons.copy')}>
         <FiCopy size={12} />
       </button>
       {result && (status === 'success' || status === 'error') && (
@@ -903,7 +904,7 @@ export default function AdminScreen({
 
     <div class="input-section">
       <label>GUID(id)</label>
-      <textarea id="guidInput" placeholder="Sisesta GUID(id)...&#10;&#10;Näited:&#10;3cUkl00wxCuAr0f8gkqJbz&#10;2vBpM91wxDvBs1g9hlrKcA&#10;&#10;Eraldaja: koma, semikoolon või reavahetus"></textarea>
+      <textarea id="guidInput" placeholder={t('viewer.guidsPlaceholder')}></textarea>
       <p class="help-text">💡 Toetab mitut GUID-i korraga. Kopeeri GUIDs otse Tekla'st või IFC failist.</p>
     </div>
 
@@ -5496,7 +5497,7 @@ export default function AdminScreen({
               <textarea
                 value={guidControllerInput}
                 onChange={(e) => setGuidControllerInput(e.target.value)}
-                placeholder="Sisesta GUID(id)...&#10;nt: 3cUkl00wxCuAr0f8gkqJbz&#10;või mitu: 3cUkl00wxCuAr0f8gkqJbz, 2vBpM91wxDvBs1g9hlrKcA"
+                placeholder={t('viewer.guidsPlaceholder')}
                 style={{
                   width: '100%',
                   minHeight: '60px',
@@ -7635,7 +7636,7 @@ export default function AdminScreen({
                                 fontSize: '10px',
                                 cursor: 'pointer'
                               }}
-                              title="Vali ja suumi"
+                              title={t('common:model.selectAndZoom')}
                             >
                               🎯
                             </button>
@@ -8175,7 +8176,7 @@ export default function AdminScreen({
                                 fontSize: '10px',
                                 cursor: 'pointer'
                               }}
-                              title="Vali ja suumi"
+                              title={t('common:model.selectAndZoom')}
                             >
                               🎯
                             </button>
@@ -15310,7 +15311,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                                       e.stopPropagation();
                                       zoomToChild(obj.modelId, childRuntimeId, childName);
                                     }}
-                                    title="Vali see detail mudelis"
+                                    title={t('selectDetailInModel')}
                                   >
                                     🔍
                                   </button>
@@ -15410,10 +15411,10 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   className="copy-btn"
                   onClick={copyAssemblyListToClipboard}
                   disabled={assemblyList.length === 0}
-                  title="Kopeeri tabelina clipboardi"
+                  title={t('common:actions.copyToClipboard')}
                 >
                   <FiCopy size={14} />
-                  Kopeeri
+                  {t('copy')}
                 </button>
               </div>
               {assemblyList.length > 0 ? (
@@ -15450,10 +15451,10 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   className="copy-btn"
                   onClick={copyBoltSummaryToClipboard}
                   disabled={boltSummary.length === 0}
-                  title="Kopeeri tabelina clipboardi"
+                  title={t('common:actions.copyToClipboard')}
                 >
                   <FiCopy size={14} />
-                  Kopeeri
+                  {t('copy')}
                 </button>
               </div>
               {boltSummary.length > 0 ? (
@@ -16767,7 +16768,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                                 padding: '6px',
                                 cursor: 'pointer'
                               }}
-                              title="Muuda"
+                              title={t('common:buttons.edit')}
                             >
                               <FiEdit2 size={14} />
                             </button>
@@ -16819,7 +16820,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                                   padding: '6px',
                                   cursor: 'pointer'
                                 }}
-                                title="Muuda nime"
+                                title={t('common:buttons.updateName')}
                               >
                                 <FiEdit2 size={14} />
                               </button>
@@ -17151,7 +17152,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                             padding: '4px',
                             cursor: 'pointer'
                           }}
-                          title="Muuda vaadet"
+                          title={t('settings.views.editView')}
                         >
                           <FiEdit2 size={12} />
                         </button>
@@ -17165,7 +17166,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                             cursor: 'pointer',
                             color: '#dc2626'
                           }}
-                          title="Kustuta"
+                          title={t('common:buttons.delete')}
                         >
                           <FiTrash2 size={12} />
                         </button>
@@ -18344,10 +18345,10 @@ document.body.appendChild(div);`;
                       className="admin-tool-btn"
                       onClick={() => selectPositionedDetail(pos)}
                       style={{ flex: '1', minWidth: '80px', background: '#3b82f6', color: '#fff' }}
-                      title="Vali detail mudelis"
+                      title={t('selectDetailInModel')}
                     >
                       <FiTarget size={12} />
-                      <span>Vali</span>
+                      <span>{t('common:buttons.select')}</span>
                     </button>
                     {pos.latitude && pos.longitude && (
                       <>
@@ -18356,10 +18357,10 @@ document.body.appendChild(div);`;
                             className="admin-tool-btn"
                             onClick={() => removePositionMarkup(pos)}
                             style={{ flex: '1', minWidth: '80px', background: '#dc2626', color: '#fff' }}
-                            title="Eemalda ring mudelilt"
+                            title={t('common:buttons.remove')}
                           >
                             <FiX size={12} />
-                            <span>Eemalda</span>
+                            <span>{t('common:buttons.remove')}</span>
                           </button>
                         ) : (
                           <button
@@ -18376,7 +18377,7 @@ document.body.appendChild(div);`;
                           className="admin-tool-btn"
                           onClick={() => addGpsMarker(pos)}
                           style={{ flex: '1', minWidth: '80px', background: '#8b5cf6', color: '#fff' }}
-                          title="Lisa tekstiga marker GPS asukohta"
+                          title={t('common:buttons.add')}
                         >
                           <FiMapPin size={12} />
                           <span>Marker</span>
@@ -18385,7 +18386,7 @@ document.body.appendChild(div);`;
                           className="admin-tool-btn"
                           onClick={() => window.open(`https://www.google.com/maps?q=${pos.latitude},${pos.longitude}`, '_blank')}
                           style={{ flex: '1', minWidth: '80px', background: '#f59e0b', color: '#fff' }}
-                          title="Ava Google Maps'is"
+                          title={t('openInGoogleMaps')}
                         >
                           <FiExternalLink size={12} />
                           <span>Maps</span>
@@ -18396,7 +18397,7 @@ document.body.appendChild(div);`;
                       className="admin-tool-btn"
                       onClick={() => deletePosition(pos)}
                       style={{ background: '#fee2e2', color: '#ef4444' }}
-                      title="Kustuta positsioon"
+                      title={t('common:buttons.delete')}
                     >
                       <FiTrash2 size={12} />
                     </button>

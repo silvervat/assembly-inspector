@@ -6737,7 +6737,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                   setActiveVehicleId(prev => prev === vehicleId ? null : vehicleId);
                                   setActiveItemId(null);
                                 }}
-                                title="Muuda veoki seadeid"
+                                title={t('common:buttons.edit')}
                               />
                             </span>
 
@@ -7597,7 +7597,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                           navigator.clipboard.writeText(item.assembly_mark);
                                           setMessage(`"${item.assembly_mark}" kopeeritud`);
                                         }}
-                                        title="Kopeeri märk"
+                                        title={t('common:actions.copyMark')}
                                       >{item.assembly_mark}</span>
                                       {item.product_name && <span className="item-product">{item.product_name}</span>}
                                       {item.cast_unit_position_code && <span className="item-position">{item.cast_unit_position_code}</span>}
@@ -7831,7 +7831,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               setActiveVehicleId(prev => prev === vehicleId ? null : vehicleId);
                               setActiveItemId(null);
                             }}
-                            title="Muuda veoki seadeid"
+                            title={t('common:buttons.edit')}
                           />
                           <span
                             className="vehicle-code clickable"
@@ -7930,7 +7930,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                           navigator.clipboard.writeText(item.assembly_mark);
                                           setMessage(`"${item.assembly_mark}" kopeeritud`);
                                         }}
-                                        title="Kopeeri märk"
+                                        title={t('common:actions.copyMark')}
                                       >{item.assembly_mark}</span>
                                       {item.product_name && <span className="item-product">{item.product_name}</span>}
                                       {item.cast_unit_position_code && <span className="item-position">{item.cast_unit_position_code}</span>}
@@ -8308,7 +8308,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         // Open modal for comment
                         initiateVehicleDateChange(activeVehicleId!, activeVehicle.scheduled_date, null);
                       }}
-                      title="Eemalda kuupäev"
+                      title={t('common:dateHistory.removeDateTitle')}
                     >
                       <FiX size={10} />
                     </button>
@@ -8957,7 +8957,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 <textarea
                   value={addModalComment}
                   onChange={(e) => setAddModalComment(e.target.value)}
-                  placeholder="Nt: Eriprojekt, kiire tarne, kontrolli mõõte..."
+                  placeholder={t('common:placeholders.additionalInfo')}
                   rows={2}
                 />
               </div>
@@ -9023,7 +9023,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               <button
                                 type="button"
                                 className="remove-btn"
-                                title="Eemalda listist"
+                                title={t('common:buttons.remove')}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setAddModalExcludedItems(prev => new Set([...prev, obj.runtimeId]));
@@ -9296,7 +9296,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                           ...editingVehicle,
                           scheduled_date: null
                         })}
-                        title="Eemalda kuupäev"
+                        title={t('common:dateHistory.removeDateTitle')}
                       >
                         <FiX size={12} />
                       </button>
@@ -10548,10 +10548,10 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                         <span className="factory-name">{f.factory_name}</span>
                         <span className="factory-code">({f.factory_code})</span>
                         <div className="factory-actions">
-                          <button className="icon-btn" onClick={() => startEditFactory(f)} title="Muuda">
+                          <button className="icon-btn" onClick={() => startEditFactory(f)} title={t('common:buttons.edit')}>
                             <FiEdit2 />
                           </button>
-                          <button className="icon-btn delete-btn" onClick={() => deleteFactory(f.id)} title="Kustuta">
+                          <button className="icon-btn delete-btn" onClick={() => deleteFactory(f.id)} title={t('common:buttons.delete')}>
                             <FiTrash2 />
                           </button>
                         </div>
@@ -10581,7 +10581,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                     className="add-btn"
                     onClick={createFactory}
                     disabled={!newFactoryName.trim() || !newFactoryCode.trim() || saving}
-                    title="Lisa tehas"
+                    title={t('factory.add')}
                   >
                     <FiPlus />
                   </button>
@@ -10965,7 +10965,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                             <button
                               className="comment-delete-btn"
                               onClick={() => deleteComment(comment.id)}
-                              title="Kustuta kommentaar"
+                              title={t('common:buttons.delete')}
                             >
                               <FiTrash2 size={12} />
                             </button>
@@ -11086,7 +11086,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                   value={itemEditNotes}
                   onChange={(e) => setItemEditNotes(e.target.value)}
                   rows={2}
-                  placeholder="Lisa märkused..."
+                  placeholder={t('common:placeholders.addNotes')}
                 />
               </div>
 
@@ -11142,7 +11142,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                             justifyContent: 'center',
                             padding: 0
                           }}
-                          title="Eemalda foto"
+                          title={t('common:buttons.remove')}
                         >
                           <FiX size={12} />
                         </button>
