@@ -19,6 +19,28 @@
     "fontTester": "Fontide testija",
     "deliverySchedules": "Tarnegraafikud"
   },
+  "resources": {
+    "crane": "Kraana",
+    "forklift": "Teleskooplaadur",
+    "manual": "Käsitsi",
+    "poomtostuk": "Korvtõstuk",
+    "kaartostuk": "Käärtõstuk",
+    "troppija": "Troppija",
+    "monteerija": "Monteerija",
+    "keevitaja": "Keevitaja",
+    "addNew": "Lisa uus {{type}}",
+    "add": "Lisa {{type}}",
+    "clickAddNew": "Klõpsa \"Lisa uus\" et lisada esimene {{type}}.",
+    "editResourceName": "Muuda ressurssi nime",
+    "editResource": "Muuda ressurssi",
+    "name": "Nimi",
+    "keywords": "Märksõnad",
+    "keywordsHint": "Eraldatud komadega",
+    "noResourcesYet": "Seda tüüpi ressursse pole veel lisatud.",
+    "usage": "Kasutus",
+    "active": "Aktiivne",
+    "actions": "Tegevused"
+  },
   "tabs": {
     "viewer": "Viewer funktsioonid",
     "database": "Andmebaas",

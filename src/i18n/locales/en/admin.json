@@ -19,6 +19,28 @@
     "fontTester": "Font tester",
     "deliverySchedules": "Delivery schedules"
   },
+  "resources": {
+    "crane": "Crane",
+    "forklift": "Telescopic handler",
+    "manual": "Manual",
+    "poomtostuk": "Boom lift",
+    "kaartostuk": "Scissor lift",
+    "troppija": "Rigger",
+    "monteerija": "Installer",
+    "keevitaja": "Welder",
+    "addNew": "Add new {{type}}",
+    "add": "Add {{type}}",
+    "clickAddNew": "Click \"Add new\" to add the first {{type}}.",
+    "editResourceName": "Edit resource name",
+    "editResource": "Edit resource",
+    "name": "Name",
+    "keywords": "Keywords",
+    "keywordsHint": "Separated by comma",
+    "noResourcesYet": "No resources of this type added yet.",
+    "usage": "Usage",
+    "active": "Active",
+    "actions": "Actions"
+  },
   "tabs": {
     "viewer": "Viewer functions",
     "database": "Database",

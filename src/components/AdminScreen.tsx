@@ -216,15 +216,15 @@ const VIEW_PRESET_COLORS = [
 // Resource types configuration
 const RESOURCE_TYPES = [
   // Machines (matches InstallationScheduleScreen INSTALL_METHODS)
-  { key: 'crane', label: 'Kraana', icon: `${import.meta.env.BASE_URL}icons/crane.png` },
-  { key: 'forklift', label: 'Teleskooplaadur', icon: `${import.meta.env.BASE_URL}icons/forklift.png` },
-  { key: 'manual', label: 'Käsitsi', icon: `${import.meta.env.BASE_URL}icons/manual.png` },
-  { key: 'poomtostuk', label: 'Korvtõstuk', icon: `${import.meta.env.BASE_URL}icons/poomtostuk.png` },
-  { key: 'kaartostuk', label: 'Käärtõstuk', icon: `${import.meta.env.BASE_URL}icons/kaartostuk.png` },
+  { key: 'crane', icon: `${import.meta.env.BASE_URL}icons/crane.png` },
+  { key: 'forklift', icon: `${import.meta.env.BASE_URL}icons/forklift.png` },
+  { key: 'manual', icon: `${import.meta.env.BASE_URL}icons/manual.png` },
+  { key: 'poomtostuk', icon: `${import.meta.env.BASE_URL}icons/poomtostuk.png` },
+  { key: 'kaartostuk', icon: `${import.meta.env.BASE_URL}icons/kaartostuk.png` },
   // Labor (matches InstallationScheduleScreen INSTALL_METHODS)
-  { key: 'troppija', label: 'Troppija', icon: `${import.meta.env.BASE_URL}icons/troppija.png` },
-  { key: 'monteerija', label: 'Monteerija', icon: `${import.meta.env.BASE_URL}icons/monteerija.png` },
-  { key: 'keevitaja', label: 'Keevitaja', icon: `${import.meta.env.BASE_URL}icons/keevitaja.png` },
+  { key: 'troppija', icon: `${import.meta.env.BASE_URL}icons/troppija.png` },
+  { key: 'monteerija', icon: `${import.meta.env.BASE_URL}icons/monteerija.png` },
+  { key: 'keevitaja', icon: `${import.meta.env.BASE_URL}icons/keevitaja.png` },
 ] as const;
 
 export default function AdminScreen({
@@ -243,6 +243,11 @@ export default function AdminScreen({
   onCancelCalibration
 }: AdminScreenProps) {
   const { t } = useTranslation('admin');
+
+  // Helper function to get translated resource type label
+  const getResourceLabel = useCallback((key: string) => {
+    return t(`resources.${key}`, { defaultValue: key });
+  }, [t]);
 
   // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin' | 'qrActivator' | 'positioner'
   const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin' | 'qrActivator' | 'positioner'>('main');
@@ -14201,9 +14206,9 @@ export default function AdminScreen({
                     };
 
                     const resourceLabels: Record<string, string> = {
-                      crane: '🏗️ Kraana', forklift: '🚜 Teleskooplaadur', poomtostuk: '🚁 Korvtõstuk',
-                      kaartostuk: '📐 Käärtõstuk', manual: '🤲 Käsitsi', troppija: '🔗 Troppija',
-                      monteerija: '🔧 Monteerija', keevitaja: '⚡ Keevitaja'
+                      crane: `🏗️ ${t('resources.crane')}`, forklift: `🚜 ${t('resources.forklift')}`, poomtostuk: `🚁 ${t('resources.poomtostuk')}`,
+                      kaartostuk: `📐 ${t('resources.kaartostuk')}`, manual: `🤲 ${t('resources.manual')}`, troppija: `🔗 ${t('resources.troppija')}`,
+                      monteerija: `🔧 ${t('resources.monteerija')}`, keevitaja: `⚡ ${t('resources.keevitaja')}`
                     };
 
                     const html = `<!DOCTYPE html>
@@ -16455,7 +16460,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   }}
                 >
                   <img src={type.icon} alt="" style={{ width: '18px', height: '18px', objectFit: 'contain' }} />
-                  <span>{type.label}</span>
+                  <span>{getResourceLabel(type.key)}</span>
                   {count > 0 && (
                     <span style={{
                       background: selectedResourceType === type.key ? 'rgba(255,255,255,0.3)' : '#e5e7eb',
@@ -16483,7 +16488,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <FiPlus size={14} />
-              Lisa uus {RESOURCE_TYPES.find(t => t.key === selectedResourceType)?.label.toLowerCase()}
+              {t('resources.addNew', { type: getResourceLabel(selectedResourceType).toLowerCase() })}
             </button>
           </div>
 
@@ -16511,10 +16516,10 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h3 style={{ margin: 0 }}>
                     {editingInstallationResource
-                      ? `Muuda ressurssi nime`
+                      ? t('resources.editResourceName')
                       : editingResource
-                        ? 'Muuda ressurssi'
-                        : `Lisa ${RESOURCE_TYPES.find(t => t.key === selectedResourceType)?.label.toLowerCase()}`}
+                        ? t('resources.editResource')
+                        : t('resources.add', { type: getResourceLabel(selectedResourceType).toLowerCase() })}
                   </h3>
                   <button onClick={() => {
                     setShowResourceForm(false);
@@ -16527,7 +16532,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
 
                 <div style={{ marginBottom: '12px', position: 'relative' }} ref={resourceSuggestionRef}>
                   <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 500 }}>
-                    Nimi *
+                    {t('resources.name')} *
                   </label>
                   <input
                     type="text"
@@ -16684,9 +16689,9 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
               if (!hasAnyResources) {
                 return (
                   <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
-                    <p>Seda tüüpi ressursse pole veel lisatud.</p>
+                    <p>{t('resources.noResourcesYet')}</p>
                     <p style={{ fontSize: '12px' }}>
-                      Klõpsa "Lisa uus" et lisada esimene {RESOURCE_TYPES.find(t => t.key === selectedResourceType)?.label.toLowerCase()}.
+                      {t('resources.clickAddNew', { type: getResourceLabel(selectedResourceType).toLowerCase() })}
                     </p>
                   </div>
                 );
@@ -16696,11 +16701,11 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: '#f9fafb' }}>
-                      <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>Nimi</th>
-                      <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>Märksõnad</th>
-                      <th style={{ textAlign: 'center', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '60px' }}>Kasutus</th>
-                      <th style={{ textAlign: 'center', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '80px' }}>Aktiivne</th>
-                      <th style={{ textAlign: 'right', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '100px' }}>Tegevused</th>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>{t('resources.name')}</th>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>{t('resources.keywords')}</th>
+                      <th style={{ textAlign: 'center', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '60px' }}>{t('resources.usage')}</th>
+                      <th style={{ textAlign: 'center', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '80px' }}>{t('resources.active')}</th>
+                      <th style={{ textAlign: 'right', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '100px' }}>{t('resources.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
