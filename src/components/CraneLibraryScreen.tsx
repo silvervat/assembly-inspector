@@ -221,7 +221,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
           <div style={{ backgroundColor: 'white', borderRadius: '6px', boxShadow: '0 1px 2px rgba(0,0,0,0.08)', marginBottom: '12px' }}>
             <div style={{ padding: '8px 12px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h2 style={{ fontSize: '13px', fontWeight: 600, margin: 0 }}>
-                {isCreating ? 'Lisa Uus Kraana' : `Muuda: ${formData.manufacturer} ${formData.model}`}
+                {isCreating ? t('crane.addNewCrane') : t('crane.editCrane', { manufacturer: formData.manufacturer, model: formData.model })}
               </h2>
             </div>
 
@@ -569,6 +569,7 @@ function BasicInfoForm({
   uploadingImage: boolean;
   setUploadingImage: (uploading: boolean) => void;
 }) {
+  const { t } = useTranslation('common');
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !craneId) return;
@@ -845,7 +846,7 @@ function BasicInfoForm({
           onClick={onSave}
           style={{ padding: '5px 12px', border: 'none', borderRadius: '4px', backgroundColor: 'var(--modus-primary)', color: 'white', cursor: 'pointer', fontSize: '12px' }}
         >
-          {isCreating ? 'Salvesta ja jätka' : 'Salvesta'}
+          {isCreating ? t('buttons.saveAndContinue') : t('buttons.save')}
         </button>
       </div>
     </div>
@@ -854,6 +855,7 @@ function BasicInfoForm({
 
 // Load Charts Manager Component - 2D Table View (like manufacturer capacity charts)
 function LoadChartsManager({ craneId }: { craneId: string }) {
+  const { t } = useTranslation('common');
   const { counterweights, createCounterweight, refetch: refetchCounterweights, deleteCounterweight } = useCounterweights(craneId);
   const { loadCharts, loading, createLoadChart, updateLoadChart, deleteLoadChart, refetch: refetchLoadCharts } = useLoadCharts(craneId);
   const [isAdding, setIsAdding] = useState(false);
@@ -1261,10 +1263,10 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
       setIsAdding(false);
       setFormData({ counterweight_kg: 72, pastedTable: '' });
       setParsedTable(null);
-      alert('Tõstegraafik salvestatud!');
+      alert(t('crane.liftingChartSaved'));
     } catch (err) {
       console.error('Error saving load charts:', err);
-      alert('Salvestamine ebaõnnestus!');
+      alert(t('crane.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -1407,7 +1409,7 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
               disabled={saving || !parsedTable}
               style={{ padding: '4px 10px', border: 'none', borderRadius: '4px', backgroundColor: 'var(--modus-primary)', color: 'white', cursor: saving ? 'not-allowed' : 'pointer', opacity: (saving || !parsedTable) ? 0.7 : 1, fontSize: '11px' }}
             >
-              {saving ? 'Salvestamine...' : 'Salvesta'}
+              {saving ? t('status.saving') : t('buttons.save')}
             </button>
           </div>
         </div>
@@ -1514,6 +1516,7 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
 
 // Crane Import Tab Component
 function CraneImportTab({ userEmail }: { userEmail: string }) {
+  const { t } = useTranslation('common');
   const { createCrane, refetch: refetchCranes } = useCranes();
   const [importing, setImporting] = useState(false);
   const [importingFull, setImportingFull] = useState(false);
@@ -2021,7 +2024,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
 
     } catch (err: any) {
       console.error('Full crane import error:', err);
-      setFullImportResult({ cranes: [], error: 'Import ebaõnnestus: ' + (err.message || 'Tundmatu viga') });
+      setFullImportResult({ cranes: [], error: t('crane.importFailed', { message: err.message || t('crane.unknownError') }) });
     } finally {
       setImportingFull(false);
       if (fullFileInputRef.current) fullFileInputRef.current.value = '';
@@ -2101,7 +2104,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
 
           successCount++;
         } catch (err: any) {
-          errors.push('Rida ' + (i + 2) + ': ' + (err.message || 'Tundmatu viga'));
+          errors.push(t('crane.rowError', { row: i + 2, message: err.message || t('crane.unknownError') }));
           failedCount++;
         }
       }

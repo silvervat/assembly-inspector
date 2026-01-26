@@ -164,7 +164,7 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
       setSelectedCells(new Set());
     } catch (e) {
       console.error('Error loading data:', e);
-      setMessage({ text: 'Viga andmete laadimisel', type: 'error' });
+      setMessage({ text: t('status.loadError'), type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -530,12 +530,12 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
       if (errorCount > 0) {
         setMessage({ text: `${successCount} salvestatud, ${errorCount} viga`, type: 'error' });
       } else {
-        setMessage({ text: `${successCount} muudatust salvestatud`, type: 'success' });
+        setMessage({ text: t('status.changesSaved', { count: successCount }), type: 'success' });
         await loadData();
       }
     } catch (e) {
       console.error('Error saving changes:', e);
-      setMessage({ text: 'Viga salvestamisel', type: 'error' });
+      setMessage({ text: t('status.saveError'), type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -617,12 +617,12 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
           {modifiedCount > 0 && (
             <span className="modified-count">{modifiedCount} muudetud</span>
           )}
-          <button className="btn-refresh" onClick={loadData} disabled={saving} title="Värskenda">
+          <button className="btn-refresh" onClick={loadData} disabled={saving} title={t('buttons.refresh')}>
             <FiRefreshCw size={16} />
           </button>
           <button className="btn-save" onClick={saveChanges} disabled={saving || modifiedCount === 0}>
             <FiSave size={16} />
-            {saving ? 'Salvestan...' : 'Salvesta'}
+            {saving ? t('buttons.saving') : t('buttons.save')}
           </button>
           {onClose && (
             <button className="btn-close" onClick={onClose}>

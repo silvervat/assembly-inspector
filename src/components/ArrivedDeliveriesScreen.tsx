@@ -1766,10 +1766,10 @@ export default function ArrivedDeliveriesScreen({
         shareUrl
       });
 
-      setMessage('PDF raport loodud');
+      setMessage(t('arrivals.pdfCreated'));
     } catch (e: any) {
       console.error('Error generating PDF:', e);
-      setMessage('Viga PDF loomisel: ' + e.message);
+      setMessage(t('arrivals.pdfError', { message: e.message }));
     } finally {
       setGeneratingPdf(null);
     }
@@ -1798,7 +1798,7 @@ export default function ArrivedDeliveriesScreen({
       );
 
       if (result.error) {
-        setMessage('Viga jagamislingi loomisel: ' + result.error);
+        setMessage(t('arrivals.shareLinkError', { message: result.error }));
         return null;
       }
 
@@ -1813,7 +1813,7 @@ export default function ArrivedDeliveriesScreen({
       return null;
     } catch (e: any) {
       console.error('Error creating share link:', e);
-      setMessage('Viga jagamislingi loomisel: ' + e.message);
+      setMessage(t('arrivals.shareLinkError', { message: e.message }));
       return null;
     } finally {
       setGeneratingShareLink(null);
@@ -2033,7 +2033,7 @@ export default function ArrivedDeliveriesScreen({
       setMessage('Detail eemaldatud');
     } catch (e: any) {
       console.error('Error removing model-added item:', e);
-      setMessage('Viga detaili eemaldamisel: ' + e.message);
+      setMessage(t('arrivals.removeItemError', { message: e.message }));
     } finally {
       setSaving(false);
     }
@@ -2073,7 +2073,7 @@ export default function ArrivedDeliveriesScreen({
       setMessage(`Detail tõstetud tagasi veokisse ${sourceVehicle?.vehicle_code || ''}`);
     } catch (e: any) {
       console.error('Error removing added item:', e);
-      setMessage('Viga detaili eemaldamisel: ' + e.message);
+      setMessage(t('arrivals.removeItemError', { message: e.message }));
     } finally {
       setSaving(false);
     }
@@ -2135,7 +2135,7 @@ export default function ArrivedDeliveriesScreen({
       setMessage(typeLabels[photoType]);
     } catch (e: any) {
       console.error('Error uploading photo:', e);
-      setMessage('Viga foto üleslaadimisel: ' + e.message);
+      setMessage(t('arrivals.photoUploadError', { message: e.message }));
     } finally {
       setSaving(false);
       setUploadProgress(null);
@@ -2249,7 +2249,7 @@ export default function ArrivedDeliveriesScreen({
       setMessage('Detaili foto üles laetud');
     } catch (e: any) {
       console.error('Error uploading item photo:', e);
-      setMessage('Viga foto üleslaadimisel: ' + e.message);
+      setMessage(t('arrivals.photoUploadError', { message: e.message }));
     } finally {
       setSaving(false);
     }
@@ -3099,7 +3099,7 @@ export default function ArrivedDeliveriesScreen({
       );
 
       const vehicle = vehicles.find(v => v.id === arrival.vehicle_id);
-      const vehicleCode = vehicle?.vehicle_code || 'Tundmatu';
+      const vehicleCode = vehicle?.vehicle_code || t('arrivals.unknown');
 
       for (const conf of arrivalConfirmations) {
         const item = items.find(i => i.id === conf.item_id);
@@ -3368,7 +3368,7 @@ export default function ArrivedDeliveriesScreen({
       setColorMode(mode);
     } catch (e) {
       console.error('Error coloring model:', e);
-      setMessage('Viga mudeli värvimisel');
+      setMessage(t('arrivals.modelColorError'));
     } finally {
       setColoringInProgress(false);
     }
@@ -3524,7 +3524,7 @@ export default function ArrivedDeliveriesScreen({
 
     } catch (e) {
       console.error('Error coloring active vehicle:', e);
-      setMessage('Viga mudeli värvimisel');
+      setMessage(t('arrivals.modelColorError'));
     } finally {
       setColoringInProgress(false);
     }
@@ -4077,7 +4077,7 @@ export default function ArrivedDeliveriesScreen({
                                   arrivedVehicle.arrival_date || ''
                                 );
                                 if (result.error || !result.shareLink) {
-                                  setMessage('Viga lingi loomisel');
+                                  setMessage(t('arrivals.linkCreateError'));
                                 } else {
                                   const url = getShareUrl(result.shareLink.share_token);
                                   setShareLinks(prev => ({ ...prev, [arrivedVehicle.id]: { url, token: result.shareLink!.share_token } }));
@@ -4164,7 +4164,7 @@ export default function ArrivedDeliveriesScreen({
                                       cursor: 'pointer'
                                     }}
                                   >
-                                    {saving ? 'Salvestab...' : 'Salvesta'}
+                                    {saving ? t('buttons.savingDots') : t('buttons.save')}
                                   </button>
                                 </div>
                               </>
@@ -6894,7 +6894,7 @@ export default function ArrivedDeliveriesScreen({
                         setMessage('Detail märgitud leiduks ja veokis kinnitatuks');
                       } catch (e) {
                         console.error('Error saving unassigned arrival:', e);
-                        setMessage('Viga salvestamisel');
+                        setMessage(t('arrivals.saveError'));
                       } finally {
                         setSaving(false);
                       }
@@ -7212,7 +7212,7 @@ export default function ArrivedDeliveriesScreen({
                 disabled={!unplannedVehicleCode.trim() || saving}
                 onClick={createUnplannedVehicle}
               >
-                {saving ? 'Salvestab...' : 'Lisa veok'}
+                {saving ? t('buttons.savingDots') : t('arrivals.addVehicle')}
               </button>
             </div>
           </div>
@@ -7346,7 +7346,7 @@ export default function ArrivedDeliveriesScreen({
                     setMessage(`Lisatud ${modelSelectedItems.length + modelNewItems.length} detaili`);
                   } catch (e: any) {
                     console.error('Error adding items:', e);
-                    setMessage('Viga detailide lisamisel: ' + e.message);
+                    setMessage(t('arrivals.addItemsError', { message: e.message }));
                   } finally {
                     setSaving(false);
                   }
@@ -7605,7 +7605,7 @@ export default function ArrivedDeliveriesScreen({
                       setMessage('Andmed salvestatud');
                       setItemsListEditVehicleId(null);
                     } catch (e: any) {
-                      setMessage('Viga salvestamisel: ' + e.message);
+                      setMessage(t('arrivals.saveErrorMessage', { message: e.message }));
                     } finally {
                       setSaving(false);
                     }
@@ -7625,7 +7625,7 @@ export default function ArrivedDeliveriesScreen({
                   }}
                 >
                   <FiCheck size={14} />
-                  {saving ? 'Salvestab...' : 'Salvesta'}
+                  {saving ? t('buttons.savingDots') : t('buttons.save')}
                 </button>
               </div>
             </div>
@@ -7690,7 +7690,7 @@ export default function ArrivedDeliveriesScreen({
                 disabled={saving}
                 style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: '#10b981', color: 'white' }}
               >
-                {saving ? 'Salvestab...' : 'Salvesta ja jätka'}
+                {saving ? t('buttons.savingDots') : t('arrivals.saveAndContinue')}
               </button>
             </div>
           </div>
