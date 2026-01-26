@@ -454,5 +454,64 @@
   "positioner": {
     "qrScannerNotSupported": "QR scanner not supported. Use Chrome.",
     "scanQrFirst": "Scan QR code first"
+  },
+  "signature": {
+    "drawHelp": "Draw signature with mouse or finger",
+    "clear": "Clear"
+  },
+  "photoUploader": {
+    "processing": "Processing images...",
+    "dropOrClick": "Drag images here or click",
+    "maxFiles": "Max {{count}} images, automatic compression"
+  },
+  "gallery": {
+    "title": "Photos gallery",
+    "search": "Search...",
+    "allTypes": "All types",
+    "userPhotos": "User photos",
+    "view3d": "3D views",
+    "topviews": "Top views",
+    "arrivalPhotos": "Arrival photos",
+    "damages": "Damages",
+    "clearFilters": "Clear filters",
+    "loading": "Loading...",
+    "noPhotos": "No photos found",
+    "loadMore": "Load more",
+    "delete": "Delete",
+    "deleteConfirm": "Are you sure you want to delete this photo?",
+    "deleteError": "Failed to delete photo",
+    "loadError": "Error loading gallery"
+  },
+  "checkpoint": {
+    "inspected": "Inspected",
+    "edit": "Edit",
+    "checkpoints": "Checkpoints",
+    "requiredCompleted": "{{completed}}/{{total}} required completed",
+    "pending": "Pending",
+    "hideInstructions": "Hide instructions",
+    "showInstructions": "Show instructions",
+    "guideMaterials": "Guide materials:",
+    "selectResponse": "-- Select response --",
+    "commentAndPhotos": "Comment & add photos",
+    "photos": "Photos",
+    "minPhotos": "min {{count}}",
+    "added": "{{count}} added",
+    "addMinPhotos": "Add at least {{count}} photo(s)",
+    "comment": "Comment",
+    "commentRequired": "required",
+    "commentIsRequired": "Comment is required",
+    "cancel": "Cancel",
+    "saving": "Saving...",
+    "saveResponses": "Save responses",
+    "continueInspection": "Continue inspection",
+    "download": "Download",
+    "openNewWindow": "Open in new window",
+    "autoScreenshots": "Automatic screenshots",
+    "view3d": "3D view",
+    "topview": "Top view",
+    "fillRequired": "Please fill required checkpoint: {{name}}",
+    "addPhotosFor": "{{name}}: Add at least {{count}} photo(s)",
+    "addCommentFor": "{{name}}: Add comment",
+    "saveError": "Error saving: {{message}}"
   }
 }

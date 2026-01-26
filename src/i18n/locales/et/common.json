@@ -454,5 +454,64 @@
   "positioner": {
     "qrScannerNotSupported": "QR skänner pole toetatud. Kasuta Chrome.",
     "scanQrFirst": "Skänni esmalt QR kood"
+  },
+  "signature": {
+    "drawHelp": "Joonista allkiri hiirega või sõrmega",
+    "clear": "Tühista"
+  },
+  "photoUploader": {
+    "processing": "Töötlen pilte...",
+    "dropOrClick": "Lohista pildid siia või kliki",
+    "maxFiles": "Max {{count}} pilti, automaatne kompressioon"
+  },
+  "gallery": {
+    "title": "Piltide galerii",
+    "search": "Otsi...",
+    "allTypes": "Kõik tüübid",
+    "userPhotos": "Kasutaja pildid",
+    "view3d": "3D vaated",
+    "topviews": "Pealtvaated",
+    "arrivalPhotos": "Saabumise pildid",
+    "damages": "Kahjustused",
+    "clearFilters": "Tühista filtrid",
+    "loading": "Laadin...",
+    "noPhotos": "Pilte ei leitud",
+    "loadMore": "Laadi rohkem",
+    "delete": "Kustuta",
+    "deleteConfirm": "Kas oled kindel, et soovid selle foto kustutada?",
+    "deleteError": "Foto kustutamine ebaõnnestus",
+    "loadError": "Viga galerii laadimisel"
+  },
+  "checkpoint": {
+    "inspected": "Inspekteeritud",
+    "edit": "Muuda",
+    "checkpoints": "Kontrollpunktid",
+    "requiredCompleted": "{{completed}}/{{total}} kohustuslikku täidetud",
+    "pending": "Täitmata",
+    "hideInstructions": "Peida juhised",
+    "showInstructions": "Näita juhiseid",
+    "guideMaterials": "Juhendmaterjalid:",
+    "selectResponse": "-- Vali vastus --",
+    "commentAndPhotos": "Kommenteeri & lisa fotod",
+    "photos": "Fotod",
+    "minPhotos": "min {{count}}",
+    "added": "{{count}} lisatud",
+    "addMinPhotos": "Lisa vähemalt {{count}} foto(t)",
+    "comment": "Kommentaar",
+    "commentRequired": "kohustuslik",
+    "commentIsRequired": "Kommentaar on kohustuslik",
+    "cancel": "Tühista",
+    "saving": "Salvestan...",
+    "saveResponses": "Salvesta vastused",
+    "continueInspection": "Jätka inspekteerimisega",
+    "download": "Lae alla",
+    "openNewWindow": "Ava uues aknas",
+    "autoScreenshots": "Automaatsed ekraanipildid",
+    "view3d": "3D vaade",
+    "topview": "Pealtvaade",
+    "fillRequired": "Palun täida kohustuslik kontrollpunkt: {{name}}",
+    "addPhotosFor": "{{name}}: Lisa vähemalt {{count}} foto(t)",
+    "addCommentFor": "{{name}}: Lisa kommentaar",
+    "saveError": "Viga salvestamisel: {{message}}"
   }
 }

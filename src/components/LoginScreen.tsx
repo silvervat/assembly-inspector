@@ -1,10 +1,12 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface LoginScreenProps {
   onLogin: (pin: string) => Promise<void>;
 }
 
 export default function LoginScreen({ onLogin }: LoginScreenProps) {
+  const { t } = useTranslation('common');
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -13,7 +15,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     e.preventDefault();
     
     if (!pin || pin.length < 4) {
-      setError('PIN kood peab olema vähemalt 4 numbrit');
+      setError(t('login.pinMinLength'));
       return;
     }
 
@@ -23,7 +25,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     try {
       await onLogin(pin);
     } catch (err: any) {
-      setError(err.message || 'Sisselogimine ebaõnnestus');
+      setError(err.message || t('login.loginFailed'));
     } finally {
       setLoading(false);
     }
@@ -34,7 +36,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
       <div className="login-card">
         <div className="login-header">
           <h1>🔍 Assembly Inspector</h1>
-          <p>Sisesta oma PIN kood</p>
+          <p>{t('login.pinPlaceholder')}</p>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -42,7 +44,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
             type="password"
             inputMode="numeric"
             pattern="[0-9]*"
-            placeholder="PIN kood"
+            placeholder={t('login.pinCode')}
             value={pin}
             onChange={(e) => setPin(e.target.value)}
             disabled={loading}
@@ -53,7 +55,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
           {error && <div className="error-message">{error}</div>}
 
           <button type="submit" disabled={loading} className="login-button">
-            {loading ? 'Kontrollin...' : 'Logi sisse'}
+            {loading ? t('buttons.checking') : t('buttons.login')}
           </button>
         </form>
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase, InspectionResultPhotoExtended } from '../supabase';
 
 export interface InspectionGalleryProps {
@@ -24,6 +25,7 @@ export const InspectionGallery: React.FC<InspectionGalleryProps> = ({
   canDelete = false,
   onDeletePhoto
 }) => {
+  const { t } = useTranslation('common');
   const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,7 +59,7 @@ export const InspectionGallery: React.FC<InspectionGalleryProps> = ({
       setPhotos(data || []);
     } catch (err) {
       console.error('Error loading gallery:', err);
-      setError(err instanceof Error ? err.message : 'Viga galerii laadimisel');
+      setError(err instanceof Error ? err.message : t('gallery.loadError'));
     } finally {
       setLoading(false);
     }
@@ -116,7 +118,7 @@ export const InspectionGallery: React.FC<InspectionGalleryProps> = ({
   };
 
   const handleDelete = async (photoId: string) => {
-    if (!confirm('Kas oled kindel, et soovid selle foto kustutada?')) return;
+    if (!confirm(t('gallery.deleteConfirm'))) return;
 
     try {
       const { error: deleteError } = await supabase
@@ -131,7 +133,7 @@ export const InspectionGallery: React.FC<InspectionGalleryProps> = ({
       setSelectedPhoto(null);
     } catch (err) {
       console.error('Error deleting photo:', err);
-      alert('Foto kustutamine ebaõnnestus');
+      alert(t('gallery.deleteError'));
     }
   };
 
@@ -161,7 +163,7 @@ export const InspectionGallery: React.FC<InspectionGalleryProps> = ({
         }}
       >
         <h2 style={{ margin: 0, color: 'white', fontSize: '18px' }}>
-          Piltide galerii ({filteredPhotos.length})
+          {t('gallery.title')} ({filteredPhotos.length})
         </h2>
         <button
           onClick={onClose}
@@ -192,7 +194,7 @@ export const InspectionGallery: React.FC<InspectionGalleryProps> = ({
         {/* Search */}
         <input
           type="text"
-          placeholder="Otsi..."
+          placeholder={t('gallery.search')}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{
@@ -215,12 +217,12 @@ export const InspectionGallery: React.FC<InspectionGalleryProps> = ({
             fontSize: '14px'
           }}
         >
-          <option value="all">Kõik tüübid</option>
-          <option value="user">Kasutaja pildid</option>
-          <option value="snapshot_3d">3D vaated</option>
-          <option value="topview">Pealtvaated</option>
-          <option value="arrival">Saabumise pildid</option>
-          <option value="damage">Kahjustused</option>
+          <option value="all">{t('gallery.allTypes')}</option>
+          <option value="user">{t('gallery.userPhotos')}</option>
+          <option value="snapshot_3d">{t('gallery.view3d')}</option>
+          <option value="topview">{t('gallery.topviews')}</option>
+          <option value="arrival">{t('gallery.arrivalPhotos')}</option>
+          <option value="damage">{t('gallery.damages')}</option>
         </select>
 
         {/* Date filters */}
@@ -266,7 +268,7 @@ export const InspectionGallery: React.FC<InspectionGalleryProps> = ({
             fontSize: '14px'
           }}
         >
-          Tühista filtrid
+          {t('gallery.clearFilters')}
         </button>
       </div>
 
@@ -274,7 +276,7 @@ export const InspectionGallery: React.FC<InspectionGalleryProps> = ({
       <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
         {loading && (
           <div style={{ textAlign: 'center', padding: '40px', color: 'white' }}>
-            Laadin...
+            {t('gallery.loading')}
           </div>
         )}
 
@@ -286,7 +288,7 @@ export const InspectionGallery: React.FC<InspectionGalleryProps> = ({
 
         {!loading && !error && filteredPhotos.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px', color: '#9CA3AF' }}>
-            Pilte ei leitud
+            {t('gallery.noPhotos')}
           </div>
         )}
 
@@ -359,7 +361,7 @@ export const InspectionGallery: React.FC<InspectionGalleryProps> = ({
                 fontSize: '14px'
               }}
             >
-              Laadi rohkem
+              {t('gallery.loadMore')}
             </button>
           </div>
         )}
@@ -418,7 +420,7 @@ export const InspectionGallery: React.FC<InspectionGalleryProps> = ({
                     fontSize: '14px'
                   }}
                 >
-                  Kustuta
+                  {t('gallery.delete')}
                 </button>
               )}
               <button

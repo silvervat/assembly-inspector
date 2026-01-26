@@ -1,4 +1,5 @@
 import React, { useRef, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export interface ProcessedFile {
   file: File;
@@ -33,6 +34,7 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
   showProgress = true,
   accept = 'image/*'
 }) => {
+  const { t } = useTranslation('common');
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -238,7 +240,7 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
             </div>
 
             <p style={{ margin: '0 0 8px', color: '#374151', fontSize: '14px' }}>
-              Töötlen pilte...
+              {t('photoUploader.processing')}
             </p>
 
             {showProgress && (
@@ -290,11 +292,11 @@ export const PhotoUploader: React.FC<PhotoUploaderProps> = ({
             </div>
 
             <p style={{ margin: '0 0 4px', color: '#374151', fontSize: '14px', fontWeight: 500 }}>
-              Lohista pildid siia või kliki
+              {t('photoUploader.dropOrClick')}
             </p>
 
             <p style={{ margin: 0, color: '#6B7280', fontSize: '12px' }}>
-              Max {maxFiles} pilti, automaatne kompressioon
+              {t('photoUploader.maxFiles', { count: maxFiles })}
             </p>
           </>
         )}

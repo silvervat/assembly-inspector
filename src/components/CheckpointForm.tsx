@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FiCheck, FiX, FiCamera, FiMessageSquare, FiInfo, FiFileText, FiVideo, FiLink, FiPaperclip, FiEdit2, FiImage, FiChevronLeft, FiChevronRight, FiPlus } from 'react-icons/fi';
 import { supabase, InspectionCheckpoint, ResponseOption, InspectionResult, CheckpointAttachment, InspectionResultPhoto } from '../supabase';
 import { addToQueue } from '../utils/offlineQueue';
@@ -42,6 +43,7 @@ export default function CheckpointForm({
   onComplete,
   onCancel: _onCancel // Not used - edit mode cancellation handled internally
 }: CheckpointFormProps) {
+  const { t } = useTranslation('common');
   const [responses, setResponses] = useState<Record<string, CheckpointResponse>>({});
   const [expandedCheckpoint, setExpandedCheckpoint] = useState<string | null>(null);
   const [expandedInstructions, setExpandedInstructions] = useState<string | null>(null);
@@ -265,13 +267,13 @@ export default function CheckpointForm({
     if (requiresPhoto(checkpoint, response.responseValue)) {
       const minPhotos = getMinPhotos(checkpoint, response.responseValue);
       if ((response.photos?.length || 0) < minPhotos) {
-        return `Lisa vähemalt ${minPhotos} foto(t)`;
+        return t('checkpoint.addMinPhotos', { count: minPhotos });
       }
     }
 
     // Check comment requirement
     if (requiresComment(checkpoint, response.responseValue) && !response.comment?.trim()) {
-      return 'Lisa kommentaar';
+      return t('checkpoint.comment');
     }
 
     return null;
@@ -515,20 +517,20 @@ export default function CheckpointForm({
 
       const response = responses[checkpoint.id];
       if (!response || !response.responseValue) {
-        return `Palun täida kohustuslik kontrollpunkt: ${checkpoint.name}`;
+        return t('checkpoint.fillRequired', { name: checkpoint.name });
       }
 
       // Check photo requirement
       if (requiresPhoto(checkpoint, response.responseValue)) {
         const minPhotos = getMinPhotos(checkpoint, response.responseValue);
         if ((response.photos?.length || 0) < minPhotos) {
-          return `${checkpoint.name}: Lisa vähemalt ${minPhotos} foto(t)`;
+          return t('checkpoint.addPhotosFor', { name: checkpoint.name, count: minPhotos });
         }
       }
 
       // Check comment requirement
       if (requiresComment(checkpoint, response.responseValue) && !response.comment?.trim()) {
-        return `${checkpoint.name}: Lisa kommentaar`;
+        return t('checkpoint.addCommentFor', { name: checkpoint.name });
       }
     }
     return null;
@@ -718,7 +720,7 @@ export default function CheckpointForm({
 
     } catch (e: any) {
       console.error('Failed to save checkpoint results:', e);
-      setError(`Viga salvestamisel: ${e.message}`);
+      setError(t('checkpoint.saveError', { message: e.message }));
     } finally {
       setSubmitting(false);
     }
@@ -808,14 +810,14 @@ export default function CheckpointForm({
             <div className="completed-header">
               <div className="completed-badge">
                 <FiCheck className="completed-icon" />
-                <span>Inspekteeritud</span>
+                <span>{t('checkpoint.inspected')}</span>
               </div>
               <button
                 className="edit-btn"
                 onClick={() => setIsEditMode(true)}
               >
                 <FiEdit2 />
-                <span>Muuda</span>
+                <span>{t('checkpoint.edit')}</span>
               </button>
             </div>
             {inspectedBy && (
@@ -827,7 +829,7 @@ export default function CheckpointForm({
           </>
         ) : (
           <>
-            <h3>Kontrollpunktid</h3>
+            <h3>{t('checkpoint.checkpoints')}</h3>
             <div className="checkpoint-progress">
               <div className="progress-bar">
                 <div
@@ -836,7 +838,7 @@ export default function CheckpointForm({
                 />
               </div>
               <span className="progress-text">
-                {completedRequired}/{totalRequired} kohustuslikku täidetud
+                {t('checkpoint.requiredCompleted', { completed: completedRequired, total: totalRequired })}
               </span>
             </div>
           </>
@@ -895,7 +897,7 @@ export default function CheckpointForm({
                         {selectedOption.label}
                       </span>
                     ) : (
-                      <span className="status-badge pending">Täitmata</span>
+                      <span className="status-badge pending">{t('checkpoint.pending')}</span>
                     )}
                   </div>
                 )}
@@ -914,7 +916,7 @@ export default function CheckpointForm({
                         }}
                       >
                         <FiInfo />
-                        {showInstructions ? 'Peida juhised' : 'Näita juhiseid'}
+                        {showInstructions ? t('checkpoint.hideInstructions') : t('checkpoint.showInstructions')}
                       </button>
                     </div>
                   )}
@@ -929,7 +931,7 @@ export default function CheckpointForm({
                   {/* Attachments */}
                   {checkpoint.attachments && checkpoint.attachments.length > 0 && (
                     <div className="checkpoint-attachments">
-                      <div className="attachments-header">Juhendmaterjalid:</div>
+                      <div className="attachments-header">{t('checkpoint.guideMaterials')}</div>
                       <div className="attachments-list">
                         {checkpoint.attachments.map((att: CheckpointAttachment) => (
                           <a
@@ -1004,7 +1006,7 @@ export default function CheckpointForm({
                           handleResponseChange(checkpoint, e.target.value, opt?.label);
                         }}
                       >
-                        <option value="">-- Vali vastus --</option>
+                        <option value="">{t('checkpoint.selectResponse')}</option>
                         {checkpoint.response_options.map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
@@ -1033,7 +1035,7 @@ export default function CheckpointForm({
                           }}
                         >
                           <FiPlus size={14} />
-                          <span>Kommenteeri & lisa fotod</span>
+                          <span>{t('checkpoint.commentAndPhotos')}</span>
                         </button>
                       );
                     }
@@ -1048,8 +1050,8 @@ export default function CheckpointForm({
                               <div className="photos-header">
                                 <FiCamera />
                                 <span>
-                                  Fotod {needsPhoto && `(min ${minPhotos})`}
-                                  {response.photos?.length > 0 && ` - ${response.photos.length} lisatud`}
+                                  {t('checkpoint.photos')} {needsPhoto && `(${t('checkpoint.minPhotos', { count: minPhotos })})`}
+                                  {response.photos?.length > 0 && ` - ${t('checkpoint.added', { count: response.photos.length })}`}
                                 </span>
                               </div>
 
@@ -1082,7 +1084,7 @@ export default function CheckpointForm({
 
                               {needsPhoto && (response.photos?.length || 0) < minPhotos && (
                                 <div className="photos-warning">
-                                  ⚠️ Lisa vähemalt {minPhotos} foto(t)
+                                  ⚠️ {t('checkpoint.addMinPhotos', { count: minPhotos })}
                                 </div>
                               )}
                             </div>
@@ -1093,18 +1095,18 @@ export default function CheckpointForm({
                             <div className="checkpoint-comment">
                               <div className="comment-header">
                                 <FiMessageSquare />
-                                <span>Kommentaar {needsComment && '(kohustuslik)'}</span>
+                                <span>{t('checkpoint.comment')} {needsComment && `(${t('checkpoint.commentRequired')})`}</span>
                               </div>
                               <textarea
                                 className="comment-input"
-                                placeholder="Lisa kommentaar..."
+                                placeholder={t('checkpoint.comment') + '...'}
                                 value={response.comment || ''}
                                 onChange={(e) => handleCommentChange(checkpoint.id, e.target.value)}
                                 rows={3}
                               />
                               {needsComment && !response.comment?.trim() && (
                                 <div className="comment-warning">
-                                  ⚠️ Kommentaar on kohustuslik
+                                  ⚠️ {t('checkpoint.commentIsRequired')}
                                 </div>
                               )}
                             </div>
@@ -1167,7 +1169,7 @@ export default function CheckpointForm({
               <div className="auto-snapshots">
                 <div className="auto-snapshots-header">
                   <FiImage />
-                  <span>Automaatsed ekraanipildid</span>
+                  <span>{t('checkpoint.autoScreenshots')}</span>
                 </div>
                 <div className="auto-snapshots-grid">
                   {snapshot3d && (
@@ -1175,8 +1177,8 @@ export default function CheckpointForm({
                       className="auto-snapshot-thumb"
                       onClick={() => openPhotoInGallery(snapshot3d.url)}
                     >
-                      <img src={snapshot3d.thumbnail_url || snapshot3d.url} alt="3D vaade" />
-                      <span className="snapshot-label">3D vaade</span>
+                      <img src={snapshot3d.thumbnail_url || snapshot3d.url} alt={t('checkpoint.view3d')} />
+                      <span className="snapshot-label">{t('checkpoint.view3d')}</span>
                     </div>
                   )}
                   {topview && (
@@ -1184,8 +1186,8 @@ export default function CheckpointForm({
                       className="auto-snapshot-thumb"
                       onClick={() => openPhotoInGallery(topview.url)}
                     >
-                      <img src={topview.thumbnail_url || topview.url} alt="Pealtvaade" />
-                      <span className="snapshot-label">Pealtvaade</span>
+                      <img src={topview.thumbnail_url || topview.url} alt={t('checkpoint.topview')} />
+                      <span className="snapshot-label">{t('checkpoint.topview')}</span>
                     </div>
                   )}
                 </div>
@@ -1204,7 +1206,7 @@ export default function CheckpointForm({
               onClick={() => setIsEditMode(false)}
               disabled={submitting}
             >
-              Tühista
+              {t('checkpoint.cancel')}
             </button>
           )}
           <button
@@ -1212,7 +1214,7 @@ export default function CheckpointForm({
             onClick={handleSubmit}
             disabled={submitting || completionPercent < 100}
           >
-            {submitting ? 'Salvestan...' : 'Salvesta vastused'}
+            {submitting ? t('checkpoint.saving') : t('checkpoint.saveResponses')}
           </button>
         </div>
       )}
@@ -1230,7 +1232,7 @@ export default function CheckpointForm({
               }
             }}
           >
-            Jätka inspekteerimisega
+            {t('checkpoint.continueInspection')}
           </button>
         </div>
       )}
@@ -1279,7 +1281,7 @@ export default function CheckpointForm({
                 download={`checkpoint-photo-${Date.now()}.png`}
                 className="photo-modal-btn"
               >
-                ⬇ Lae alla
+                ⬇ {t('checkpoint.download')}
               </a>
               <a
                 href={modalGallery.photos[modalGallery.currentIndex]}
@@ -1287,7 +1289,7 @@ export default function CheckpointForm({
                 rel="noopener noreferrer"
                 className="photo-modal-btn"
               >
-                ↗ Ava uues aknas
+                ↗ {t('checkpoint.openNewWindow')}
               </a>
             </div>
           </div>
