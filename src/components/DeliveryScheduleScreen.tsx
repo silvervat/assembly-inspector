@@ -4067,10 +4067,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
 
         // Track original data if this is first update
-        if (!existingItem.original_date && !existingItem.first_imported_at) {
+        if (!existingItem.original_date) {
           updateData.original_date = existingItem.scheduled_date;
           updateData.original_vehicle_code = change.currentVehicleCode;
-          updateData.first_imported_at = existingItem.created_at;
         }
 
         // Increment version count
@@ -4407,7 +4406,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           // Track original data
           original_date: scheduledDate,
           original_vehicle_code: vehicle!.vehicle_code,
-          first_imported_at: new Date().toISOString(),
           schedule_version_count: 1
         };
       });
