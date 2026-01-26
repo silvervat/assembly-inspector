@@ -210,5 +210,128 @@
   "batchProgress": "{{current}}/{{total}} salvestatud",
   "sendingToDatabase": "Saadan andmebaasi...",
   "sentToDatabase": "Saadetud andmebaasi: {{count}} detaili",
-  "sendToDatabaseError": "Andmebaasi saatmine ebaõnnestus"
+  "sendToDatabaseError": "Andmebaasi saatmine ebaõnnestus",
+  "coordinateSettings": {
+    "title": "Koordinaatsüsteem & Kalibreerimine",
+    "loading": "Laadin...",
+    "error": "Viga seadete laadimisel",
+    "projectLocation": "Projekti asukoht",
+    "country": {
+      "label": "Riik",
+      "placeholder": "Vali riik..."
+    },
+    "system": {
+      "label": "Koordinaatsüsteem",
+      "local": "Kohalik (kalibreeritud)"
+    },
+    "modelUnits": {
+      "label": "Mudeli ühikud",
+      "millimeters": "mm",
+      "meters": "m",
+      "feet": "ft"
+    },
+    "hasRealCoords": {
+      "label": "Mudel on juba õigetes koordinaatides",
+      "hint": "Märgi see, kui mudel on eksporditud õiges riiklikus süsteemis"
+    },
+    "calibration": {
+      "status": "Kalibreerimise staatus",
+      "notCalibrated": "Kalibreerimine vajalik",
+      "inProgress": "Kalibreerimine pooleli",
+      "calibrated": "Kalibreeritud",
+      "pointsCount": "Kalibreerimispunkte",
+      "minRequired": "Vajalik miinimum",
+      "recommended": "Soovitatav",
+      "quality": "Kvaliteet",
+      "rmse": "RMSE",
+      "maxError": "Max viga",
+      "rotation": "Pööre",
+      "scale": "Skaala",
+      "excellent": "Suurepärane",
+      "good": "Hea",
+      "fair": "Rahuldav",
+      "poor": "Halb",
+      "lastCalibrated": "Viimati kalibreeritud",
+      "recalculate": "Arvuta transformatsioon uuesti",
+      "recalculating": "Arvutan...",
+      "testCoords": "Testi koordinaate"
+    },
+    "points": {
+      "title": "Kalibreerimispunktid",
+      "add": "Lisa punkt",
+      "addMore": "Lisa rohkem punkte täpsuse parandamiseks",
+      "name": "Nimi",
+      "modelCoords": "Mudel (X, Y)",
+      "gpsCoords": "GPS",
+      "error": "Viga",
+      "noPoints": "Punkte pole lisatud",
+      "delete": "Kustuta",
+      "confirmDelete": "Kas kustutada see punkt?"
+    },
+    "addPoint": {
+      "title": "Lisa kalibreerimispunkt",
+      "step1": {
+        "short": "Mudel",
+        "title": "Vali punkt mudelist",
+        "description": "Klõpsa mudelis objektil, mille juures seisad.",
+        "selectButton": "Vali punkt mudelist",
+        "picking": "Klõpsa mudelis...",
+        "selected": "Valitud punkt",
+        "object": "Objekt"
+      },
+      "step2": {
+        "short": "GPS",
+        "title": "Fikseeri GPS asukoht",
+        "description": "Seisa TÄPSELT valitud punkti kohal ja fikseeri oma GPS asukoht.",
+        "fixButton": "Fikseeri GPS asukoht",
+        "gpsCoords": "GPS koordinaadid",
+        "accuracy": "Täpsus"
+      },
+      "step3": {
+        "short": "Nimeta",
+        "title": "Nimeta punkt",
+        "name": "Nimi",
+        "namePlaceholder": "Nt: NW nurga post",
+        "notes": "Märkmed",
+        "notesPlaceholder": "Märkmed..."
+      },
+      "back": "Tagasi",
+      "cancel": "Tühista",
+      "save": "Salvesta punkt",
+      "saving": "Salvestan...",
+      "timeout": "Punkti valimine aegus",
+      "pickError": "Viga punkti valimisel",
+      "saveError": "Viga punkti salvestamisel"
+    },
+    "gpsFixer": {
+      "title": "GPS Asukoha Fikseerimine",
+      "signal": "GPS SIGNAAL",
+      "currentLocation": "PRAEGUNE ASUKOHT",
+      "latitude": "Laiuskraad",
+      "longitude": "Pikkuskraad",
+      "altitude": "Kõrgus",
+      "lastUpdate": "Viimane uuendus",
+      "justNow": "just praegu",
+      "waiting": "Ootan GPS signaali...",
+      "permissionDenied": "GPS ligipääs keelatud",
+      "requestPermission": "Küsi luba uuesti",
+      "tips": {
+        "title": "Parema täpsuse saamiseks",
+        "tip1": "Seisa paigal vähemalt 10 sekundit",
+        "tip2": "Hoia telefoni rinnakõrgusel",
+        "tip3": "Väldi kõrgeid hooneid ja puid"
+      },
+      "averaging": "Keskmista",
+      "measurements": "mõõtmist",
+      "fix": "FIKSEERI SEE ASUKOHT",
+      "cancel": "Tühista",
+      "accuracy": {
+        "excellent": "Suurepärane",
+        "good": "Hea",
+        "fair": "Rahuldav",
+        "poor": "Halb",
+        "none": "Puudub"
+      }
+    }
+  }
 }

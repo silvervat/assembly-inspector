@@ -191,5 +191,128 @@
   "batchProgress": "{{current}}/{{total}} saved",
   "sendingToDatabase": "Sending to database...",
   "sentToDatabase": "Sent to database: {{count}} items",
-  "sendToDatabaseError": "Failed to send to database"
+  "sendToDatabaseError": "Failed to send to database",
+  "coordinateSettings": {
+    "title": "Coordinate System & Calibration",
+    "loading": "Loading...",
+    "error": "Error loading settings",
+    "projectLocation": "Project location",
+    "country": {
+      "label": "Country",
+      "placeholder": "Select country..."
+    },
+    "system": {
+      "label": "Coordinate system",
+      "local": "Local (calibrated)"
+    },
+    "modelUnits": {
+      "label": "Model units",
+      "millimeters": "mm",
+      "meters": "m",
+      "feet": "ft"
+    },
+    "hasRealCoords": {
+      "label": "Model has real coordinates",
+      "hint": "Check this if model was exported in correct national system"
+    },
+    "calibration": {
+      "status": "Calibration status",
+      "notCalibrated": "Calibration required",
+      "inProgress": "Calibration in progress",
+      "calibrated": "Calibrated",
+      "pointsCount": "Calibration points",
+      "minRequired": "Minimum required",
+      "recommended": "Recommended",
+      "quality": "Quality",
+      "rmse": "RMSE",
+      "maxError": "Max error",
+      "rotation": "Rotation",
+      "scale": "Scale",
+      "excellent": "Excellent",
+      "good": "Good",
+      "fair": "Fair",
+      "poor": "Poor",
+      "lastCalibrated": "Last calibrated",
+      "recalculate": "Recalculate transformation",
+      "recalculating": "Calculating...",
+      "testCoords": "Test coordinates"
+    },
+    "points": {
+      "title": "Calibration points",
+      "add": "Add point",
+      "addMore": "Add more points for better accuracy",
+      "name": "Name",
+      "modelCoords": "Model (X, Y)",
+      "gpsCoords": "GPS",
+      "error": "Error",
+      "noPoints": "No points added",
+      "delete": "Delete",
+      "confirmDelete": "Delete this point?"
+    },
+    "addPoint": {
+      "title": "Add calibration point",
+      "step1": {
+        "short": "Model",
+        "title": "Select point from model",
+        "description": "Click on an object in the model where you are standing.",
+        "selectButton": "Select point from model",
+        "picking": "Click in model...",
+        "selected": "Selected point",
+        "object": "Object"
+      },
+      "step2": {
+        "short": "GPS",
+        "title": "Fix GPS location",
+        "description": "Stand EXACTLY at the selected point and fix your GPS location.",
+        "fixButton": "Fix GPS location",
+        "gpsCoords": "GPS coordinates",
+        "accuracy": "Accuracy"
+      },
+      "step3": {
+        "short": "Name",
+        "title": "Name the point",
+        "name": "Name",
+        "namePlaceholder": "E.g.: NW corner post",
+        "notes": "Notes",
+        "notesPlaceholder": "Notes..."
+      },
+      "back": "Back",
+      "cancel": "Cancel",
+      "save": "Save point",
+      "saving": "Saving...",
+      "timeout": "Point selection timed out",
+      "pickError": "Error selecting point",
+      "saveError": "Error saving point"
+    },
+    "gpsFixer": {
+      "title": "GPS Location Fix",
+      "signal": "GPS SIGNAL",
+      "currentLocation": "CURRENT LOCATION",
+      "latitude": "Latitude",
+      "longitude": "Longitude",
+      "altitude": "Altitude",
+      "lastUpdate": "Last update",
+      "justNow": "just now",
+      "waiting": "Waiting for GPS signal...",
+      "permissionDenied": "GPS access denied",
+      "requestPermission": "Request permission again",
+      "tips": {
+        "title": "For better accuracy",
+        "tip1": "Stand still for at least 10 seconds",
+        "tip2": "Hold phone at chest height",
+        "tip3": "Avoid tall buildings and trees"
+      },
+      "averaging": "Average",
+      "measurements": "measurements",
+      "fix": "FIX THIS LOCATION",
+      "cancel": "Cancel",
+      "accuracy": {
+        "excellent": "Excellent",
+        "good": "Good",
+        "fair": "Fair",
+        "poor": "Poor",
+        "none": "None"
+      }
+    }
+  }
 }

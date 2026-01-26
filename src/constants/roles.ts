@@ -148,6 +148,8 @@ export const SUPER_ADMIN_PERMISSIONS = {
   can_view_issues: true,
   can_edit_issues: true,
   can_delete_issues: true,
+  can_manage_coordinate_system: true,
+  can_manage_calibration: true,
 } as const;
 
 /**

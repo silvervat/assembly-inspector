@@ -12,6 +12,7 @@ import * as XLSX from 'xlsx-js-style';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
 import { USER_ROLES, EXTERNAL_ROLES, mapExternalRole, DEFAULT_USER_PERMISSIONS, DEFAULT_USER_ROLE } from '../constants/roles';
+import CoordinateSettingsPanel from './admin/CoordinateSettingsPanel';
 
 // Test result type for function explorer
 interface FunctionTestResult {
@@ -8360,6 +8361,15 @@ export default function AdminScreen({
                 />
               </div>
             </div>
+
+            {/* GPS COORDINATE SYSTEM & CALIBRATION section */}
+            {user && (
+              <CoordinateSettingsPanel
+                api={api}
+                projectId={projectId}
+                user={user}
+              />
+            )}
 
             {/* CALIBRATION section - Building orientation */}
             <div className="function-section" style={{ background: calibrationMode !== 'off' ? '#fef3c7' : undefined, border: calibrationMode !== 'off' ? '2px solid #f59e0b' : undefined }}>
