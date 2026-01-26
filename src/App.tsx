@@ -36,7 +36,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.996';
+export const APP_VERSION = '3.0.997';
 
 // Trimble Connect kasutaja info
 interface TrimbleConnectUser {

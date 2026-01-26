@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Inspection, InspectionPlanItem, InspectionTypeRef, InspectionCategory, InspectionCheckpoint, InspectionResult, INSPECTION_STATUS_COLORS } from '../supabase';
 import { InspectionMode } from './MainMenu';
@@ -98,6 +99,8 @@ export default function InspectorScreen({
   onNavigate,
   onColorModelWhite
 }: InspectorScreenProps) {
+  const { t } = useTranslation('inspection');
+
   // Režiimi nimi
   const getModeTitle = (mode: InspectionMode): string => {
     // If inspection_type mode, use the type name from props
@@ -105,14 +108,14 @@ export default function InspectorScreen({
       return inspectionTypeName;
     }
     const titles: Record<InspectionMode, string> = {
-      paigaldatud: 'Paigaldatud detailide inspektsioon',
-      poldid: 'Poltide inspektsioon',
-      muu: 'Muu inspektsioon',
-      mittevastavus: 'Mitte vastavus',
-      varviparandus: 'Värviparandused inspektsioon',
-      keevis: 'Keeviste inspektsioon',
-      paigaldatud_detailid: 'Paigaldatud detailid',
-      eos2: 'Saada EOS2 tabelisse',
+      paigaldatud: t('modes.paigaldatud', 'Paigaldatud detailide inspektsioon'),
+      poldid: t('modes.poldid', 'Poltide inspektsioon'),
+      muu: t('modes.muu', 'Muu inspektsioon'),
+      mittevastavus: t('modes.mittevastavus', 'Mitte vastavus'),
+      varviparandus: t('modes.varviparandus', 'Värviparandused inspektsioon'),
+      keevis: t('modes.keevis', 'Keeviste inspektsioon'),
+      paigaldatud_detailid: t('modes.paigaldatud_detailid', 'Paigaldatud detailid'),
+      eos2: t('modes.eos2', 'Saada EOS2 tabelisse'),
       admin: 'Administratsioon',
       inspection_plan: 'Inspektsiooni kava',
       inspection_plans: 'Kontrollplaanid',
