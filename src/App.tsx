@@ -17,6 +17,7 @@ import DeliveryShareGallery from './components/DeliveryShareGallery';
 import QRActivationPage from './components/QRActivationPage';
 import DeliverySpreadsheetEditor from './components/DeliverySpreadsheetEditor';
 import PositionerPopupPage from './components/PositionerPopupPage';
+import GpsSearchPopupPage from './components/GpsSearchPopupPage';
 import CranePlannerScreen from './components/CranePlannerScreen';
 import CraneLibraryScreen from './components/CraneLibraryScreen';
 import KeyboardShortcutsScreen from './components/KeyboardShortcutsScreen';
@@ -37,7 +38,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.3.1';
+export const APP_VERSION = '3.3.2';
 
 // Trimble Connect kasutaja info
 interface TrimbleConnectUser {
@@ -58,6 +59,7 @@ const popupType = new URLSearchParams(window.location.search).get('popup');
 const isPopupMode = popupType === 'delivery';
 const isSpreadsheetMode = popupType === 'spreadsheet';
 const isPositionerMode = popupType === 'positioner';
+const isGpsSearchMode = popupType === 'gps';
 const popupProjectId = new URLSearchParams(window.location.search).get('projectId') || '';
 const popupGuid = new URLSearchParams(window.location.search).get('guid') || '';
 const popupMark = new URLSearchParams(window.location.search).get('mark') || '';
@@ -2608,6 +2610,15 @@ export default function App() {
         projectId={popupProjectId}
         initialGuid={popupGuid}
         initialMark={popupMark}
+      />
+    );
+  }
+
+  // GPS Search popup mode - standalone GPS search window
+  if (isGpsSearchMode && popupProjectId) {
+    return (
+      <GpsSearchPopupPage
+        projectId={popupProjectId}
       />
     );
   }

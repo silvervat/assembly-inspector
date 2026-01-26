@@ -11,6 +11,7 @@ import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
 import { findObjectsInLoadedModels, selectObjectsByGuid } from '../utils/navigationHelper';
 import { isAdmin as checkIsAdmin } from '../constants/roles';
+import { wgs84ToBelgianLambert72 } from '../utils/coordinateUtils';
 
 // Constants
 const MAX_MARKUPS_PER_BATCH = 200;
@@ -145,6 +146,8 @@ export default function ToolsScreen({
 
   // GPS Location Search modal
   const [showGpsSearchModal, setShowGpsSearchModal] = useState(false);
+  const [gpsMarkersLoading, setGpsMarkersLoading] = useState(false);
+  const [gpsPositionsCount, setGpsPositionsCount] = useState(0);
 
   // Marker (Märgista) feature state
   const [markerCategories, setMarkerCategories] = useState<MarkerCategory[]>([
@@ -242,6 +245,88 @@ export default function ToolsScreen({
     setToast({ message, type });
     toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
   }, []);
+
+  // Load GPS positions count from database
+  const loadGpsPositionsCount = useCallback(async () => {
+    try {
+      const { count, error } = await supabase
+        .from('detail_positions')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', _projectId);
+
+      if (!error && count !== null) {
+        setGpsPositionsCount(count);
+      }
+    } catch (e) {
+      console.error('Error loading GPS positions count:', e);
+    }
+  }, [_projectId]);
+
+  // Load GPS positions count on mount and when projectId changes
+  useEffect(() => {
+    if (_projectId) {
+      loadGpsPositionsCount();
+    }
+  }, [_projectId, loadGpsPositionsCount]);
+
+  // Add GPS position markers to the model
+  const addGpsMarkersToModel = useCallback(async () => {
+    setGpsMarkersLoading(true);
+    try {
+      // Load all GPS positions for this project
+      const { data: positions, error } = await supabase
+        .from('detail_positions')
+        .select('guid, assembly_mark, latitude, longitude, accuracy, positioned_at')
+        .eq('project_id', _projectId);
+
+      if (error) throw error;
+      if (!positions || positions.length === 0) {
+        showToast('GPS positsioone ei leitud', 'error');
+        return;
+      }
+
+      const markups: any[] = [];
+
+      for (const pos of positions) {
+        // Convert WGS84 GPS coordinates to model coordinates (Belgian Lambert 72)
+        const modelCoords = wgs84ToBelgianLambert72(pos.latitude, pos.longitude);
+
+        // Create markup text
+        const text = [
+          pos.assembly_mark || pos.guid.substring(0, 8),
+          `📍 ${pos.latitude.toFixed(6)}, ${pos.longitude.toFixed(6)}`,
+          `±${pos.accuracy?.toFixed(0) || '?'}m`
+        ].join('\n');
+
+        markups.push({
+          text,
+          start: {
+            positionX: modelCoords.x,
+            positionY: modelCoords.y,
+            positionZ: 0
+          },
+          end: {
+            positionX: modelCoords.x,
+            positionY: modelCoords.y,
+            positionZ: 0
+          },
+          color: '#22c55e', // Green
+          leaderHeight: 5000 // mm
+        });
+      }
+
+      // Add markups to model using Trimble API
+      await (api.markup as any)?.addTextMarkup?.(markups);
+
+      showToast(`✅ ${markups.length} GPS markerit lisatud mudelile`, 'success');
+
+    } catch (e: any) {
+      console.error('Error adding GPS markers:', e);
+      showToast(`Viga markerite lisamisel: ${e.message}`, 'error');
+    } finally {
+      setGpsMarkersLoading(false);
+    }
+  }, [_projectId, api, showToast]);
 
   // Load markeerija presets from database
   const loadMarkeerijPresets = useCallback(async () => {
@@ -4144,16 +4229,57 @@ export default function ToolsScreen({
         {/* GPS Location Search - only visible if user has permission */}
         {(user.can_access_gps_search || user.can_access_admin || user.role === 'admin') && (
           <div className="tools-section">
-            <div
-              className="tools-section-header tools-section-header-clickable"
-              onClick={() => setShowGpsSearchModal(true)}
-              style={{ cursor: 'pointer' }}
-            >
+            <div className="tools-section-header">
               <FiMapPin size={18} style={{ color: '#16a34a' }} />
               <h3>GPS Location Search</h3>
-              <span style={{ marginLeft: 'auto', fontSize: 12, color: '#6b7280' }}>
-                Ava →
-              </span>
+            </div>
+            <p className="tools-section-desc">
+              Jälgi ja salvesta detailide GPS asukohti ehitusplatsil.
+              {gpsPositionsCount > 0 && (
+                <span style={{ marginLeft: 8, color: '#16a34a', fontWeight: 500 }}>
+                  ({gpsPositionsCount} positsiooni salvestatud)
+                </span>
+              )}
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => {
+                  // Open GPS search in new window (avoids iframe GPS restrictions)
+                  const baseUrl = window.location.origin + window.location.pathname;
+                  const gpsUrl = `${baseUrl}?popup=gps&projectId=${encodeURIComponent(_projectId)}`;
+                  window.open(gpsUrl, 'gps-search', 'width=900,height=700,scrollbars=yes,resizable=yes');
+                }}
+                className="tools-btn"
+                style={{ background: '#16a34a', color: 'white' }}
+              >
+                <FiMapPin size={14} />
+                Ava GPS otsing
+              </button>
+              {gpsPositionsCount > 0 && (
+                <button
+                  onClick={addGpsMarkersToModel}
+                  disabled={gpsMarkersLoading}
+                  className="tools-btn"
+                  style={{ background: '#2563eb', color: 'white' }}
+                >
+                  {gpsMarkersLoading ? (
+                    <FiRefreshCw size={14} className="spinning" />
+                  ) : (
+                    <FiTarget size={14} />
+                  )}
+                  Lisa markerid mudelisse ({gpsPositionsCount})
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  loadGpsPositionsCount();
+                  showToast('Positsioonide arv uuendatud', 'success');
+                }}
+                className="tools-btn"
+                title="Uuenda positsioonide arvu"
+              >
+                <FiRefreshCw size={14} />
+              </button>
             </div>
           </div>
         )}
