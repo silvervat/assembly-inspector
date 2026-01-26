@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import {
   supabase,
@@ -157,6 +158,8 @@ export default function IssuesScreen({
   onColorModelWhite,
   onOpenPartDatabase
 }: IssuesScreenProps) {
+  const { t } = useTranslation('common');
+
   // ============================================
   // STATE
   // ============================================
@@ -385,7 +388,7 @@ export default function IssuesScreen({
       await disableAssemblySelection();
 
       // Color model white first - get ALL objects from all models
-      setMessage('Värvin mudeli valgeks...');
+      setMessage(t('issues.coloringModelWhite'));
       const models = await (api.viewer as any).getModels();
       for (const model of models) {
         try {
@@ -406,7 +409,7 @@ export default function IssuesScreen({
       }
 
       // Color each sub-detail with its unique color
-      setMessage('Värvin alamdetaile...');
+      setMessage(t('issues.coloringSubDetails'));
       for (const subDetail of subDetailsList) {
         await api.viewer.setObjectState(
           { modelObjectIds: [{ modelId, objectRuntimeIds: [subDetail.id] }] },
@@ -714,7 +717,7 @@ export default function IssuesScreen({
 
     } catch (e: unknown) {
       console.error('Error loading issues:', e);
-      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+      setMessage(t('issues.errorGeneric', { message: e instanceof Error ? e.message : t('issues.unknownError') }));
     } finally {
       setLoading(false);
     }
@@ -772,7 +775,7 @@ export default function IssuesScreen({
   const colorModelByIssueStatus = useCallback(async () => {
     if (!api || !projectId) return;
 
-    setColoringStatus('Värvin mudelit...');
+    setColoringStatus(t('issues.coloringModel'));
 
     try {
       // 1. Load all model objects from database
@@ -964,7 +967,7 @@ export default function IssuesScreen({
 
     } catch (e: unknown) {
       console.error('Error selecting in model:', e);
-      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+      setMessage(t('issues.errorGeneric', { message: e instanceof Error ? e.message : t('issues.unknownError') }));
     } finally {
       setTimeout(() => {
         syncingToModelRef.current = false;
@@ -1017,7 +1020,7 @@ export default function IssuesScreen({
 
     } catch (e: unknown) {
       console.error('Error selecting status in model:', e);
-      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+      setMessage(t('issues.errorGeneric', { message: e instanceof Error ? e.message : t('issues.unknownError') }));
     } finally {
       setTimeout(() => {
         syncingToModelRef.current = false;
@@ -1076,7 +1079,7 @@ export default function IssuesScreen({
     } catch (e: unknown) {
       console.error('Error coloring status:', e);
       setColoringStatus('');
-      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+      setMessage(t('issues.errorGeneric', { message: e instanceof Error ? e.message : t('issues.unknownError') }));
     }
   }, [api, issues]);
 
@@ -1247,12 +1250,12 @@ export default function IssuesScreen({
 
     } catch (e: unknown) {
       console.error('Error saving issue:', e);
-      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+      setMessage(t('issues.errorGeneric', { message: e instanceof Error ? e.message : t('issues.unknownError') }));
     }
   }, [formData, editingIssue, newIssueObjects, pendingFiles, projectId, tcUserEmail, tcUserName, loadIssues, colorModelByIssueStatus]);
 
   const handleDeleteIssue = useCallback(async (issueId: string) => {
-    if (!confirm('Kas oled kindel, et soovid mittevastavust kustutada?')) return;
+    if (!confirm(t('issues.deleteConfirm'))) return;
 
     try {
       const { error } = await supabase
@@ -1270,7 +1273,7 @@ export default function IssuesScreen({
 
     } catch (e: unknown) {
       console.error('Error deleting issue:', e);
-      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+      setMessage(t('issues.errorGeneric', { message: e instanceof Error ? e.message : t('issues.unknownError') }));
     }
   }, [loadIssues, colorModelByIssueStatus]);
 
@@ -1297,7 +1300,7 @@ export default function IssuesScreen({
 
     } catch (e: unknown) {
       console.error('Error changing status:', e);
-      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+      setMessage(t('issues.errorGeneric', { message: e instanceof Error ? e.message : t('issues.unknownError') }));
     }
   }, [tcUserEmail, loadIssues, colorModelByIssueStatus, detailIssue]);
 
@@ -1381,7 +1384,7 @@ export default function IssuesScreen({
 
     } catch (e: unknown) {
       console.error('Error adding comment:', e);
-      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+      setMessage(t('issues.errorGeneric', { message: e instanceof Error ? e.message : t('issues.unknownError') }));
     }
   }, [newComment, detailIssue, tcUserEmail, tcUserName, projectId]);
 
@@ -1414,7 +1417,7 @@ export default function IssuesScreen({
 
     } catch (e: unknown) {
       console.error('Error editing comment:', e);
-      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+      setMessage(t('issues.errorGeneric', { message: e instanceof Error ? e.message : t('issues.unknownError') }));
     }
   }, [editingCommentId, editingCommentText, detailIssue]);
 
@@ -1450,7 +1453,7 @@ export default function IssuesScreen({
 
     } catch (e: unknown) {
       console.error('Error deleting comment:', e);
-      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+      setMessage(t('issues.errorGeneric', { message: e instanceof Error ? e.message : t('issues.unknownError') }));
     }
   }, [detailIssue]);
 
@@ -1522,7 +1525,7 @@ export default function IssuesScreen({
 
     } catch (e: unknown) {
       console.error('Error uploading photo:', e);
-      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+      setMessage(t('issues.errorGeneric', { message: e instanceof Error ? e.message : t('issues.unknownError') }));
     } finally {
       setUploadingPhoto(false);
     }
@@ -1596,7 +1599,7 @@ export default function IssuesScreen({
 
     } catch (e: unknown) {
       console.error('Error deleting attachment:', e);
-      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+      setMessage(t('issues.errorGeneric', { message: e instanceof Error ? e.message : t('issues.unknownError') }));
     }
   }, [detailIssue]);
 
@@ -1642,7 +1645,7 @@ export default function IssuesScreen({
 
     } catch (e: unknown) {
       console.error('Error assigning user:', e);
-      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+      setMessage(t('issues.errorGeneric', { message: e instanceof Error ? e.message : t('issues.unknownError') }));
     }
   }, [assigningIssueId, tcUserEmail, tcUserName, loadIssues]);
 
@@ -1664,7 +1667,7 @@ export default function IssuesScreen({
 
     } catch (e: unknown) {
       console.error('Error unassigning user:', e);
-      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+      setMessage(t('issues.errorGeneric', { message: e instanceof Error ? e.message : t('issues.unknownError') }));
     }
   }, [tcUserEmail, loadIssues]);
 
@@ -1819,7 +1822,7 @@ export default function IssuesScreen({
 
     } catch (e: unknown) {
       console.error('Error exporting to Excel:', e);
-      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+      setMessage(t('issues.errorGeneric', { message: e instanceof Error ? e.message : t('issues.unknownError') }));
     }
   }, [filteredIssues]);
 
