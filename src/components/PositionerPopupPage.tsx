@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FiCamera, FiX, FiLoader, FiCheck, FiMapPin } from 'react-icons/fi';
 import { supabase } from '../supabase';
 
@@ -9,6 +10,7 @@ interface PositionerPopupPageProps {
 }
 
 export default function PositionerPopupPage({ projectId, initialGuid, initialMark }: PositionerPopupPageProps) {
+  const { t } = useTranslation('common');
   const [scannerActive, setScannerActive] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [message, setMessage] = useState('');
@@ -59,7 +61,7 @@ export default function PositionerPopupPage({ projectId, initialGuid, initialMar
 
       if (!('BarcodeDetector' in window)) {
         addDebugLog('ERROR: BarcodeDetector not supported');
-        setMessage('QR skänner pole toetatud. Kasuta Chrome.');
+        setMessage(t('positionerPopup.qrNotSupported'));
         setScannerActive(false);
         return;
       }
@@ -117,7 +119,7 @@ export default function PositionerPopupPage({ projectId, initialGuid, initialMar
       }
     } catch (e: any) {
       addDebugLog(`ERROR: ${e.message}`);
-      setMessage(`Kaamera viga: ${e.message}`);
+      setMessage(t('positionerPopup.cameraError', { message: e.message }));
       setScannerActive(false);
     }
   }, [stopScanner]);
@@ -133,7 +135,7 @@ export default function PositionerPopupPage({ projectId, initialGuid, initialMar
 
     if (error || !qrCode) {
       addDebugLog('QR not found in database');
-      setMessage('QR koodi ei leitud');
+      setMessage(t('positionerPopup.qrNotFoundDb'));
       return;
     }
 
@@ -150,7 +152,7 @@ export default function PositionerPopupPage({ projectId, initialGuid, initialMar
     const targetMark = mark || currentMark;
 
     if (!targetGuid) {
-      setMessage('Skänni esmalt QR kood');
+      setMessage(t('positionerPopup.scanFirst'));
       return;
     }
 
@@ -159,7 +161,7 @@ export default function PositionerPopupPage({ projectId, initialGuid, initialMar
 
     if (!navigator.geolocation) {
       addDebugLog('GPS not supported');
-      setMessage('GPS pole toetatud');
+      setMessage(t('positionerPopup.gpsNotSupported'));
       setCapturing(false);
       return;
     }
@@ -189,7 +191,7 @@ export default function PositionerPopupPage({ projectId, initialGuid, initialMar
 
         if (saveError) {
           addDebugLog(`Save error: ${saveError.message}`);
-          setMessage('Viga salvestamisel');
+          setMessage(t('positionerPopup.saveError'));
         } else {
           addDebugLog('Saved successfully!');
           setMessage(`✅ Salvestatud: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
@@ -207,7 +209,7 @@ export default function PositionerPopupPage({ projectId, initialGuid, initialMar
       },
       (gpsError) => {
         addDebugLog(`GPS error: ${gpsError.message}`);
-        setMessage(`GPS viga: ${gpsError.message}`);
+        setMessage(t('positionerPopup.gpsError', { message: gpsError.message }));
         setCapturing(false);
       },
       {
@@ -239,10 +241,10 @@ export default function PositionerPopupPage({ projectId, initialGuid, initialMar
         }}>
           <h1 style={{ margin: 0, fontSize: '20px', color: '#1f2937' }}>
             <FiMapPin style={{ marginRight: '8px' }} />
-            Positsioneerija
+            {t('positionerPopup.title')}
           </h1>
           <p style={{ margin: '8px 0 0', fontSize: '13px', color: '#6b7280' }}>
-            Skänni QR ja salvesta GPS asukoht
+            {t('positionerPopup.description')}
           </p>
         </div>
 
@@ -262,7 +264,7 @@ export default function PositionerPopupPage({ projectId, initialGuid, initialMar
             {capturing && (
               <div style={{ marginTop: '8px', fontSize: '13px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <FiLoader className="spin" size={14} />
-                GPS asukohta määratakse...
+                {t('positionerPopup.gpsCapturing')}
               </div>
             )}
           </div>
@@ -291,7 +293,7 @@ export default function PositionerPopupPage({ projectId, initialGuid, initialMar
             }}
           >
             <FiCamera size={20} />
-            Skänni QR koodi
+            {t('positionerPopup.scanQrCode')}
           </button>
         ) : (
           <div style={{
@@ -337,7 +339,7 @@ export default function PositionerPopupPage({ projectId, initialGuid, initialMar
               }}
             >
               <FiX size={16} />
-              Sulge
+              {t('positionerPopup.close')}
             </button>
           </div>
         )}
@@ -381,7 +383,7 @@ export default function PositionerPopupPage({ projectId, initialGuid, initialMar
                   cursor: 'pointer'
                 }}
               >
-                Tühjenda
+                {t('positionerPopup.clearDebug')}
               </button>
             </div>
             {debugLogs.map((log, i) => (
@@ -416,7 +418,7 @@ export default function PositionerPopupPage({ projectId, initialGuid, initialMar
             cursor: 'pointer'
           }}
         >
-          Sulge aken
+          {t('positionerPopup.closeWindow')}
         </button>
       </div>
 
