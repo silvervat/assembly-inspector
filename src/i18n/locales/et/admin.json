@@ -135,5 +135,14 @@
   "selectFirstDetailFromModel": "Vali esmalt üks detail mudelist!",
   "basePointSet": "Baaspunkt määratud:\\nX: {{x}}mm\\nY: {{y}}mm\\nZ: {{z}}mm",
   "basePointCleared": "Baaspunkt tühjendatud",
-  "enterShapeCode": "Sisesta kujundi kood!"
+  "enterShapeCode": "Sisesta kujundi kood!",
+  "searchingObjects": "Otsin objekte...",
+  "foundAndSelected": "Leitud ja valitud {{count}} objekti",
+  "noValidGuidFound": "Ühtegi kehtivat GUID ei leitud",
+  "operationError": "Viga toimingu tegemisel",
+  "resetError": "Viga lähtestamisel",
+  "batchProgress": "{{current}}/{{total}} salvestatud",
+  "sendingToDatabase": "Saadan andmebaasi...",
+  "sentToDatabase": "Saadetud andmebaasi: {{count}} detaili",
+  "sendToDatabaseError": "Andmebaasi saatmine ebaõnnestus"
 }

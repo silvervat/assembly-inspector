@@ -135,5 +135,14 @@
   "selectFirstDetailFromModel": "Select one detail from model first!",
   "basePointSet": "Base point set:\\nX: {{x}}mm\\nY: {{y}}mm\\nZ: {{z}}mm",
   "basePointCleared": "Base point cleared",
-  "enterShapeCode": "Enter shape code!"
+  "enterShapeCode": "Enter shape code!",
+  "searchingObjects": "Searching objects...",
+  "foundAndSelected": "Found and selected {{count}} objects",
+  "noValidGuidFound": "No valid GUID found",
+  "operationError": "Error performing operation",
+  "resetError": "Error resetting",
+  "batchProgress": "{{current}}/{{total}} saved",
+  "sendingToDatabase": "Sending to database...",
+  "sentToDatabase": "Sent to database: {{count}} items",
+  "sendToDatabaseError": "Failed to send to database"
 }
