@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { TrimbleExUser, supabase, INSPECTION_STATUS_COLORS } from '../supabase';
 import {
   FiSearch, FiTool, FiBox, FiDroplet, FiZap, FiLayers,
@@ -68,6 +69,7 @@ export default function InspectionPlansScreen({
   matchedTypeIds = [],
   completedTypeIds = []
 }: InspectionPlansScreenProps) {
+  const { t } = useTranslation('inspection');
   const [loading, setLoading] = useState(true);
   const [inspectionTypes, setInspectionTypes] = useState<InspectionType[]>([]);
   const [typeStats, setTypeStats] = useState<Record<string, TypeStats>>({});
@@ -228,12 +230,12 @@ export default function InspectionPlansScreen({
         {loading ? (
           <div className="empty-state">
             <FiLoader className="spinner" size={48} />
-            <p>Laadin kontrollplaane...</p>
+            <p>{t('plans.loading')}</p>
           </div>
         ) : inspectionTypes.length === 0 ? (
           <div className="empty-state">
             <FiClipboard size={48} style={{ color: '#6b7280' }} />
-            <p>Selles projektis pole veel ühtegi kontrollplaani</p>
+            <p>{t('plans.noPlans')}</p>
             {checkIsAdmin(user) && (
               <p style={{ marginTop: '8px', fontSize: '14px', color: '#6b7280' }}>
                 Koosta inspektsiooni kava administratsiooni menüüst

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FiPlus, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage, FiEdit2, FiX, FiCheck, FiSearch, FiFilter, FiFileText, FiSettings, FiDownload } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, InspectionTypeRef, InspectionCategory, InspectionPlanItem, InspectionPlanStats, TrimbleExUser, INSPECTION_STATUS_COLORS } from '../supabase';
@@ -92,6 +93,7 @@ export default function InspectionPlanScreen({
   onColorModelWhite,
   onOpenPartDatabase
 }: InspectionPlanScreenProps) {
+  const { t } = useTranslation('inspection');
   // Property mappings for correct Tekla property reading
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
 
@@ -493,7 +495,7 @@ export default function InspectionPlanScreen({
       setInspectionTypes(data || []);
     } catch (error) {
       console.error('Failed to fetch inspection types:', error);
-      showMessage('❌ Viga inspektsioonitüüpide laadimisel', 'error');
+      showMessage(t('plan.errorLoadingTypes'), 'error');
     }
   };
 

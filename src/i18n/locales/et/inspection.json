@@ -147,7 +147,20 @@
     "checkpointUpdated": "Kontrollpunkt uuendatud",
     "errorSavingCheckpoint": "Viga kontrollpunkti salvestamisel",
     "checkpointDeleted": "Kontrollpunkt kustutatud",
-    "errorDeletingCheckpoint": "Viga kontrollpunkti kustutamisel"
+    "errorDeletingCheckpoint": "Viga kontrollpunkti kustutamisel",
+    "errorLoadingData": "Viga andmete laadimisel"
+  },
+  "plans": {
+    "loading": "Laadin kontrollplaane...",
+    "noPlans": "Selles projektis pole veel ühtegi kontrollplaani",
+    "createHint": "Koosta inspektsiooni kava administratsiooni menüüst",
+    "adminPanel": "Admin paneel"
+  },
+  "plan": {
+    "errorLoadingTypes": "❌ Viga inspektsioonitüüpide laadimisel",
+    "noObjectsToSave": "⚠️ Pole objekte salvestamiseks",
+    "allObjectsAlreadyInPlan": "⚠️ Kõik valitud objektid on juba kavas",
+    "objectsAdded": "✅ {{count}} objekti lisatud kavasse!"
   },
   "responses": {
     "ok": "Korras",
