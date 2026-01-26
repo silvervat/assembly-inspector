@@ -9,6 +9,7 @@ import InspectionConfigScreen from './InspectionConfigScreen';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
 import { downloadInspectionReportPDF, InspectionReportData } from '../utils/inspectionPdfGenerator';
+import { isAdminOrModerator } from '../constants/roles';
 
 // Checkpoint result data (from inspection_results table)
 interface CheckpointResultData {
@@ -1538,7 +1539,7 @@ export default function InspectionPlanScreen({
           Kava nimekiri ({planItems.length})
         </button>
         {/* Config button - only for admin/moderator */}
-        {user && (user.role === 'admin' || user.role === 'moderator') && (
+        {isAdminOrModerator(user) && (
           <button
             className="config-btn"
             onClick={() => setShowConfigScreen(true)}

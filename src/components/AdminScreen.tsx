@@ -10,6 +10,7 @@ import { belgianLambert72ToWGS84, wgs84ToBelgianLambert72, gpsDistance } from '.
 import * as XLSX from 'xlsx-js-style';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
+import { USER_ROLES, EXTERNAL_ROLES, mapExternalRole, DEFAULT_USER_PERMISSIONS, DEFAULT_USER_ROLE } from '../constants/roles';
 
 // Test result type for function explorer
 interface FunctionTestResult {
@@ -290,7 +291,7 @@ export default function AdminScreen({
   const [userFormData, setUserFormData] = useState({
     email: '',
     name: '',
-    role: 'inspector' as 'admin' | 'moderator' | 'inspector' | 'viewer',
+    role: DEFAULT_USER_ROLE as 'admin' | 'moderator' | 'inspector' | 'viewer',
     can_assembly_inspection: true,
     can_bolt_inspection: false,
     is_active: true,
@@ -2598,7 +2599,7 @@ export default function AdminScreen({
     setUserFormData({
       email: '',
       name: '',
-      role: 'inspector',
+      role: DEFAULT_USER_ROLE,
       can_assembly_inspection: true,
       can_bolt_inspection: false,
       is_active: true,
@@ -2681,9 +2682,9 @@ export default function AdminScreen({
         trimble_project_id: projectId,
         email: m.email.toLowerCase(),
         name: m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim() || null,
-        role: m.role === 'ADMIN' ? 'admin' : 'inspector',
-        can_assembly_inspection: true,
-        can_bolt_inspection: false,
+        role: mapExternalRole(m.role || ''),
+        can_assembly_inspection: DEFAULT_USER_PERMISSIONS.can_assembly_inspection,
+        can_bolt_inspection: DEFAULT_USER_PERMISSIONS.can_bolt_inspection,
         is_active: m.status === 'ACTIVE'
       }));
 
@@ -13146,8 +13147,8 @@ export default function AdminScreen({
                               borderRadius: '4px',
                               fontSize: '11px',
                               fontWeight: 500,
-                              backgroundColor: member.role === 'ADMIN' ? 'var(--warning-color)' : 'var(--bg-tertiary)',
-                              color: member.role === 'ADMIN' ? '#fff' : 'var(--text-primary)'
+                              backgroundColor: member.role === EXTERNAL_ROLES.ADMIN ? 'var(--warning-color)' : 'var(--bg-tertiary)',
+                              color: member.role === EXTERNAL_ROLES.ADMIN ? '#fff' : 'var(--text-primary)'
                             }}>
                               {member.role}
                             </span>
@@ -16096,10 +16097,10 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                           borderRadius: '12px',
                           fontSize: '11px',
                           fontWeight: '500',
-                          backgroundColor: user.role === 'admin' ? '#fef2f2' : user.role === 'moderator' ? '#fffbeb' : '#f0fdf4',
-                          color: user.role === 'admin' ? '#dc2626' : user.role === 'moderator' ? '#d97706' : '#16a34a'
+                          backgroundColor: user.role === USER_ROLES.ADMIN ? '#fef2f2' : user.role === USER_ROLES.MODERATOR ? '#fffbeb' : '#f0fdf4',
+                          color: user.role === USER_ROLES.ADMIN ? '#dc2626' : user.role === USER_ROLES.MODERATOR ? '#d97706' : '#16a34a'
                         }}>
-                          {user.role === 'admin' ? 'Admin' : user.role === 'moderator' ? 'Moderaator' : 'Inspektor'}
+                          {user.role === USER_ROLES.ADMIN ? 'Admin' : user.role === USER_ROLES.MODERATOR ? 'Moderaator' : 'Inspektor'}
                         </span>
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'center' }}>

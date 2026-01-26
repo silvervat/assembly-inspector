@@ -6,6 +6,7 @@ import {
 } from 'react-icons/fi';
 import { IconType } from 'react-icons';
 import PageHeader from './PageHeader';
+import { isAdmin as checkIsAdmin, isAdminOrModerator as checkIsAdminOrModerator } from '../constants/roles';
 
 interface InspectionPlansScreenProps {
   user: TrimbleExUser;
@@ -197,7 +198,7 @@ export default function InspectionPlansScreen({
       />
 
       {/* Admin/Moderator button for inspection admin panel */}
-      {(user.role === 'admin' || user.role === 'moderator') && onNavigate && (
+      {checkIsAdminOrModerator(user) && onNavigate && (
         <div style={{ padding: '8px 12px', borderBottom: '1px solid #e5e7eb' }}>
           <button
             onClick={() => onNavigate('inspection_admin')}
@@ -233,7 +234,7 @@ export default function InspectionPlansScreen({
           <div className="empty-state">
             <FiClipboard size={48} style={{ color: '#6b7280' }} />
             <p>Selles projektis pole veel ühtegi kontrollplaani</p>
-            {user.role === 'admin' && (
+            {checkIsAdmin(user) && (
               <p style={{ marginTop: '8px', fontSize: '14px', color: '#6b7280' }}>
                 Koosta inspektsiooni kava administratsiooni menüüst
               </p>

@@ -9,6 +9,7 @@ import PartDatabasePanel from './PartDatabasePanel';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
 import { findObjectsInLoadedModels, selectObjectsByGuid } from '../utils/navigationHelper';
+import { isAdmin as checkIsAdmin } from '../constants/roles';
 
 // Constants
 const MAX_MARKUPS_PER_BATCH = 200;
@@ -129,6 +130,7 @@ export default function ToolsScreen({
   initialExpandedSection
 }: ToolsScreenProps) {
   const { t } = useTranslation(['tools', 'common']);
+  const isAdmin = checkIsAdmin(user);
   const [boltLoading, setBoltLoading] = useState(false);
   const [removeLoading, setRemoveLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
@@ -299,7 +301,7 @@ export default function ToolsScreen({
         color_g: markeerijaSett.color.g,
         color_b: markeerijaSett.color.b,
         leader_height: markeerijaSett.leaderHeight,
-        is_shared: newPresetShared && user.role === 'admin',
+        is_shared: newPresetShared && isAdmin,
         created_by: user.email,
         created_by_name: user.name || user.email
       };
@@ -332,7 +334,7 @@ export default function ToolsScreen({
 
   // Toggle share status of a preset (admin only)
   const togglePresetShare = useCallback(async (presetId: string) => {
-    if (user.role !== 'admin') return;
+    if (!isAdmin) return;
     const preset = markeerijPresets.find(p => p.id === presetId);
     if (!preset || preset.created_by !== user.email) return;
 
@@ -3138,7 +3140,7 @@ export default function ToolsScreen({
                 {/* Share/Delete buttons for own presets - icon only */}
                 {selectedPresetId && markeerijPresets.find(p => p.id === selectedPresetId)?.created_by === user.email && (
                   <>
-                    {user.role === 'admin' && (
+                    {isAdmin && (
                       <button
                         onClick={() => togglePresetShare(selectedPresetId)}
                         style={{
@@ -3220,7 +3222,7 @@ export default function ToolsScreen({
                       }}
                       autoFocus
                     />
-                    {user.role === 'admin' && (
+                    {isAdmin && (
                       <label style={{
                         display: 'flex',
                         alignItems: 'center',

@@ -13,6 +13,7 @@ import {
   hideObjectsByGuid
 } from '../utils/navigationHelper';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
+import { isAdmin as checkIsAdmin } from '../constants/roles';
 import {
   FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
@@ -1024,7 +1025,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     if (!comment) return;
 
     // Check permission: admin can delete all, others only their own
-    const isAdmin = user?.role === 'admin';
+    const isAdmin = checkIsAdmin(user);
     const isOwner = comment.created_by === tcUserEmail;
 
     if (!isAdmin && !isOwner) {
@@ -8896,7 +8897,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   <div className="no-comments">Kommentaare pole</div>
                 ) : (
                   getCommentsFor(commentModalTarget.type, commentModalTarget.id).map(comment => {
-                    const isAdmin = user?.role === 'admin';
+                    const isAdmin = checkIsAdmin(user);
                     const isOwner = comment.created_by === tcUserEmail;
                     const canDelete = isAdmin || isOwner;
 

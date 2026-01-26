@@ -8,6 +8,7 @@ import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext'
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
+import { isAdmin as checkIsAdmin, isAdminOrModerator as checkIsAdminOrModerator } from '../constants/roles';
 // Photo compression is now handled inline - no need for PhotoUploader
 
 // ============================================
@@ -793,7 +794,8 @@ export default function InstallationsScreen({
   const [showMarkInstalledModal, setShowMarkInstalledModal] = useState(false);
   const [markInstalledItems, setMarkInstalledItems] = useState<Preassembly[]>([]);
 
-  const isAdminOrModerator = user.role === 'admin' || user.role === 'moderator';
+  const isAdminOrModerator = checkIsAdminOrModerator(user);
+  const isAdmin = checkIsAdmin(user);
 
   // Check assembly selection status
   const checkAssemblySelection = async () => {
@@ -1759,7 +1761,7 @@ export default function InstallationsScreen({
 
   // Lock a month (admin only)
   const lockMonth = async (monthKey: string) => {
-    if (user.role !== 'admin') {
+    if (!isAdmin) {
       setMessage(t('installation:screen.onlyAdminsCanLockMonth'));
       return;
     }
@@ -1790,7 +1792,7 @@ export default function InstallationsScreen({
 
   // Unlock a month (admin only)
   const unlockMonth = async (monthKey: string) => {
-    if (user.role !== 'admin') {
+    if (!isAdmin) {
       setMessage(t('installation:screen.onlyAdminsCanUnlockMonth'));
       return;
     }
@@ -1855,7 +1857,7 @@ export default function InstallationsScreen({
 
   // Lock a day
   const lockDay = async (dayKey: string) => {
-    if (user.role !== 'admin') {
+    if (!isAdmin) {
       setMessage(t('installation:screen.onlyAdminsCanLockDay'));
       return;
     }
@@ -1890,7 +1892,7 @@ export default function InstallationsScreen({
 
   // Unlock a day
   const unlockDay = async (dayKey: string) => {
-    if (user.role !== 'admin') {
+    if (!isAdmin) {
       setMessage(t('installation:screen.onlyAdminsCanUnlockDay'));
       return;
     }
@@ -3282,7 +3284,7 @@ export default function InstallationsScreen({
 
     // Check if the month is locked
     const monthKey = getMonthKey(installDate);
-    if (isMonthLocked(monthKey) && user.role !== 'admin') {
+    if (isMonthLocked(monthKey) && !isAdmin) {
       const lockInfo = getMonthLockInfo(monthKey);
       setMessage(t('installation:screen.monthLockedBy', { month: monthKey, by: lockInfo?.locked_by_name || lockInfo?.locked_by || t('installation:screen.lockedByAdmin') }));
       return;
@@ -5754,7 +5756,7 @@ export default function InstallationsScreen({
                   <FiEdit2 size={14} />
                   <span>Muuda päeva ({day.items.length})</span>
                 </button>
-                {user.role === 'admin' && !monthLocks.has(day.dayKey.substring(0, 7)) && (
+                {isAdmin && !monthLocks.has(day.dayKey.substring(0, 7)) && (
                   <button
                     onClick={() => dayLocks.has(day.dayKey) ? unlockDay(day.dayKey) : lockDay(day.dayKey)}
                   >
@@ -5771,7 +5773,7 @@ export default function InstallationsScreen({
                     )}
                   </button>
                 )}
-                {user.role === 'admin' && monthLocks.has(day.dayKey.substring(0, 7)) && (
+                {isAdmin && monthLocks.has(day.dayKey.substring(0, 7)) && (
                   <button disabled title="Kuu on lukustatud">
                     <FiLock size={14} />
                     <span>Päev lukustatud (kuu lukus)</span>
@@ -5962,7 +5964,7 @@ export default function InstallationsScreen({
                   <FiEdit2 size={14} />
                   <span>Muuda päeva ({day.items.length})</span>
                 </button>
-                {user.role === 'admin' && !monthLocks.has(day.dayKey.substring(0, 7)) && (
+                {isAdmin && !monthLocks.has(day.dayKey.substring(0, 7)) && (
                   <button
                     onClick={() => dayLocks.has(day.dayKey) ? unlockDay(day.dayKey) : lockDay(day.dayKey)}
                   >
@@ -5979,7 +5981,7 @@ export default function InstallationsScreen({
                     )}
                   </button>
                 )}
-                {user.role === 'admin' && monthLocks.has(day.dayKey.substring(0, 7)) && (
+                {isAdmin && monthLocks.has(day.dayKey.substring(0, 7)) && (
                   <button disabled title="Kuu on lukustatud">
                     <FiLock size={14} />
                     <span>Päev lukustatud (kuu lukus)</span>
@@ -8258,7 +8260,7 @@ export default function InstallationsScreen({
                       </button>
                       {monthMenuOpen === month.monthKey && (
                         <div className="month-menu-dropdown">
-                          {user.role === 'admin' && (
+                          {isAdmin && (
                             <>
                               {isMonthLocked(month.monthKey) ? (
                                 <button onClick={() => unlockMonth(month.monthKey)}>

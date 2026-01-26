@@ -8,6 +8,7 @@ import { PiCraneTowerFill } from 'react-icons/pi';
 import { InspectionMode } from './MainMenu';
 import { supabase, TrimbleExUser } from '../supabase';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
+import { isAdmin as checkIsAdmin } from '../constants/roles';
 
 interface PageHeaderProps {
   title: string;
@@ -81,7 +82,7 @@ export default function PageHeader({
   // Inspection types state
   const [inspectionTypes, setInspectionTypes] = useState<Array<{ id: string; code: string; name: string; color: string }>>([]);
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = checkIsAdmin(user);
 
   // Load inspection types for submenu
   useEffect(() => {

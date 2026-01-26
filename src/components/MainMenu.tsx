@@ -8,6 +8,7 @@ import {
 } from 'react-icons/fi';
 import { PiCraneTowerFill } from 'react-icons/pi';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
+import { isAdmin as checkIsAdmin } from '../constants/roles';
 
 export type InspectionMode =
   | 'paigaldatud'
@@ -52,7 +53,7 @@ export default function MainMenu({
   onOpenSettings
 }: MainMenuProps) {
   const { t, i18n } = useTranslation();
-  const isAdmin = user.role === 'admin';
+  const isAdmin = checkIsAdmin(user);
   const [activeIssuesCount, setActiveIssuesCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
