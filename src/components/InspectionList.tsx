@@ -146,7 +146,7 @@ function groupByProduct(inspections: InspectionItem[]): ProductGroup[] {
 
   for (const insp of inspections) {
     const productKey = insp.product_name || '_unknown';
-    const productLabel = insp.product_name || 'Tundmatu';
+    const productLabel = insp.product_name || '_unknown';
 
     if (!productMap[productKey]) {
       productMap[productKey] = {
@@ -465,7 +465,7 @@ export default function InspectionList({
 
   // Delete a single photo from a result
   const deletePhoto = async (photoId: string) => {
-    if (!confirm('Kas oled kindel, et soovid selle foto kustutada?')) {
+    if (!confirm(t('inspectionList.deletePhotoConfirm'))) {
       return;
     }
 
@@ -696,24 +696,24 @@ export default function InspectionList({
             {/* Location info */}
             {(insp.cast_unit_position_code || insp.cast_unit_bottom_elevation || insp.cast_unit_top_elevation || insp.parent_assembly_mark) && (
               <span className="inspection-location" style={{ fontSize: '10px', color: '#94a3b8', marginLeft: '8px' }}>
-                {insp.cast_unit_position_code && <span title="Telje asukoht">📍{insp.cast_unit_position_code}</span>}
-                {insp.cast_unit_bottom_elevation && <span title="Alumine kõrgus"> ⬇️{insp.cast_unit_bottom_elevation}</span>}
-                {insp.cast_unit_top_elevation && <span title="Ülemine kõrgus"> ⬆️{insp.cast_unit_top_elevation}</span>}
-                {insp.parent_assembly_mark && <span title="Ema detaili mark"> 🏠{insp.parent_assembly_mark}</span>}
+                {insp.cast_unit_position_code && <span title={t('inspectionList.axisLocation')}>📍{insp.cast_unit_position_code}</span>}
+                {insp.cast_unit_bottom_elevation && <span title={t('inspectionList.lowerHeight')}> ⬇️{insp.cast_unit_bottom_elevation}</span>}
+                {insp.cast_unit_top_elevation && <span title={t('inspectionList.upperHeight')}> ⬆️{insp.cast_unit_top_elevation}</span>}
+                {insp.parent_assembly_mark && <span title={t('inspectionList.parentMark')}> 🏠{insp.parent_assembly_mark}</span>}
               </span>
             )}
           </div>
           <button
             className="inspection-info-btn"
             onClick={(e) => handleShowDetail(e, insp)}
-            title="Näita detaile"
+            title={t('inspectionList.showDetails')}
           >
             <FiInfo size={16} />
           </button>
           <button
             className="inspection-zoom-btn"
             onClick={(e) => handleZoom(e, insp)}
-            title="Zoom elemendile"
+            title={t('inspectionList.zoomToElement')}
           >
             <FiZoomIn size={16} />
           </button>
@@ -734,13 +734,13 @@ export default function InspectionList({
             className="date-group-main"
             onClick={() => handleProductClick(product)}
           >
-            <span className="date-label">{product.productLabel}</span>
+            <span className="date-label">{product.productKey === '_unknown' ? t('inspectionList.unknown') : product.productLabel}</span>
             <span className="date-count">{product.items.length}</span>
           </div>
           <button
             className="date-group-zoom-btn"
             onClick={(e) => handleProductZoom(e, product)}
-            title="Märgista ja zoom kõik toote detailid"
+            title={t('inspectionList.zoomToProduct')}
           >
             <FiZoomIn size={16} />
           </button>
@@ -791,10 +791,10 @@ export default function InspectionList({
             {/* Location info */}
             {(insp.cast_unit_position_code || insp.cast_unit_bottom_elevation || insp.cast_unit_top_elevation || insp.parent_assembly_mark) && (
               <span className="inspection-location" style={{ fontSize: '10px', color: '#94a3b8', marginLeft: '8px' }}>
-                {insp.cast_unit_position_code && <span title="Telje asukoht">📍{insp.cast_unit_position_code}</span>}
-                {insp.cast_unit_bottom_elevation && <span title="Alumine kõrgus"> ⬇️{insp.cast_unit_bottom_elevation}</span>}
-                {insp.cast_unit_top_elevation && <span title="Ülemine kõrgus"> ⬆️{insp.cast_unit_top_elevation}</span>}
-                {insp.parent_assembly_mark && <span title="Ema detaili mark"> 🏠{insp.parent_assembly_mark}</span>}
+                {insp.cast_unit_position_code && <span title={t('inspectionList.axisLocation')}>📍{insp.cast_unit_position_code}</span>}
+                {insp.cast_unit_bottom_elevation && <span title={t('inspectionList.lowerHeight')}> ⬇️{insp.cast_unit_bottom_elevation}</span>}
+                {insp.cast_unit_top_elevation && <span title={t('inspectionList.upperHeight')}> ⬆️{insp.cast_unit_top_elevation}</span>}
+                {insp.parent_assembly_mark && <span title={t('inspectionList.parentMark')}> 🏠{insp.parent_assembly_mark}</span>}
               </span>
             )}
             {mode === 'all' && (
@@ -810,14 +810,14 @@ export default function InspectionList({
           <button
             className="inspection-info-btn"
             onClick={(e) => handleShowDetail(e, insp)}
-            title="Näita detaile"
+            title={t('inspectionList.showDetails')}
           >
             <FiInfo size={16} />
           </button>
           <button
             className="inspection-zoom-btn"
             onClick={(e) => handleZoom(e, insp)}
-            title="Zoom elemendile"
+            title={t('inspectionList.zoomToElement')}
           >
             <FiZoomIn size={16} />
           </button>
@@ -844,7 +844,7 @@ export default function InspectionList({
           <button
             className="date-group-zoom-btn"
             onClick={(e) => handleDayZoom(e, day)}
-            title="Märgista ja zoom kõik päeva detailid"
+            title={t('inspectionList.zoomToDay')}
           >
             <FiZoomIn size={16} />
           </button>
@@ -871,7 +871,7 @@ export default function InspectionList({
     <div className="inspection-list-container">
       <div className="inspection-list-header">
         <h3>
-          {mode === 'mine' ? '🔴 Minu inspektsioonid' : mode === 'todo' ? '🟡 Tegemata' : '🟢 Kõik inspektsioonid'}
+          {mode === 'mine' ? `🔴 ${t('inspectionList.myInspections')}` : mode === 'todo' ? `🟡 ${t('inspectionList.notDone')}` : `🟢 ${t('inspectionList.allInspections')}`}
           <span className="inspection-count">
             ({inspections.length}{totalCount > inspections.length ? ` / ${totalCount}` : ''})
           </span>
@@ -906,7 +906,7 @@ export default function InspectionList({
                 <button
                   className="month-group-zoom-btn"
                   onClick={(e) => handleMonthZoom(e, month)}
-                  title="Märgista ja zoom kõik kuu detailid"
+                  title={t('inspectionList.zoomToMonth')}
                 >
                   <FiZoomIn size={18} />
                 </button>
@@ -927,10 +927,10 @@ export default function InspectionList({
         {inspections.length === 0 && (
           <div className="inspection-list-empty">
             {mode === 'mine'
-              ? 'Sul pole veel inspektsioone'
+              ? t('inspectionList.noInspections')
               : mode === 'todo'
-              ? 'Tegemata üksusi pole'
-              : 'Inspektsioone pole veel tehtud'}
+              ? t('inspectionList.noTodoItems')
+              : t('inspectionList.noInspectionsDone')}
           </div>
         )}
 
@@ -942,7 +942,7 @@ export default function InspectionList({
               onClick={onLoadMore}
               disabled={loadingMore}
             >
-              {loadingMore ? 'Laadin...' : `Lae juurde (${totalCount - inspections.length} veel)`}
+              {loadingMore ? t('inspectionList.loading') : t('inspectionList.loadMore', { count: totalCount - inspections.length })}
             </button>
           </div>
         )}
@@ -953,13 +953,13 @@ export default function InspectionList({
         <div className="inspection-detail-overlay" onClick={closeDetailModal}>
           <div className="inspection-detail-modal inspection-detail-modal-large" onClick={e => e.stopPropagation()}>
             <div className="inspection-detail-header">
-              <h4>{selectedInspection.assembly_mark || 'Detail'}</h4>
+              <h4>{selectedInspection.assembly_mark || t('inspectionList.detail')}</h4>
               <div className="inspection-detail-header-actions">
                 {checkpointResults.length > 0 && !editMode && canEditInspection(selectedInspection) && (
                   <button
                     className="inspection-edit-btn"
                     onClick={startEditMode}
-                    title="Muuda"
+                    title={t('buttons.edit')}
                   >
                     <FiEdit2 size={16} />
                   </button>
@@ -975,19 +975,19 @@ export default function InspectionList({
 
             <div className="inspection-detail-content">
               <div className="detail-row">
-                <span className="detail-label">Inspekteerija:</span>
+                <span className="detail-label">{t('inspectionList.inspector')}</span>
                 <span className="detail-value">{selectedInspection.inspector_name}</span>
               </div>
 
               {selectedInspection.user_email && (
                 <div className="detail-row">
-                  <span className="detail-label">E-post:</span>
+                  <span className="detail-label">{t('inspectionList.email')}</span>
                   <span className="detail-value">{selectedInspection.user_email}</span>
                 </div>
               )}
 
               <div className="detail-row">
-                <span className="detail-label">Kuupäev:</span>
+                <span className="detail-label">{t('inspectionList.date')}</span>
                 <span className="detail-value">
                   {new Date(selectedInspection.inspected_at).toLocaleString('et-EE')}
                 </span>
@@ -995,7 +995,7 @@ export default function InspectionList({
 
               {selectedInspection.file_name && (
                 <div className="detail-row">
-                  <span className="detail-label">Fail:</span>
+                  <span className="detail-label">{t('inspectionList.file')}</span>
                   <span className="detail-value">{selectedInspection.file_name}</span>
                 </div>
               )}
@@ -1012,7 +1012,7 @@ export default function InspectionList({
               {/* Photos section */}
               {(selectedInspection.photo_urls?.length || 0) > 0 && (
                 <div className="detail-photos">
-                  <span className="detail-label">Fotod:</span>
+                  <span className="detail-label">{t('inspectionList.photos')}</span>
                   <div className="detail-photo-grid">
                     {selectedInspection.photo_urls?.map((url, idx) => (
                       <div
@@ -1030,14 +1030,14 @@ export default function InspectionList({
               {/* Checkpoint Results Section */}
               {loadingResults && (
                 <div className="checkpoint-results-loading">
-                  Laadin kontrollpunkte...
+                  {t('inspectionList.loadingCheckpoints')}
                 </div>
               )}
 
               {!loadingResults && checkpointResults.length > 0 && (
                 <div className="checkpoint-results-section">
                   <div className="checkpoint-results-header">
-                    <span className="checkpoint-results-title">Kontrollpunktid ({checkpointResults.length})</span>
+                    <span className="checkpoint-results-title">{t('inspectionList.checkpointsCount', { count: checkpointResults.length })}</span>
                     {editMode && (
                       <div className="checkpoint-edit-actions">
                         <button
@@ -1046,14 +1046,14 @@ export default function InspectionList({
                           disabled={savingResults}
                         >
                           <FiSave size={14} />
-                          {savingResults ? 'Salvestan...' : 'Salvesta'}
+                          {savingResults ? t('buttons.saving') : t('buttons.save')}
                         </button>
                         <button
                           className="checkpoint-cancel-btn"
                           onClick={cancelEditMode}
                           disabled={savingResults}
                         >
-                          Tühista
+                          {t('buttons.cancel')}
                         </button>
                       </div>
                     )}
@@ -1068,13 +1068,13 @@ export default function InspectionList({
                         <div key={result.id} className="checkpoint-result-item">
                           <div className="checkpoint-result-header">
                             <span className="checkpoint-result-name">
-                              {result.checkpoint_name || result.checkpoint_code || 'Kontrollpunkt'}
+                              {result.checkpoint_name || result.checkpoint_code || t('inspectionList.checkpoint')}
                             </span>
                             {editMode && canDeleteResult() && (
                               <button
                                 className="checkpoint-delete-btn"
                                 onClick={() => deleteResult(result.id)}
-                                title="Kustuta"
+                                title={t('buttons.delete')}
                               >
                                 <FiTrash2 size={14} />
                               </button>
@@ -1084,7 +1084,7 @@ export default function InspectionList({
                           {editMode ? (
                             <div className="checkpoint-result-edit">
                               <div className="checkpoint-edit-field">
-                                <label>Staatus:</label>
+                                <label>{t('inspectionList.status')}</label>
                                 <select
                                   value={editedResults[result.id]?.response_value || result.response_value}
                                   onChange={(e) => setEditedResults(prev => ({
@@ -1103,7 +1103,7 @@ export default function InspectionList({
                                 </select>
                               </div>
                               <div className="checkpoint-edit-field">
-                                <label>Kommentaar:</label>
+                                <label>{t('inspectionList.comment')}</label>
                                 <textarea
                                   value={editedResults[result.id]?.comment || ''}
                                   onChange={(e) => setEditedResults(prev => ({
@@ -1119,7 +1119,7 @@ export default function InspectionList({
                               {/* Photos in edit mode with delete option */}
                               {result.result_photos && result.result_photos.length > 0 && (
                                 <div className="checkpoint-edit-photos">
-                                  <label>Fotod:</label>
+                                  <label>{t('inspectionList.photos')}</label>
                                   <div className="checkpoint-result-photos">
                                     {result.result_photos.map((photo) => (
                                       <div
@@ -1137,7 +1137,7 @@ export default function InspectionList({
                                         <button
                                           className="photo-delete-btn"
                                           onClick={() => deletePhoto(photo.id)}
-                                          title="Kustuta foto"
+                                          title={t('inspectionList.deletePhoto')}
                                         >
                                           <FiTrash2 size={12} />
                                         </button>
@@ -1194,7 +1194,7 @@ export default function InspectionList({
 
               {!loadingResults && checkpointResults.length === 0 && (selectedInspection.guid || selectedInspection.guid_ifc) && (
                 <div className="checkpoint-results-empty">
-                  Kontrollpunktide tulemusi ei leitud
+                  {t('inspectionList.checkpointsEmpty')}
                 </div>
               )}
 
@@ -1206,7 +1206,7 @@ export default function InspectionList({
                 }}
               >
                 <FiZoomIn size={16} />
-                Zoom elemendile
+                {t('inspectionList.zoomToElement')}
               </button>
             </div>
           </div>
@@ -1226,7 +1226,7 @@ export default function InspectionList({
             <button className="photo-modal-close" onClick={closeGallery}>
               ✕
             </button>
-            <img src={modalGallery.photos[modalGallery.currentIndex]} alt="Inspektsiooni foto" />
+            <img src={modalGallery.photos[modalGallery.currentIndex]} alt={t('inspectionList.inspectionPhoto')} />
 
             {/* Navigation arrows */}
             {modalGallery.photos.length > 1 && (

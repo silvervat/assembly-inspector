@@ -544,7 +544,13 @@
     "axisLocation": "Telje asukoht",
     "lowerHeight": "Alumine kõrgus",
     "upperHeight": "Ülemine kõrgus",
-    "parentMark": "Ema detaili mark"
+    "parentMark": "Ema detaili mark",
+    "showDetails": "Näita detaile",
+    "detail": "Detail",
+    "checkpoint": "Kontrollpunkt",
+    "deletePhoto": "Kustuta foto",
+    "comment": "Kommentaar:",
+    "inspectionPhoto": "Inspektsiooni foto"
   },
   "bulkAction": {
     "selected": "{{count}} valitud",
