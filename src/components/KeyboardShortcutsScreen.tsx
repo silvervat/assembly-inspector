@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FiChevronDown, FiChevronRight, FiSearch, FiCommand } from 'react-icons/fi';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
@@ -119,6 +120,7 @@ export default function KeyboardShortcutsScreen({
   onSelectInspectionType,
   onOpenPartDatabase
 }: KeyboardShortcutsScreenProps) {
+  const { t } = useTranslation('common');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
@@ -169,7 +171,7 @@ export default function KeyboardShortcutsScreen({
       overflow: 'hidden'
     }}>
       <PageHeader
-        title="Kasutusjuhendid"
+        title={t('shortcuts.title')}
         onBack={onBackToMenu}
         onNavigate={onNavigate}
         currentMode="keyboard_shortcuts"
@@ -201,7 +203,7 @@ export default function KeyboardShortcutsScreen({
           <FiSearch size={18} style={{ color: '#9ca3af', flexShrink: 0 }} />
           <input
             type="text"
-            placeholder="Otsi juhendeid..."
+            placeholder={t('shortcuts.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -250,7 +252,7 @@ export default function KeyboardShortcutsScreen({
             padding: '40px 20px',
             color: '#6b7280'
           }}>
-            <div style={{ fontSize: '14px' }}>Otsingule "{searchQuery}" ei leitud tulemusi</div>
+            <div style={{ fontSize: '14px' }}>{t('shortcuts.noResults', { query: searchQuery })}</div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -298,7 +300,7 @@ export default function KeyboardShortcutsScreen({
                       fontSize: '12px',
                       marginRight: '8px'
                     }}>
-                      {category.items.length} {category.items.length === 1 ? 'teema' : 'teemat'}
+                      {category.items.length} {category.items.length === 1 ? t('shortcuts.topicSingular') : t('shortcuts.topicPlural')}
                     </span>
                     {isExpanded ? (
                       <FiChevronDown size={18} style={{ color: '#9ca3af' }} />
@@ -365,7 +367,7 @@ export default function KeyboardShortcutsScreen({
                           color: '#92400e',
                           lineHeight: 1.5
                         }}>
-                          <strong>Vihje:</strong> Otseteed töötavad, kui extensioni paneel on aktiivne. Vali mudelis detailid, klõpsa seejärel extensioni paneelile ja vajuta otseteed. Mõned otseteed (nt markupid) vajavad, et mudelis oleks detail valitud.
+                          <strong>{t('shortcuts.hint')}</strong> {t('shortcuts.hintText')}
                         </div>
                       )}
                     </div>
