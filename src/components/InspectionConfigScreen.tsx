@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FiArrowLeft, FiPlus, FiEdit2, FiTrash2, FiSave, FiChevronDown, FiChevronRight, FiFileText, FiX, FiCheck, FiSettings, FiCopy, FiEye, FiMove } from 'react-icons/fi';
 import { supabase, InspectionTypeRef, InspectionCategory, InspectionCheckpoint, ResponseOption, CheckpointAttachment, TrimbleExUser, INSPECTION_STATUS_COLORS } from '../supabase';
 
@@ -18,20 +19,20 @@ interface ExtendedCheckpoint extends InspectionCheckpoint {
 
 type ActiveTab = 'types' | 'categories' | 'checkpoints' | 'workflow';
 
-// Default response options
-const DEFAULT_RESPONSE_OPTIONS: ResponseOption[] = [
-  { value: 'ok', label: 'Korras', color: 'green', requiresPhoto: false, requiresComment: false },
-  { value: 'not_ok', label: 'Ei vasta', color: 'red', requiresPhoto: true, requiresComment: true },
-  { value: 'na', label: 'Pole kohaldatav', color: 'gray', requiresPhoto: false, requiresComment: false }
+// Default response options - labels are translation keys
+const DEFAULT_RESPONSE_OPTIONS_KEYS = [
+  { value: 'ok', labelKey: 'ok', color: 'green' as const, requiresPhoto: false, requiresComment: false },
+  { value: 'not_ok', labelKey: 'not_ok', color: 'red' as const, requiresPhoto: true, requiresComment: true },
+  { value: 'na', labelKey: 'na', color: 'gray' as const, requiresPhoto: false, requiresComment: false }
 ];
 
-const COLOR_OPTIONS: Array<{ value: ResponseOption['color']; label: string; hex: string }> = [
-  { value: 'green', label: 'Roheline', hex: '#22c55e' },
-  { value: 'yellow', label: 'Kollane', hex: '#eab308' },
-  { value: 'red', label: 'Punane', hex: '#ef4444' },
-  { value: 'blue', label: 'Sinine', hex: '#3b82f6' },
-  { value: 'orange', label: 'Oranž', hex: '#f97316' },
-  { value: 'gray', label: 'Hall', hex: '#6b7280' }
+const COLOR_OPTIONS_KEYS: Array<{ value: ResponseOption['color']; key: string; hex: string }> = [
+  { value: 'green', key: 'green', hex: '#22c55e' },
+  { value: 'yellow', key: 'yellow', hex: '#eab308' },
+  { value: 'red', key: 'red', hex: '#ef4444' },
+  { value: 'blue', key: 'blue', hex: '#3b82f6' },
+  { value: 'orange', key: 'orange', hex: '#f97316' },
+  { value: 'gray', key: 'gray', hex: '#6b7280' }
 ];
 
 // ============================================
@@ -39,6 +40,28 @@ const COLOR_OPTIONS: Array<{ value: ResponseOption['color']; label: string; hex:
 // ============================================
 
 export default function InspectionConfigScreen({ projectId, user, onBack }: InspectionConfigScreenProps) {
+  const { t } = useTranslation('inspection');
+
+  // Helper functions for translated labels
+  const getResponseLabel = useCallback((key: string): string => {
+    return t(`responses.${key}`, { defaultValue: key });
+  }, [t]);
+
+  const getColorLabel = useCallback((key: string): string => {
+    return t(`colors.${key}`, { defaultValue: key });
+  }, [t]);
+
+  // Generate default response options with translated labels
+  const getDefaultResponseOptions = useCallback((): ResponseOption[] => {
+    return DEFAULT_RESPONSE_OPTIONS_KEYS.map(opt => ({
+      value: opt.value,
+      label: getResponseLabel(opt.labelKey),
+      color: opt.color,
+      requiresPhoto: opt.requiresPhoto,
+      requiresComment: opt.requiresComment
+    }));
+  }, [getResponseLabel]);
+
   // Tab state
   const [activeTab, setActiveTab] = useState<ActiveTab>('types');
 
@@ -77,9 +100,9 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
       setTypes(data || []);
     } catch (err) {
       console.error('Failed to load types:', err);
-      showMessage('Viga tüüpide laadimisel', 'error');
+      showMessage(t('config.errorLoadingTypes'), 'error');
     }
-  }, []);
+  }, [t]);
 
   const loadCategories = useCallback(async (typeId?: string) => {
     try {
@@ -97,9 +120,9 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
       setCategories(data || []);
     } catch (err) {
       console.error('Failed to load categories:', err);
-      showMessage('Viga kategooriate laadimisel', 'error');
+      showMessage(t('config.errorLoadingCategories'), 'error');
     }
-  }, []);
+  }, [t]);
 
   const loadCheckpoints = useCallback(async (categoryId?: string) => {
     try {
@@ -120,9 +143,9 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
       setCheckpoints(data || []);
     } catch (err) {
       console.error('Failed to load checkpoints:', err);
-      showMessage('Viga kontrollpunktide laadimisel', 'error');
+      showMessage(t('config.errorLoadingCheckpoints'), 'error');
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const loadAll = async () => {
@@ -181,21 +204,21 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
           .from('inspection_types')
           .insert([typeData]);
         if (error) throw error;
-        showMessage('Tüüp loodud', 'success');
+        showMessage(t('config.typeCreated'), 'success');
       } else {
         const { error } = await supabase
           .from('inspection_types')
           .update(typeData)
           .eq('id', editingType.id);
         if (error) throw error;
-        showMessage('Tüüp uuendatud', 'success');
+        showMessage(t('config.typeUpdated'), 'success');
       }
 
       setEditingType(null);
       await loadTypes();
     } catch (err) {
       console.error('Failed to save type:', err);
-      showMessage('Viga tüübi salvestamisel', 'error');
+      showMessage(t('config.errorSavingType'), 'error');
     } finally {
       setSaving(false);
     }
@@ -204,11 +227,11 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
   const handleDeleteType = async (typeId: string) => {
     const type = types.find(t => t.id === typeId);
     if (type?.is_system) {
-      showMessage('Süsteemset tüüpi ei saa kustutada', 'error');
+      showMessage(t('config.systemTypeCannotDelete'), 'error');
       return;
     }
 
-    if (!confirm('Kas olete kindel? See kustutab ka kõik kategooriad ja kontrollpunktid.')) return;
+    if (!confirm(t('config.deleteTypeConfirm'))) return;
 
     try {
       const { error } = await supabase
@@ -217,13 +240,13 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
         .eq('id', typeId);
       if (error) throw error;
 
-      showMessage('Tüüp kustutatud', 'success');
+      showMessage(t('config.typeDeleted'), 'success');
       await loadTypes();
       await loadCategories();
       await loadCheckpoints();
     } catch (err) {
       console.error('Failed to delete type:', err);
-      showMessage('Viga tüübi kustutamisel', 'error');
+      showMessage(t('config.errorDeletingType'), 'error');
     }
   };
 
@@ -233,7 +256,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
 
   const handleSaveCategory = async () => {
     if (!editingCategory || !editingCategory.type_id) {
-      showMessage('Valige inspektsioonitüüp', 'error');
+      showMessage(t('config.selectInspectionType'), 'error');
       return;
     }
 
@@ -261,28 +284,28 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
           .from('inspection_categories')
           .insert([categoryData]);
         if (error) throw error;
-        showMessage('Kategooria loodud', 'success');
+        showMessage(t('config.categoryCreated'), 'success');
       } else {
         const { error } = await supabase
           .from('inspection_categories')
           .update(categoryData)
           .eq('id', editingCategory.id);
         if (error) throw error;
-        showMessage('Kategooria uuendatud', 'success');
+        showMessage(t('config.categoryUpdated'), 'success');
       }
 
       setEditingCategory(null);
       await loadCategories();
     } catch (err) {
       console.error('Failed to save category:', err);
-      showMessage('Viga kategooria salvestamisel', 'error');
+      showMessage(t('config.errorSavingCategory'), 'error');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeleteCategory = async (categoryId: string) => {
-    if (!confirm('Kas olete kindel? See kustutab ka kõik kontrollpunktid.')) return;
+    if (!confirm(t('config.deleteCategoryConfirm'))) return;
 
     try {
       const { error } = await supabase
@@ -291,12 +314,12 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
         .eq('id', categoryId);
       if (error) throw error;
 
-      showMessage('Kategooria kustutatud', 'success');
+      showMessage(t('config.categoryDeleted'), 'success');
       await loadCategories();
       await loadCheckpoints();
     } catch (err) {
       console.error('Failed to delete category:', err);
-      showMessage('Viga kategooria kustutamisel', 'error');
+      showMessage(t('config.errorDeletingCategory'), 'error');
     }
   };
 
@@ -306,7 +329,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
 
   const handleSaveCheckpoint = async () => {
     if (!editingCheckpoint || !editingCheckpoint.category_id) {
-      showMessage('Valige kategooria', 'error');
+      showMessage(t('config.selectCategoryError'), 'error');
       return;
     }
 
@@ -324,7 +347,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
         sort_order: editingCheckpoint.sort_order || checkpoints.filter(c => c.category_id === editingCheckpoint.category_id).length,
         is_required: editingCheckpoint.is_required || false,
         is_active: editingCheckpoint.is_active !== false,
-        response_options: editingCheckpoint.response_options || DEFAULT_RESPONSE_OPTIONS,
+        response_options: editingCheckpoint.response_options || getDefaultResponseOptions(),
         display_type: editingCheckpoint.display_type || 'radio',
         allow_multiple: editingCheckpoint.allow_multiple || false,
         comment_enabled: editingCheckpoint.comment_enabled !== false,
@@ -351,7 +374,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
           await saveCheckpointAttachments(data.id, editingCheckpoint.attachments);
         }
 
-        showMessage('Kontrollpunkt loodud', 'success');
+        showMessage(t('config.checkpointCreated'), 'success');
       } else {
         const { error } = await supabase
           .from('inspection_checkpoints')
@@ -363,14 +386,14 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
           await saveCheckpointAttachments(editingCheckpoint.id, editingCheckpoint.attachments || []);
         }
 
-        showMessage('Kontrollpunkt uuendatud', 'success');
+        showMessage(t('config.checkpointUpdated'), 'success');
       }
 
       setEditingCheckpoint(null);
       await loadCheckpoints();
     } catch (err) {
       console.error('Failed to save checkpoint:', err);
-      showMessage('Viga kontrollpunkti salvestamisel', 'error');
+      showMessage(t('config.errorSavingCheckpoint'), 'error');
     } finally {
       setSaving(false);
     }
@@ -400,7 +423,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
   };
 
   const handleDeleteCheckpoint = async (checkpointId: string) => {
-    if (!confirm('Kas olete kindel?')) return;
+    if (!confirm(t('config.deleteCheckpointConfirm'))) return;
 
     try {
       const { error } = await supabase
@@ -409,11 +432,11 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
         .eq('id', checkpointId);
       if (error) throw error;
 
-      showMessage('Kontrollpunkt kustutatud', 'success');
+      showMessage(t('config.checkpointDeleted'), 'success');
       await loadCheckpoints();
     } catch (err) {
       console.error('Failed to delete checkpoint:', err);
-      showMessage('Viga kontrollpunkti kustutamisel', 'error');
+      showMessage(t('config.errorDeletingCheckpoint'), 'error');
     }
   };
 
@@ -422,7 +445,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
       ...checkpoint,
       id: undefined,
       code: `${checkpoint.code}_COPY`,
-      name: `${checkpoint.name} (koopia)`
+      name: t('config.copyName', { name: checkpoint.name })
     });
     setActiveTab('checkpoints');
   };
@@ -434,12 +457,12 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
   const renderTypesTab = () => (
     <div className="config-section">
       <div className="section-header">
-        <h3>Inspektsiooni kategooriad</h3>
+        <h3>{t('config.inspectionCategory')}</h3>
         <button
           className="btn btn-primary btn-sm"
           onClick={() => setEditingType({ is_active: true })}
         >
-          <FiPlus size={16} /> Lisa kategooria
+          <FiPlus size={16} /> {t('config.addCategory')}
         </button>
       </div>
 
@@ -455,15 +478,15 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
               <div className="type-info">
                 {expandedTypes.has(type.id) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
                 <span className="type-name">{type.name}</span>
-                {type.is_system && <span className="badge system">Süsteem</span>}
-                {!type.is_active && <span className="badge inactive">Mitteaktiivne</span>}
+                {type.is_system && <span className="badge system">{t('config.systemBadge')}</span>}
+                {!type.is_active && <span className="badge inactive">{t('config.inactiveBadge')}</span>}
               </div>
               <div className="type-actions" onClick={e => e.stopPropagation()}>
-                <button className="btn-icon" onClick={() => setEditingType(type)} title="Muuda">
+                <button className="btn-icon" onClick={() => setEditingType(type)} title={t('actions.edit')}>
                   <FiEdit2 size={14} />
                 </button>
                 {!type.is_system && (
-                  <button className="btn-icon danger" onClick={() => handleDeleteType(type.id)} title="Kustuta">
+                  <button className="btn-icon danger" onClick={() => handleDeleteType(type.id)} title={t('actions.delete')}>
                     <FiTrash2 size={14} />
                   </button>
                 )}
@@ -473,17 +496,17 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
             {expandedTypes.has(type.id) && (
               <div className="type-details">
                 <div className="detail-row">
-                  <span className="label">Kood:</span>
+                  <span className="label">{t('config.code')}:</span>
                   <span className="value">{type.code}</span>
                 </div>
                 {type.description && (
                   <div className="detail-row">
-                    <span className="label">Kirjeldus:</span>
+                    <span className="label">{t('config.description')}:</span>
                     <span className="value">{type.description}</span>
                   </div>
                 )}
                 <div className="detail-row">
-                  <span className="label">Tüüpe:</span>
+                  <span className="label">{t('config.typesCount')}</span>
                   <span className="value">{categories.filter(c => c.type_id === type.id).length}</span>
                 </div>
               </div>
@@ -505,7 +528,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
       <div className="modal-overlay">
         <div className="modal-content">
           <div className="modal-header">
-            <h3>{editingType.id ? 'Muuda kategooriat' : 'Uus inspektsiooni kategooria'}</h3>
+            <h3>{editingType.id ? t('config.editCategory') : t('config.newInspectionCategory')}</h3>
             <button className="btn-icon" onClick={() => setEditingType(null)}>
               <FiX size={20} />
             </button>
@@ -513,27 +536,27 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
 
           <div className="modal-body">
             <div className="form-group">
-              <label>Nimi *</label>
+              <label>{t('config.nameRequired')}</label>
               <input
                 type="text"
                 value={editingType.name || ''}
                 onChange={e => setEditingType({ ...editingType, name: e.target.value })}
-                placeholder="nt. Teraskonstruktsioonide paigaldus"
+                placeholder={t('config.exampleCategoryName')}
               />
             </div>
 
             <div className="form-row">
               <div className="form-group">
-                <label>Kood</label>
+                <label>{t('config.code')}</label>
                 <input
                   type="text"
                   value={editingType.code || ''}
                   onChange={e => setEditingType({ ...editingType, code: e.target.value.toUpperCase() })}
-                  placeholder="Auto-genereeritakse"
+                  placeholder={t('config.autoGenerated')}
                 />
               </div>
               <div className="form-group">
-                <label>Järjestus</label>
+                <label>{t('config.order')}</label>
                 <input
                   type="number"
                   value={editingType.sort_order || 0}
@@ -543,7 +566,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
             </div>
 
             <div className="form-group">
-              <label>Kirjeldus</label>
+              <label>{t('config.description')}</label>
               <textarea
                 value={editingType.description || ''}
                 onChange={e => setEditingType({ ...editingType, description: e.target.value })}
@@ -558,17 +581,17 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                   checked={editingType.is_active !== false}
                   onChange={e => setEditingType({ ...editingType, is_active: e.target.checked })}
                 />
-                Aktiivne
+                {t('config.active')}
               </label>
             </div>
           </div>
 
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={() => setEditingType(null)}>
-              Tühista
+              {t('config.cancel')}
             </button>
             <button className="btn btn-primary" onClick={handleSaveType} disabled={saving || !editingType.name}>
-              <FiSave size={16} /> {saving ? 'Salvestan...' : 'Salvesta'}
+              <FiSave size={16} /> {saving ? t('config.saving') : t('config.save')}
             </button>
           </div>
         </div>
@@ -583,14 +606,14 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
   const renderCategoriesTab = () => (
     <div className="config-section">
       <div className="section-header">
-        <h3>Inspektsiooni tüübid</h3>
+        <h3>{t('config.types')}</h3>
         <div className="header-controls">
           <select
             value={selectedTypeId || ''}
             onChange={e => setSelectedTypeId(e.target.value || null)}
             className="type-filter"
           >
-            <option value="">Kõik kategooriad</option>
+            <option value="">{t('config.allCategories')}</option>
             {types.filter(t => t.is_active).map(t => (
               <option key={t.id} value={t.id}>{t.name}</option>
             ))}
@@ -599,7 +622,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
             className="btn btn-primary btn-sm"
             onClick={() => setEditingCategory({ type_id: selectedTypeId || '', is_active: true })}
           >
-            <FiPlus size={16} /> Lisa tüüp
+            <FiPlus size={16} /> {t('config.addType')}
           </button>
         </div>
       </div>
@@ -613,29 +636,29 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
             <h4 className="type-title">{type.name}</h4>
             <div className="categories-list">
               {typeCategories.length === 0 ? (
-                <p className="empty-text">Tüüpe pole. Lisa uus tüüp.</p>
+                <p className="empty-text">{t('config.noTypesYet')}</p>
               ) : (
                 typeCategories.map(cat => (
                   <div key={cat.id} className="category-card">
                     <div className="category-info">
                       <span className="category-name">{cat.name}</span>
-                      {cat.is_required && <span className="badge required">Kohustuslik</span>}
-                      {!cat.is_active && <span className="badge inactive">Mitteaktiivne</span>}
+                      {cat.is_required && <span className="badge required">{t('config.requiredBadge')}</span>}
+                      {!cat.is_active && <span className="badge inactive">{t('config.inactiveBadge')}</span>}
                       <span className="checkpoint-count">
-                        {checkpoints.filter(cp => cp.category_id === cat.id).length} kontrollpunkti
+                        {checkpoints.filter(cp => cp.category_id === cat.id).length} {t('config.checkpointsCount')}
                       </span>
                     </div>
                     <div className="category-actions">
                       <button className="btn-icon" onClick={() => {
                         setSelectedCategoryId(cat.id);
                         setActiveTab('checkpoints');
-                      }} title="Vaata kontrollpunkte">
+                      }} title={t('config.viewCheckpoints')}>
                         <FiEye size={14} />
                       </button>
-                      <button className="btn-icon" onClick={() => setEditingCategory(cat)} title="Muuda">
+                      <button className="btn-icon" onClick={() => setEditingCategory(cat)} title={t('actions.edit')}>
                         <FiEdit2 size={14} />
                       </button>
-                      <button className="btn-icon danger" onClick={() => handleDeleteCategory(cat.id)} title="Kustuta">
+                      <button className="btn-icon danger" onClick={() => handleDeleteCategory(cat.id)} title={t('actions.delete')}>
                         <FiTrash2 size={14} />
                       </button>
                     </div>
@@ -660,7 +683,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
       <div className="modal-overlay">
         <div className="modal-content">
           <div className="modal-header">
-            <h3>{editingCategory.id ? 'Muuda tüüpi' : 'Uus inspektsiooni tüüp'}</h3>
+            <h3>{editingCategory.id ? t('config.editType') : t('config.newType')}</h3>
             <button className="btn-icon" onClick={() => setEditingCategory(null)}>
               <FiX size={20} />
             </button>
@@ -668,12 +691,12 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
 
           <div className="modal-body">
             <div className="form-group">
-              <label>Inspektsiooni kategooria *</label>
+              <label>{t('config.inspectionCategoryRequired')}</label>
               <select
                 value={editingCategory.type_id || ''}
                 onChange={e => setEditingCategory({ ...editingCategory, type_id: e.target.value })}
               >
-                <option value="">Vali kategooria...</option>
+                <option value="">{t('config.selectCategory')}</option>
                 {types.filter(t => t.is_active).map(t => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
@@ -681,27 +704,27 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
             </div>
 
             <div className="form-group">
-              <label>Nimi *</label>
+              <label>{t('config.nameRequired')}</label>
               <input
                 type="text"
                 value={editingCategory.name || ''}
                 onChange={e => setEditingCategory({ ...editingCategory, name: e.target.value })}
-                placeholder="nt. Visuaalne kontroll"
+                placeholder={t('config.exampleTypeName2')}
               />
             </div>
 
             <div className="form-row">
               <div className="form-group">
-                <label>Kood</label>
+                <label>{t('config.code')}</label>
                 <input
                   type="text"
                   value={editingCategory.code || ''}
                   onChange={e => setEditingCategory({ ...editingCategory, code: e.target.value.toUpperCase() })}
-                  placeholder="Auto-genereeritakse"
+                  placeholder={t('config.autoGenerated')}
                 />
               </div>
               <div className="form-group">
-                <label>Järjestus</label>
+                <label>{t('config.order')}</label>
                 <input
                   type="number"
                   value={editingCategory.sort_order || 0}
@@ -711,7 +734,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
             </div>
 
             <div className="form-group">
-              <label>Kirjeldus</label>
+              <label>{t('config.description')}</label>
               <textarea
                 value={editingCategory.description || ''}
                 onChange={e => setEditingCategory({ ...editingCategory, description: e.target.value })}
@@ -727,7 +750,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                     checked={editingCategory.is_required || false}
                     onChange={e => setEditingCategory({ ...editingCategory, is_required: e.target.checked })}
                   />
-                  Kohustuslik tüüp
+                  {t('config.requiredType')}
                 </label>
               </div>
               <div className="form-group">
@@ -737,7 +760,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                     checked={editingCategory.is_active !== false}
                     onChange={e => setEditingCategory({ ...editingCategory, is_active: e.target.checked })}
                   />
-                  Aktiivne
+                  {t('config.active')}
                 </label>
               </div>
             </div>
@@ -745,14 +768,14 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
 
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={() => setEditingCategory(null)}>
-              Tühista
+              {t('config.cancel')}
             </button>
             <button
               className="btn btn-primary"
               onClick={handleSaveCategory}
               disabled={saving || !editingCategory.name || !editingCategory.type_id}
             >
-              <FiSave size={16} /> {saving ? 'Salvestan...' : 'Salvesta'}
+              <FiSave size={16} /> {saving ? t('config.saving') : t('config.save')}
             </button>
           </div>
         </div>
@@ -772,14 +795,14 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
     return (
       <div className="config-section">
         <div className="section-header">
-          <h3>Kontrollpunktid</h3>
+          <h3>{t('config.checkpoints')}</h3>
           <div className="header-controls">
             <select
               value={selectedCategoryId || ''}
               onChange={e => setSelectedCategoryId(e.target.value || null)}
               className="category-filter"
             >
-              <option value="">Kõik tüübid</option>
+              <option value="">{t('config.allTypes')}</option>
               {categories.filter(c => c.is_active).map(c => {
                 const type = types.find(t => t.id === c.type_id);
                 return (
@@ -793,7 +816,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                 category_id: selectedCategoryId || '',
                 is_active: true,
                 is_required: true,
-                response_options: [...DEFAULT_RESPONSE_OPTIONS],
+                response_options: getDefaultResponseOptions(),
                 display_type: 'radio',
                 comment_enabled: true,
                 end_user_can_comment: true,
@@ -804,13 +827,13 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                 attachments: []
               })}
             >
-              <FiPlus size={16} /> Lisa kontrollpunkt
+              <FiPlus size={16} /> {t('config.addCheckpoint')}
             </button>
           </div>
         </div>
 
         {filteredCheckpoints.length === 0 ? (
-          <p className="empty-text">Kontrollpunkte pole. Lisa uus kontrollpunkt.</p>
+          <p className="empty-text">{t('config.noCheckpointsYet')}</p>
         ) : (
           <div className="checkpoints-list">
             {filteredCheckpoints.map((cp, idx) => {
@@ -827,11 +850,11 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                         <span className="checkpoint-path">{type?.name} → {category?.name}</span>
                       )}
                       <div className="checkpoint-badges">
-                        {cp.is_required && <span className="badge required">Kohustuslik</span>}
-                        {!cp.is_active && <span className="badge inactive">Mitteaktiivne</span>}
-                        {cp.photos_min > 0 && <span className="badge photo">Foto nõutud</span>}
+                        {cp.is_required && <span className="badge required">{t('config.requiredBadge')}</span>}
+                        {!cp.is_active && <span className="badge inactive">{t('config.inactiveBadge')}</span>}
+                        {cp.photos_min > 0 && <span className="badge photo">{t('config.photoRequiredBadge')}</span>}
                         {cp.attachments && cp.attachments.length > 0 && (
-                          <span className="badge attachment">{cp.attachments.length} juhend</span>
+                          <span className="badge attachment">{cp.attachments.length} {t('config.guideBadge')}</span>
                         )}
                       </div>
                     </div>
@@ -841,20 +864,20 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                       <span
                         key={opt.value}
                         className="response-badge"
-                        style={{ backgroundColor: COLOR_OPTIONS.find(c => c.value === opt.color)?.hex || '#6b7280' }}
+                        style={{ backgroundColor: COLOR_OPTIONS_KEYS.find(c => c.value === opt.color)?.hex || '#6b7280' }}
                       >
                         {opt.label}
                       </span>
                     ))}
                   </div>
                   <div className="checkpoint-actions">
-                    <button className="btn-icon" onClick={() => handleDuplicateCheckpoint(cp)} title="Kopeeri">
+                    <button className="btn-icon" onClick={() => handleDuplicateCheckpoint(cp)} title={t('config.copy')}>
                       <FiCopy size={14} />
                     </button>
-                    <button className="btn-icon" onClick={() => setEditingCheckpoint(cp)} title="Muuda">
+                    <button className="btn-icon" onClick={() => setEditingCheckpoint(cp)} title={t('actions.edit')}>
                       <FiEdit2 size={14} />
                     </button>
-                    <button className="btn-icon danger" onClick={() => handleDeleteCheckpoint(cp.id)} title="Kustuta">
+                    <button className="btn-icon danger" onClick={() => handleDeleteCheckpoint(cp.id)} title={t('actions.delete')}>
                       <FiTrash2 size={14} />
                     </button>
                   </div>
@@ -877,7 +900,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
     const addResponseOption = () => {
       const newOption: ResponseOption = {
         value: `option_${Date.now()}`,
-        label: 'Uus valik',
+        label: t('config.newOption'),
         color: 'gray',
         requiresPhoto: false,
         requiresComment: false
@@ -930,7 +953,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
       <div className="modal-overlay">
         <div className="modal-content modal-xlarge">
           <div className="modal-header">
-            <h3>{editingCheckpoint.id ? 'Muuda kontrollpunkti' : 'Uus kontrollpunkt'}</h3>
+            <h3>{editingCheckpoint.id ? t('checkpoint.edit') : t('checkpoint.new')}</h3>
             <button className="btn-icon" onClick={() => setEditingCheckpoint(null)}>
               <FiX size={20} />
             </button>
@@ -939,15 +962,15 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
           <div className="modal-body modal-body-scroll">
             {/* Basic Info */}
             <div className="form-section">
-              <h4>Põhiandmed</h4>
+              <h4>{t('config.basicInfo')}</h4>
 
               <div className="form-group">
-                <label>Inspektsiooni tüüp *</label>
+                <label>{t('config.inspectionTypeRequired')}</label>
                 <select
                   value={editingCheckpoint.category_id || ''}
                   onChange={e => setEditingCheckpoint({ ...editingCheckpoint, category_id: e.target.value })}
                 >
-                  <option value="">Vali tüüp...</option>
+                  <option value="">{t('config.selectType')}</option>
                   {categories.filter(c => c.is_active).map(c => {
                     const type = types.find(t => t.id === c.type_id);
                     return (
@@ -958,27 +981,27 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
               </div>
 
               <div className="form-group">
-                <label>Nimi / Küsimus *</label>
+                <label>{t('config.nameQuestion')}</label>
                 <input
                   type="text"
                   value={editingCheckpoint.name || ''}
                   onChange={e => setEditingCheckpoint({ ...editingCheckpoint, name: e.target.value })}
-                  placeholder="nt. Kas element on õigesti paigaldatud?"
+                  placeholder={t('config.questionPlaceholder')}
                 />
               </div>
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Kood</label>
+                  <label>{t('config.code')}</label>
                   <input
                     type="text"
                     value={editingCheckpoint.code || ''}
                     onChange={e => setEditingCheckpoint({ ...editingCheckpoint, code: e.target.value.toUpperCase() })}
-                    placeholder="Auto-genereeritakse"
+                    placeholder={t('config.autoGenerated')}
                   />
                 </div>
                 <div className="form-group">
-                  <label>Järjestus</label>
+                  <label>{t('config.order')}</label>
                   <input
                     type="number"
                     value={editingCheckpoint.sort_order || 0}
@@ -988,22 +1011,22 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
               </div>
 
               <div className="form-group">
-                <label>Kirjeldus</label>
+                <label>{t('config.description')}</label>
                 <textarea
                   value={editingCheckpoint.description || ''}
                   onChange={e => setEditingCheckpoint({ ...editingCheckpoint, description: e.target.value })}
                   rows={2}
-                  placeholder="Lühike selgitus kontrollpunkti kohta"
+                  placeholder={t('config.descriptionPlaceholder')}
                 />
               </div>
 
               <div className="form-group">
-                <label>Juhend (Markdown)</label>
+                <label>{t('config.guideMarkdown')}</label>
                 <textarea
                   value={editingCheckpoint.instructions || ''}
                   onChange={e => setEditingCheckpoint({ ...editingCheckpoint, instructions: e.target.value })}
                   rows={4}
-                  placeholder="Detailne juhend inspektorile. Toetab Markdown formaati."
+                  placeholder={t('config.guidePlaceholder')}
                 />
               </div>
             </div>
@@ -1011,9 +1034,9 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
             {/* Response Options */}
             <div className="form-section">
               <div className="section-header-inline">
-                <h4>Vastuse variandid</h4>
+                <h4>{t('config.responseOptions')}</h4>
                 <button className="btn btn-secondary btn-sm" onClick={addResponseOption}>
-                  <FiPlus size={14} /> Lisa
+                  <FiPlus size={14} /> {t('config.add')}
                 </button>
               </div>
 
@@ -1024,14 +1047,14 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                       type="text"
                       value={opt.value}
                       onChange={e => updateResponseOption(idx, { value: e.target.value })}
-                      placeholder="Väärtus"
+                      placeholder={t('config.value')}
                       className="input-sm"
                     />
                     <input
                       type="text"
                       value={opt.label}
                       onChange={e => updateResponseOption(idx, { label: e.target.value })}
-                      placeholder="Silt"
+                      placeholder={t('config.label')}
                       className="input-md"
                     />
                     <select
@@ -1039,8 +1062,8 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                       onChange={e => updateResponseOption(idx, { color: e.target.value as ResponseOption['color'] })}
                       className="input-sm"
                     >
-                      {COLOR_OPTIONS.map(c => (
-                        <option key={c.value} value={c.value}>{c.label}</option>
+                      {COLOR_OPTIONS_KEYS.map(c => (
+                        <option key={c.value} value={c.value}>{getColorLabel(c.key)}</option>
                       ))}
                     </select>
                     <label className="checkbox-inline">
@@ -1049,7 +1072,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                         checked={opt.requiresPhoto}
                         onChange={e => updateResponseOption(idx, { requiresPhoto: e.target.checked })}
                       />
-                      Foto
+                      {t('config.photo')}
                     </label>
                     <label className="checkbox-inline">
                       <input
@@ -1057,7 +1080,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                         checked={opt.requiresComment}
                         onChange={e => updateResponseOption(idx, { requiresComment: e.target.checked })}
                       />
-                      Kommentaar
+                      {t('config.comment')}
                     </label>
                     <button className="btn-icon danger" onClick={() => removeResponseOption(idx)}>
                       <FiTrash2 size={14} />
@@ -1069,11 +1092,11 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
 
             {/* Photo Settings */}
             <div className="form-section">
-              <h4>Foto seaded</h4>
+              <h4>{t('config.photoSettings')}</h4>
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Min fotosid</label>
+                  <label>{t('config.minPhotos')}</label>
                   <input
                     type="number"
                     min="0"
@@ -1083,7 +1106,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                   />
                 </div>
                 <div className="form-group">
-                  <label>Max fotosid</label>
+                  <label>{t('config.maxPhotos')}</label>
                   <input
                     type="number"
                     min="0"
@@ -1095,13 +1118,13 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
               </div>
 
               <p className="form-hint">
-                Foto nõuded määratakse vastuste juures. Kui valik nõuab fotot, siis peab kasutaja lisama vähemalt "Min fotosid" arvu pilte.
+                {t('config.photoHint')}
               </p>
             </div>
 
             {/* Comment Settings */}
             <div className="form-section">
-              <h4>Kommentaari seaded</h4>
+              <h4>{t('config.commentSettings')}</h4>
 
               <div className="form-row">
                 <div className="form-group">
@@ -1111,7 +1134,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                       checked={editingCheckpoint.comment_enabled !== false}
                       onChange={e => setEditingCheckpoint({ ...editingCheckpoint, comment_enabled: e.target.checked })}
                     />
-                    Kommentaar lubatud
+                    {t('config.commentEnabled')}
                   </label>
                 </div>
                 <div className="form-group">
@@ -1121,7 +1144,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                       checked={editingCheckpoint.end_user_can_comment !== false}
                       onChange={e => setEditingCheckpoint({ ...editingCheckpoint, end_user_can_comment: e.target.checked })}
                     />
-                    Kasutaja saab kommenteerida
+                    {t('config.userCanComment')}
                   </label>
                 </div>
               </div>
@@ -1130,9 +1153,9 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
             {/* Attachments */}
             <div className="form-section">
               <div className="section-header-inline">
-                <h4>Juhendmaterjalid</h4>
+                <h4>{t('config.guideMaterials')}</h4>
                 <button className="btn btn-secondary btn-sm" onClick={addAttachment}>
-                  <FiPlus size={14} /> Lisa
+                  <FiPlus size={14} /> {t('config.add')}
                 </button>
               </div>
 
@@ -1144,16 +1167,16 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                       onChange={e => updateAttachment(idx, { type: e.target.value as CheckpointAttachment['type'] })}
                       className="input-sm"
                     >
-                      <option value="link">Link</option>
-                      <option value="video">Video</option>
-                      <option value="document">Dokument</option>
-                      <option value="image">Pilt</option>
+                      <option value="link">{t('config.link')}</option>
+                      <option value="video">{t('config.video')}</option>
+                      <option value="document">{t('config.document')}</option>
+                      <option value="image">{t('config.image')}</option>
                     </select>
                     <input
                       type="text"
                       value={att.name}
                       onChange={e => updateAttachment(idx, { name: e.target.value })}
-                      placeholder="Nimi"
+                      placeholder={t('config.name')}
                       className="input-md"
                     />
                     <input
@@ -1169,14 +1192,14 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                   </div>
                 ))}
                 {(!editingCheckpoint.attachments || editingCheckpoint.attachments.length === 0) && (
-                  <p className="empty-text">Juhendmaterjale pole lisatud</p>
+                  <p className="empty-text">{t('config.noGuideMaterials')}</p>
                 )}
               </div>
             </div>
 
             {/* Flags */}
             <div className="form-section">
-              <h4>Seaded</h4>
+              <h4>{t('config.settings')}</h4>
 
               <div className="form-row">
                 <div className="form-group">
@@ -1186,7 +1209,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                       checked={editingCheckpoint.is_required || false}
                       onChange={e => setEditingCheckpoint({ ...editingCheckpoint, is_required: e.target.checked })}
                     />
-                    Kohustuslik kontrollpunkt
+                    {t('config.requiredCheckpoint')}
                   </label>
                 </div>
                 <div className="form-group">
@@ -1196,7 +1219,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
                       checked={editingCheckpoint.is_active !== false}
                       onChange={e => setEditingCheckpoint({ ...editingCheckpoint, is_active: e.target.checked })}
                     />
-                    Aktiivne
+                    {t('config.active')}
                   </label>
                 </div>
               </div>
@@ -1205,14 +1228,14 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
 
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={() => setEditingCheckpoint(null)}>
-              Tühista
+              {t('config.cancel')}
             </button>
             <button
               className="btn btn-primary"
               onClick={handleSaveCheckpoint}
               disabled={saving || !editingCheckpoint.name || !editingCheckpoint.category_id}
             >
-              <FiSave size={16} /> {saving ? 'Salvestan...' : 'Salvesta'}
+              <FiSave size={16} /> {saving ? t('config.saving') : t('config.save')}
             </button>
           </div>
         </div>
@@ -1227,39 +1250,39 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
   const renderWorkflowTab = () => (
     <div className="config-section">
       <div className="section-header">
-        <h3>Töövoo seaded ja värvid</h3>
+        <h3>{t('config.workflowSettings')}</h3>
       </div>
 
       <div className="workflow-info">
         {/* Status Colors */}
         <div className="info-card">
-          <h4>Inspektsioonide staatuse värvid (fikseeritud)</h4>
-          <p>Need värvid kuvatakse mudelis ja nimekirjades vastavalt inspektsiooni staatusele:</p>
+          <h4>{t('config.statusColors')}</h4>
+          <p>{t('config.statusColorsInfo')}</p>
 
           <div className="status-colors-list">
             <div className="status-color-item">
               <div className="color-dot" style={{ backgroundColor: INSPECTION_STATUS_COLORS.planned.hex }} />
-              <span className="color-label">{INSPECTION_STATUS_COLORS.planned.label}</span>
+              <span className="color-label">{t('status.planned')}</span>
               <span className="color-hex">{INSPECTION_STATUS_COLORS.planned.hex}</span>
             </div>
             <div className="status-color-item">
               <div className="color-dot" style={{ backgroundColor: INSPECTION_STATUS_COLORS.inProgress.hex }} />
-              <span className="color-label">{INSPECTION_STATUS_COLORS.inProgress.label}</span>
+              <span className="color-label">{t('status.inProgress')}</span>
               <span className="color-hex">{INSPECTION_STATUS_COLORS.inProgress.hex}</span>
             </div>
             <div className="status-color-item">
               <div className="color-dot" style={{ backgroundColor: INSPECTION_STATUS_COLORS.completed.hex }} />
-              <span className="color-label">{INSPECTION_STATUS_COLORS.completed.label}</span>
+              <span className="color-label">{t('status.completed')}</span>
               <span className="color-hex">{INSPECTION_STATUS_COLORS.completed.hex}</span>
             </div>
             <div className="status-color-item">
               <div className="color-dot" style={{ backgroundColor: INSPECTION_STATUS_COLORS.rejected.hex }} />
-              <span className="color-label">{INSPECTION_STATUS_COLORS.rejected.label}</span>
+              <span className="color-label">{t('status.rejected')}</span>
               <span className="color-hex">{INSPECTION_STATUS_COLORS.rejected.hex}</span>
             </div>
             <div className="status-color-item">
               <div className="color-dot" style={{ backgroundColor: INSPECTION_STATUS_COLORS.approved.hex }} />
-              <span className="color-label">{INSPECTION_STATUS_COLORS.approved.label}</span>
+              <span className="color-label">{t('status.approved')}</span>
               <span className="color-hex">{INSPECTION_STATUS_COLORS.approved.hex}</span>
             </div>
           </div>
@@ -1267,36 +1290,36 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
 
         {/* Workflow */}
         <div className="info-card">
-          <h4>Kinnitamise töövoog</h4>
-          <p>Pärast inspektsiooni lõpetamist peab moderaator tulemused üle vaatama ja kinnitama.</p>
+          <h4>{t('config.approvalWorkflow')}</h4>
+          <p>{t('config.workflowInfo')}</p>
           <ul>
-            <li><strong>Kontrollikavasse määratud</strong> - Element on lisatud kontrolli kavasse, ootab kontrollimist</li>
-            <li><strong>Pooleli</strong> - Kontroll on alustatud, kuid pole veel lõpetatud</li>
-            <li><strong>Valmis</strong> - Kontroll on tehtud, ootab moderaatori ülevaatust</li>
-            <li><strong>Tagasi lükatud</strong> - Moderaator saatis parandamiseks tagasi</li>
-            <li><strong>Lõpetatud ja heaks kiidetud</strong> - Moderaator on kinnitanud, kasutaja ei saa enam muuta</li>
+            <li>{t('config.workflowStep1')}</li>
+            <li>{t('config.workflowStep2')}</li>
+            <li>{t('config.workflowStep3')}</li>
+            <li>{t('config.workflowStep4')}</li>
+            <li>{t('config.workflowStep5')}</li>
           </ul>
         </div>
 
         <div className="workflow-diagram">
           <div className="workflow-step">
             <div className="step-icon" style={{ backgroundColor: INSPECTION_STATUS_COLORS.planned.hex + '30', color: INSPECTION_STATUS_COLORS.planned.hex }}>📋</div>
-            <div className="step-label">Kavasse<br/>määratud</div>
+            <div className="step-label">{t('config.workflowAssigned')}</div>
           </div>
           <div className="workflow-arrow">→</div>
           <div className="workflow-step">
             <div className="step-icon" style={{ backgroundColor: INSPECTION_STATUS_COLORS.inProgress.hex + '30', color: INSPECTION_STATUS_COLORS.inProgress.hex }}>🔄</div>
-            <div className="step-label">Pooleli</div>
+            <div className="step-label">{t('config.workflowInProgress')}</div>
           </div>
           <div className="workflow-arrow">→</div>
           <div className="workflow-step">
             <div className="step-icon" style={{ backgroundColor: INSPECTION_STATUS_COLORS.completed.hex + '30', color: INSPECTION_STATUS_COLORS.completed.hex }}>✓</div>
-            <div className="step-label">Valmis</div>
+            <div className="step-label">{t('config.workflowReady')}</div>
           </div>
           <div className="workflow-arrow">→</div>
           <div className="workflow-step">
             <div className="step-icon" style={{ backgroundColor: INSPECTION_STATUS_COLORS.approved.hex + '30', color: '#fff' }}>✓✓</div>
-            <div className="step-label">Heaks<br/>kiidetud</div>
+            <div className="step-label">{t('config.workflowApproved')}</div>
           </div>
         </div>
       </div>
@@ -1312,7 +1335,7 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
       <div className="inspection-config-screen">
         <div className="loading-container">
           <div className="loading-spinner" />
-          <p>Laadin seadistusi...</p>
+          <p>{t('config.loadingSettings')}</p>
         </div>
       </div>
     );
@@ -1325,9 +1348,9 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
         <button className="btn-back" onClick={onBack}>
           <FiArrowLeft size={20} />
         </button>
-        <h2>Inspektsioonide seadistamine</h2>
+        <h2>{t('config.mainTitle')}</h2>
         <div className="user-info">
-          <span className="role-badge">{user.role === 'admin' ? 'Admin' : 'Moderaator'}</span>
+          <span className="role-badge">{user.role === 'admin' ? t('config.roleAdmin') : t('config.roleModerator')}</span>
         </div>
       </div>
 
@@ -1344,25 +1367,25 @@ export default function InspectionConfigScreen({ projectId, user, onBack }: Insp
           className={`tab ${activeTab === 'types' ? 'active' : ''}`}
           onClick={() => setActiveTab('types')}
         >
-          <FiSettings size={16} /> Kategooriad
+          <FiSettings size={16} /> {t('config.categories')}
         </button>
         <button
           className={`tab ${activeTab === 'categories' ? 'active' : ''}`}
           onClick={() => setActiveTab('categories')}
         >
-          <FiFileText size={16} /> Tüübid
+          <FiFileText size={16} /> {t('config.types')}
         </button>
         <button
           className={`tab ${activeTab === 'checkpoints' ? 'active' : ''}`}
           onClick={() => setActiveTab('checkpoints')}
         >
-          <FiCheck size={16} /> Kontrollpunktid
+          <FiCheck size={16} /> {t('config.checkpoints')}
         </button>
         <button
           className={`tab ${activeTab === 'workflow' ? 'active' : ''}`}
           onClick={() => setActiveTab('workflow')}
         >
-          <FiMove size={16} /> Töövoog & värvid
+          <FiMove size={16} /> {t('config.workflowAndColors')}
         </button>
       </div>
 
