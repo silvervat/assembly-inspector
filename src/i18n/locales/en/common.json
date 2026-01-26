@@ -317,10 +317,87 @@
     "historyTitle": "Date change history"
   },
   "userProfile": {
-    "titlePlaceholder": "e.g. Quality Controller"
+    "title": "User Profile",
+    "titlePlaceholder": "e.g. Quality Controller",
+    "defaultUser": "User",
+    "roleAdmin": "Admin",
+    "roleModerator": "Moderator",
+    "roleInspector": "Inspector",
+    "phone": "Phone",
+    "phonePlaceholder": "+372 5XX XXXX",
+    "position": "Job Title",
+    "positionPlaceholder": "e.g. Quality Controller",
+    "company": "Company",
+    "companyPlaceholder": "e.g. Construction Company Ltd",
+    "signature": "Signature",
+    "changeSignature": "Change signature",
+    "addSignature": "+ Add signature",
+    "deleteSignatureConfirm": "Are you sure you want to delete the signature?",
+    "saveFailed": "Failed to save profile",
+    "signatureSaveFailed": "Failed to save signature"
   },
   "positioner": {
     "qrScannerNotSupported": "QR scanner not supported. Use Chrome.",
     "scanQrFirst": "Scan QR code first"
+  },
+  "login": {
+    "title": "Assembly Inspector",
+    "subtitle": "Enter your PIN code",
+    "pinPlaceholder": "PIN code",
+    "pinMinLength": "PIN code must be at least 4 digits",
+    "checking": "Checking...",
+    "login": "Log in",
+    "loginFailed": "Login failed",
+    "footer": "Assembly Quality Control System"
+  },
+  "signaturePad": {
+    "clear": "Clear",
+    "cancel": "Cancel",
+    "save": "Save",
+    "drawSignature": "Draw your signature here"
+  },
+  "guides": {
+    "title": "User Guides",
+    "searchPlaceholder": "Search guides...",
+    "noResults": "No results found for \"{{query}}\"",
+    "topic": "topic",
+    "topics": "topics",
+    "hint": "Hint:",
+    "hintText": "Shortcuts work when the extension panel is active. Select items in the model, click on the extension panel and press the shortcut. Some shortcuts (e.g. markups) require an item to be selected in the model.",
+    "globalShortcuts": "Global shortcuts"
+  },
+  "bulkAction": {
+    "selected": "{{count}} selected",
+    "clearSelection": "Clear selection",
+    "approve": "Approve",
+    "return": "Return",
+    "reject": "Reject",
+    "assign": "Assign",
+    "export": "Export",
+    "approveTitle": "Approve checkpoints",
+    "returnTitle": "Return for correction",
+    "rejectTitle": "Reject",
+    "checkpoints": "checkpoints",
+    "commentOptional": "Comment (optional)",
+    "commentRequired": "Comment (required)",
+    "confirmReturn": "Return",
+    "commentRequiredReturn": "Comment is required when returning",
+    "commentRequiredReject": "Comment is required when rejecting"
+  },
+  "shortcuts": {
+    "altShiftA": "Colors all arrived (confirmed) but not installed items green, rest of model is colored white.",
+    "altShiftM": "Adds markups to selected items with black text and 500mm line. If items are closer than 4m, 2m height difference is used.",
+    "altShiftS": "Opens quick search modal and expands extension panel. Allows searching items by assembly mark from any page.",
+    "altShiftW": "Colors entire model white - same function as on Tools page.",
+    "altShiftB": "Adds bolt markups to selected items in dark blue color. If bolts are closer than 4m, 1.5m height difference is used.",
+    "altShiftI": "Opens Installations entry page directly, regardless of which page you are currently on.",
+    "altShiftD": "Adds two-line markups to selected items with vehicle code and delivery date. Each vehicle gets different color, nearby markups get different heights.",
+    "altShiftR": "Removes all markups from model. Useful for quickly clearing all markups without going to Tools page.",
+    "altShiftC": "Colors entire model white (like ALT+SHIFT+W), but items selected in model are colored dark green. Useful for highlighting specific items.",
+    "altShiftT": "Opens delivery schedule and colors today's deliveries. Each vehicle gets different color (same as in delivery schedule list). Notifies if no deliveries for today.",
+    "altShift1": "Copies assembly marks of selected items in Excel format (tab-separated MARK and GUID). Suitable for pasting directly into Excel.",
+    "altShift2": "Copies assembly marks of selected items as simple list (each mark on separate line). Suitable for email or messenger.",
+    "altShift3": "Colors all installed items dark blue, rest of model is colored white. Same logic as on Installations page.",
+    "altShift4": "Selects all installed items (without coloring). Works in batches, supports large volumes (20k+ items)."
   }
 }

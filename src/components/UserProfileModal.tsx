@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useUserProfile } from '../hooks/useUserProfile';
 import { SignaturePad } from './SignaturePad';
 import { UserProfileExtension } from '../supabase';
@@ -19,6 +20,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   onClose,
   onSave
 }) => {
+  const { t } = useTranslation('common');
   const { profile, loading, error, updateProfile, uploadSignature, deleteSignature } = useUserProfile(userEmail, projectId);
 
   const [phone, setPhone] = useState('');
@@ -53,7 +55,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       onSave?.();
       onClose();
     } else {
-      setSaveError('Profiili salvestamine ebaõnnestus');
+      setSaveError(t('userProfile.saveFailed'));
     }
 
     setSaving(false);
@@ -68,18 +70,24 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     if (url) {
       setShowSignaturePad(false);
     } else {
-      setSaveError('Allkirja salvestamine ebaõnnestus');
+      setSaveError(t('userProfile.signatureSaveFailed'));
     }
 
     setSaving(false);
   };
 
   const handleDeleteSignature = async () => {
-    if (!confirm('Kas oled kindel, et soovid allkirja kustutada?')) return;
+    if (!confirm(t('userProfile.deleteSignatureConfirm'))) return;
 
     setSaving(true);
     await deleteSignature();
     setSaving(false);
+  };
+
+  const getRoleLabel = (role: string | undefined): string => {
+    if (role === 'admin') return t('userProfile.roleAdmin');
+    if (role === 'moderator') return t('userProfile.roleModerator');
+    return t('userProfile.roleInspector');
   };
 
   if (loading) {
@@ -106,7 +114,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             textAlign: 'center'
           }}
         >
-          Laadin...
+          {t('status.loading')}
         </div>
       </div>
     );
@@ -150,7 +158,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             alignItems: 'center'
           }}
         >
-          <h2 style={{ margin: 0, fontSize: '18px', color: '#111827' }}>Kasutaja profiil</h2>
+          <h2 style={{ margin: 0, fontSize: '18px', color: '#111827' }}>{t('userProfile.title')}</h2>
           <button
             onClick={onClose}
             style={{
@@ -202,10 +210,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 {profile?.name?.[0]?.toUpperCase() || '?'}
               </div>
               <div>
-                <div style={{ fontWeight: 'bold', color: '#111827' }}>{profile?.name || 'Kasutaja'}</div>
+                <div style={{ fontWeight: 'bold', color: '#111827' }}>{profile?.name || t('userProfile.defaultUser')}</div>
                 <div style={{ fontSize: '12px', color: '#6B7280' }}>{profile?.email}</div>
                 <div style={{ fontSize: '11px', color: '#9CA3AF' }}>
-                  {profile?.role === 'admin' ? 'Admin' : profile?.role === 'moderator' ? 'Moderaator' : 'Inspektor'}
+                  {getRoleLabel(profile?.role)}
                 </div>
               </div>
             </div>
@@ -224,13 +232,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   color: '#374151'
                 }}
               >
-                Telefon
+                {t('userProfile.phone')}
               </label>
               <input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                placeholder="+372 5XX XXXX"
+                placeholder={t('userProfile.phonePlaceholder')}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -252,13 +260,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   color: '#374151'
                 }}
               >
-                Ametinimetus
+                {t('userProfile.position')}
               </label>
               <input
                 type="text"
                 value={position}
                 onChange={(e) => setPosition(e.target.value)}
-                placeholder="nt. Kvaliteedikontrolör"
+                placeholder={t('userProfile.positionPlaceholder')}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -280,13 +288,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   color: '#374151'
                 }}
               >
-                Ettevõte
+                {t('userProfile.company')}
               </label>
               <input
                 type="text"
                 value={company}
                 onChange={(e) => setCompany(e.target.value)}
-                placeholder="nt. AS Ehitusfirma"
+                placeholder={t('userProfile.companyPlaceholder')}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -308,7 +316,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   color: '#374151'
                 }}
               >
-                Allkiri
+                {t('userProfile.signature')}
               </label>
 
               {showSignaturePad ? (
@@ -330,7 +338,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   >
                     <img
                       src={profile.signature_url}
-                      alt="Allkiri"
+                      alt={t('userProfile.signature')}
                       style={{
                         maxWidth: '100%',
                         height: 'auto',
@@ -350,7 +358,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                         fontSize: '13px'
                       }}
                     >
-                      Muuda allkirja
+                      {t('userProfile.changeSignature')}
                     </button>
                     <button
                       onClick={handleDeleteSignature}
@@ -365,7 +373,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                         fontSize: '13px'
                       }}
                     >
-                      Kustuta
+                      {t('buttons.delete')}
                     </button>
                   </div>
                 </div>
@@ -383,7 +391,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     color: '#6B7280'
                   }}
                 >
-                  + Lisa allkiri
+                  {t('userProfile.addSignature')}
                 </button>
               )}
             </div>
@@ -411,7 +419,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               fontSize: '14px'
             }}
           >
-            Tühista
+            {t('buttons.cancel')}
           </button>
           <button
             onClick={handleSave}
@@ -426,7 +434,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               fontSize: '14px'
             }}
           >
-            {saving ? 'Salvestan...' : 'Salvesta'}
+            {saving ? t('status.saving') : t('buttons.save')}
           </button>
         </div>
       </div>

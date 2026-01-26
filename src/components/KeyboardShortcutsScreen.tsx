@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FiChevronDown, FiChevronRight, FiSearch, FiCommand } from 'react-icons/fi';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
@@ -17,94 +18,38 @@ interface KeyboardShortcutsScreenProps {
 
 interface GuideItem {
   id: string;
-  title: string;
-  description: string;
+  shortcutKey: string;
+  descriptionKey: string;
 }
 
 interface GuideCategory {
   id: string;
-  name: string;
+  nameKey: string;
   icon: React.ReactNode;
   items: GuideItem[];
 }
 
-// Guide categories and items
+// Guide categories and items - using translation keys
 const guideCategories: GuideCategory[] = [
   {
     id: 'keyboard_shortcuts',
-    name: 'Globaalsed otseteed',
+    nameKey: 'guides.globalShortcuts',
     icon: <FiCommand size={18} />,
     items: [
-      {
-        id: 'alt_shift_a',
-        title: 'ALT + SHIFT + A',
-        description: 'Värvib kõik saabunud (kinnitatud) aga paigaldamata detailid roheliseks, ülejäänud mudel värvitakse valgeks.'
-      },
-      {
-        id: 'alt_shift_m',
-        title: 'ALT + SHIFT + M',
-        description: 'Lisab valitud detailidele markupid musta tekstiga ja 500mm joonega. Kui detailid on üksteisele lähemal kui 4m, kasutatakse 2m kõrguserinevust.'
-      },
-      {
-        id: 'alt_shift_s',
-        title: 'ALT + SHIFT + S',
-        description: 'Avab kiirotsingu modaali ja laiendab extensioni paneeli. Võimaldab otsida detaile assembly margi järgi ükskõik milliselt lehelt.'
-      },
-      {
-        id: 'alt_shift_w',
-        title: 'ALT + SHIFT + W',
-        description: 'Värvib kogu mudeli valgeks - sama funktsioon mis Tööriistad lehel.'
-      },
-      {
-        id: 'alt_shift_b',
-        title: 'ALT + SHIFT + B',
-        description: 'Lisab valitud detailidele poltide markupid tumesinises värvis. Kui poldid on üksteisele lähemal kui 4m, kasutatakse 1.5m kõrguserinevust.'
-      },
-      {
-        id: 'alt_shift_i',
-        title: 'ALT + SHIFT + I',
-        description: 'Avab Paigaldamiste sisestamise lehe otse, sõltumata sellest millisel lehel parasjagu oled.'
-      },
-      {
-        id: 'alt_shift_d',
-        title: 'ALT + SHIFT + D',
-        description: 'Lisab valitud detailidele kaherealised markupid veoki lühendi ja tarnekuupäevaga. Iga veok saab erineva värvi, lähedased markupid saavad erineva kõrguse.'
-      },
-      {
-        id: 'alt_shift_r',
-        title: 'ALT + SHIFT + R',
-        description: 'Eemaldab kõik markupid mudelis. Kasulik kui on vaja kiiresti kõik markupid kustutada ilma Tööriistad lehele minemata.'
-      },
-      {
-        id: 'alt_shift_c',
-        title: 'ALT + SHIFT + C',
-        description: 'Värvib kogu mudeli valgeks (nagu ALT+SHIFT+W), aga mudelis valitud detailid värvitakse tumeroheliseks. Kasulik kindlate detailide esiletoomiseks.'
-      },
-      {
-        id: 'alt_shift_t',
-        title: 'ALT + SHIFT + T',
-        description: 'Avab tarnegraafiku ja värvib tänased tarned. Iga veok saab erineva värvi (sama mis tarnegraafiku listis). Kui tänaseks pole tarneid, annab teada.'
-      },
-      {
-        id: 'alt_shift_1',
-        title: 'ALT + SHIFT + 1',
-        description: 'Kopeerib valitud detailide assembly margid Exceli-formaadis (tabulaatoriga eraldatud MARK ja GUID). Sobib otse Excelisse kleepimiseks.'
-      },
-      {
-        id: 'alt_shift_2',
-        title: 'ALT + SHIFT + 2',
-        description: 'Kopeerib valitud detailide assembly margid lihtsalt nimekirjana (iga mark eraldi real). Sobib emaili või messengeri saatmiseks.'
-      },
-      {
-        id: 'alt_shift_3',
-        title: 'ALT + SHIFT + 3',
-        description: 'Värvib kõik paigaldatud detailid tumesiniseks, ülejäänud mudel värvitakse valgeks. Sama loogika mis Paigaldamiste lehel.'
-      },
-      {
-        id: 'alt_shift_4',
-        title: 'ALT + SHIFT + 4',
-        description: 'Valib kõik paigaldatud detailid (ilma värvimata). Töötab osade kaupa, toetab suuri mahtusid (20k+ detaili).'
-      }
+      { id: 'alt_shift_a', shortcutKey: 'ALT + SHIFT + A', descriptionKey: 'shortcuts.altShiftA' },
+      { id: 'alt_shift_m', shortcutKey: 'ALT + SHIFT + M', descriptionKey: 'shortcuts.altShiftM' },
+      { id: 'alt_shift_s', shortcutKey: 'ALT + SHIFT + S', descriptionKey: 'shortcuts.altShiftS' },
+      { id: 'alt_shift_w', shortcutKey: 'ALT + SHIFT + W', descriptionKey: 'shortcuts.altShiftW' },
+      { id: 'alt_shift_b', shortcutKey: 'ALT + SHIFT + B', descriptionKey: 'shortcuts.altShiftB' },
+      { id: 'alt_shift_i', shortcutKey: 'ALT + SHIFT + I', descriptionKey: 'shortcuts.altShiftI' },
+      { id: 'alt_shift_d', shortcutKey: 'ALT + SHIFT + D', descriptionKey: 'shortcuts.altShiftD' },
+      { id: 'alt_shift_r', shortcutKey: 'ALT + SHIFT + R', descriptionKey: 'shortcuts.altShiftR' },
+      { id: 'alt_shift_c', shortcutKey: 'ALT + SHIFT + C', descriptionKey: 'shortcuts.altShiftC' },
+      { id: 'alt_shift_t', shortcutKey: 'ALT + SHIFT + T', descriptionKey: 'shortcuts.altShiftT' },
+      { id: 'alt_shift_1', shortcutKey: 'ALT + SHIFT + 1', descriptionKey: 'shortcuts.altShift1' },
+      { id: 'alt_shift_2', shortcutKey: 'ALT + SHIFT + 2', descriptionKey: 'shortcuts.altShift2' },
+      { id: 'alt_shift_3', shortcutKey: 'ALT + SHIFT + 3', descriptionKey: 'shortcuts.altShift3' },
+      { id: 'alt_shift_4', shortcutKey: 'ALT + SHIFT + 4', descriptionKey: 'shortcuts.altShift4' }
     ]
   }
 ];
@@ -119,6 +64,7 @@ export default function KeyboardShortcutsScreen({
   onSelectInspectionType,
   onOpenPartDatabase
 }: KeyboardShortcutsScreenProps) {
+  const { t } = useTranslation('common');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
@@ -132,11 +78,11 @@ export default function KeyboardShortcutsScreen({
     return guideCategories.map(category => ({
       ...category,
       items: category.items.filter(item =>
-        item.title.toLowerCase().includes(query) ||
-        item.description.toLowerCase().includes(query)
+        item.shortcutKey.toLowerCase().includes(query) ||
+        t(item.descriptionKey).toLowerCase().includes(query)
       )
     })).filter(category => category.items.length > 0);
-  }, [searchQuery]);
+  }, [searchQuery, t]);
 
   const toggleCategory = (categoryId: string) => {
     const newExpanded = new Set(expandedCategories);
@@ -169,7 +115,7 @@ export default function KeyboardShortcutsScreen({
       overflow: 'hidden'
     }}>
       <PageHeader
-        title="Kasutusjuhendid"
+        title={t('guides.title')}
         onBack={onBackToMenu}
         onNavigate={onNavigate}
         currentMode="keyboard_shortcuts"
@@ -201,7 +147,7 @@ export default function KeyboardShortcutsScreen({
           <FiSearch size={18} style={{ color: '#9ca3af', flexShrink: 0 }} />
           <input
             type="text"
-            placeholder="Otsi juhendeid..."
+            placeholder={t('guides.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -250,7 +196,7 @@ export default function KeyboardShortcutsScreen({
             padding: '40px 20px',
             color: '#6b7280'
           }}>
-            <div style={{ fontSize: '14px' }}>Otsingule "{searchQuery}" ei leitud tulemusi</div>
+            <div style={{ fontSize: '14px' }}>{t('guides.noResults', { query: searchQuery })}</div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -291,14 +237,14 @@ export default function KeyboardShortcutsScreen({
                       fontSize: '15px',
                       color: '#1f2937'
                     }}>
-                      {highlightText(category.name, searchQuery)}
+                      {highlightText(t(category.nameKey), searchQuery)}
                     </span>
                     <span style={{
                       color: '#9ca3af',
                       fontSize: '12px',
                       marginRight: '8px'
                     }}>
-                      {category.items.length} {category.items.length === 1 ? 'teema' : 'teemat'}
+                      {category.items.length} {category.items.length === 1 ? t('guides.topic') : t('guides.topics')}
                     </span>
                     {isExpanded ? (
                       <FiChevronDown size={18} style={{ color: '#9ca3af' }} />
@@ -337,7 +283,7 @@ export default function KeyboardShortcutsScreen({
                               fontFamily: 'ui-monospace, monospace',
                               border: '1px solid #c7d2fe'
                             }}>
-                              {highlightText(item.title, searchQuery)}
+                              {highlightText(item.shortcutKey, searchQuery)}
                             </code>
                           </div>
 
@@ -348,7 +294,7 @@ export default function KeyboardShortcutsScreen({
                             lineHeight: 1.5,
                             paddingLeft: '2px'
                           }}>
-                            {highlightText(item.description, searchQuery)}
+                            {highlightText(t(item.descriptionKey), searchQuery)}
                           </div>
                         </div>
                       ))}
@@ -365,7 +311,7 @@ export default function KeyboardShortcutsScreen({
                           color: '#92400e',
                           lineHeight: 1.5
                         }}>
-                          <strong>Vihje:</strong> Otseteed töötavad, kui extensioni paneel on aktiivne. Vali mudelis detailid, klõpsa seejärel extensioni paneelile ja vajuta otseteed. Mõned otseteed (nt markupid) vajavad, et mudelis oleks detail valitud.
+                          <strong>{t('guides.hint')}</strong> {t('guides.hintText')}
                         </div>
                       )}
                     </div>

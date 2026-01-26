@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export interface SignaturePadProps {
   onSave: (dataUrl: string) => void;
@@ -18,6 +19,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
   width = 300,
   height = 150
 }) => {
+  const { t } = useTranslation('common');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasDrawn, setHasDrawn] = useState(false);
@@ -164,7 +166,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
 
       {/* Helper text */}
       <p style={{ margin: 0, fontSize: '12px', color: '#6B7280', textAlign: 'center' }}>
-        Joonista allkiri hiirega või sõrmega
+        {t('signaturePad.drawSignature')}
       </p>
 
       {/* Actions */}
@@ -181,7 +183,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
             color: '#374151'
           }}
         >
-          Tühista
+          {t('signaturePad.clear')}
         </button>
 
         {onCancel && (
@@ -197,7 +199,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
               color: '#374151'
             }}
           >
-            Loobu
+            {t('signaturePad.cancel')}
           </button>
         )}
 
@@ -214,7 +216,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
             fontSize: '14px'
           }}
         >
-          Salvesta
+          {t('signaturePad.save')}
         </button>
       </div>
     </div>

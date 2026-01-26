@@ -322,5 +322,85 @@
   "positioner": {
     "qrScannerNotSupported": "QR skänner pole toetatud. Kasuta Chrome.",
     "scanQrFirst": "Skänni esmalt QR kood"
+  },
+  "login": {
+    "title": "Assembly Inspector",
+    "subtitle": "Sisesta oma PIN kood",
+    "pinPlaceholder": "PIN kood",
+    "pinMinLength": "PIN kood peab olema vähemalt 4 numbrit",
+    "checking": "Kontrollin...",
+    "login": "Logi sisse",
+    "loginFailed": "Sisselogimine ebaõnnestus",
+    "footer": "Assembly Quality Control System"
+  },
+  "userProfile": {
+    "title": "Kasutaja profiil",
+    "titlePlaceholder": "nt. Kvaliteedikontrolör",
+    "defaultUser": "Kasutaja",
+    "roleAdmin": "Admin",
+    "roleModerator": "Moderaator",
+    "roleInspector": "Inspektor",
+    "phone": "Telefon",
+    "phonePlaceholder": "+372 5XX XXXX",
+    "position": "Ametinimetus",
+    "positionPlaceholder": "nt. Kvaliteedikontrolör",
+    "company": "Ettevõte",
+    "companyPlaceholder": "nt. AS Ehitusfirma",
+    "signature": "Allkiri",
+    "changeSignature": "Muuda allkirja",
+    "addSignature": "+ Lisa allkiri",
+    "deleteSignatureConfirm": "Kas oled kindel, et soovid allkirja kustutada?",
+    "saveFailed": "Profiili salvestamine ebaõnnestus",
+    "signatureSaveFailed": "Allkirja salvestamine ebaõnnestus"
+  },
+  "signaturePad": {
+    "clear": "Tühjenda",
+    "cancel": "Tühista",
+    "save": "Salvesta",
+    "drawSignature": "Joonista oma allkiri siia"
+  },
+  "guides": {
+    "title": "Kasutusjuhendid",
+    "searchPlaceholder": "Otsi juhendeid...",
+    "noResults": "Otsingule \"{{query}}\" ei leitud tulemusi",
+    "topic": "teema",
+    "topics": "teemat",
+    "hint": "Vihje:",
+    "hintText": "Otseteed töötavad, kui extensioni paneel on aktiivne. Vali mudelis detailid, klõpsa seejärel extensioni paneelile ja vajuta otseteed. Mõned otseteed (nt markupid) vajavad, et mudelis oleks detail valitud.",
+    "globalShortcuts": "Globaalsed otseteed"
+  },
+  "bulkAction": {
+    "selected": "{{count}} valitud",
+    "clearSelection": "Tühista valik",
+    "approve": "Kinnita",
+    "return": "Tagasi",
+    "reject": "Lükka tagasi",
+    "assign": "Määra",
+    "export": "Ekspordi",
+    "approveTitle": "Kinnita kontrollpunktid",
+    "returnTitle": "Suuna tagasi parandamiseks",
+    "rejectTitle": "Lükka tagasi",
+    "checkpoints": "kontrollpunkti",
+    "commentOptional": "Kommentaar (valikuline)",
+    "commentRequired": "Kommentaar (kohustuslik)",
+    "confirmReturn": "Suuna tagasi",
+    "commentRequiredReturn": "Kommentaar on kohustuslik tagasi suunamisel",
+    "commentRequiredReject": "Kommentaar on kohustuslik tagasi lükkamisel"
+  },
+  "shortcuts": {
+    "altShiftA": "Värvib kõik saabunud (kinnitatud) aga paigaldamata detailid roheliseks, ülejäänud mudel värvitakse valgeks.",
+    "altShiftM": "Lisab valitud detailidele markupid musta tekstiga ja 500mm joonega. Kui detailid on üksteisele lähemal kui 4m, kasutatakse 2m kõrguserinevust.",
+    "altShiftS": "Avab kiirotsingu modaali ja laiendab extensioni paneeli. Võimaldab otsida detaile assembly margi järgi ükskõik milliselt lehelt.",
+    "altShiftW": "Värvib kogu mudeli valgeks - sama funktsioon mis Tööriistad lehel.",
+    "altShiftB": "Lisab valitud detailidele poltide markupid tumesinises värvis. Kui poldid on üksteisele lähemal kui 4m, kasutatakse 1.5m kõrguserinevust.",
+    "altShiftI": "Avab Paigaldamiste sisestamise lehe otse, sõltumata sellest millisel lehel parasjagu oled.",
+    "altShiftD": "Lisab valitud detailidele kaherealised markupid veoki lühendi ja tarnekuupäevaga. Iga veok saab erineva värvi, lähedased markupid saavad erineva kõrguse.",
+    "altShiftR": "Eemaldab kõik markupid mudelis. Kasulik kui on vaja kiiresti kõik markupid kustutada ilma Tööriistad lehele minemata.",
+    "altShiftC": "Värvib kogu mudeli valgeks (nagu ALT+SHIFT+W), aga mudelis valitud detailid värvitakse tumeroheliseks. Kasulik kindlate detailide esiletoomiseks.",
+    "altShiftT": "Avab tarnegraafiku ja värvib tänased tarned. Iga veok saab erineva värvi (sama mis tarnegraafiku listis). Kui tänaseks pole tarneid, annab teada.",
+    "altShift1": "Kopeerib valitud detailide assembly margid Exceli-formaadis (tabulaatoriga eraldatud MARK ja GUID). Sobib otse Excelisse kleepimiseks.",
+    "altShift2": "Kopeerib valitud detailide assembly margid lihtsalt nimekirjana (iga mark eraldi real). Sobib emaili või messengeri saatmiseks.",
+    "altShift3": "Värvib kõik paigaldatud detailid tumesiniseks, ülejäänud mudel värvitakse valgeks. Sama loogika mis Paigaldamiste lehel.",
+    "altShift4": "Valib kõik paigaldatud detailid (ilma värvimata). Töötab osade kaupa, toetab suuri mahtusid (20k+ detaili)."
   }
 }

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export interface BulkActionBarProps {
   selectedCount: number;
@@ -33,6 +34,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
   disabled = false,
   users = []
 }) => {
+  const { t } = useTranslation('common');
   // Available for future use
   void _selectedIds;
   void _onStatusChange;
@@ -62,13 +64,13 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
       onApprove(comment || undefined);
     } else if (showCommentModal === 'return') {
       if (!comment.trim()) {
-        alert('Kommentaar on kohustuslik tagasi suunamisel');
+        alert(t('bulkAction.commentRequiredReturn'));
         return;
       }
       onReturn(comment);
     } else if (showCommentModal === 'reject') {
       if (!comment.trim()) {
-        alert('Kommentaar on kohustuslik tagasi lükkamisel');
+        alert(t('bulkAction.commentRequiredReject'));
         return;
       }
       onReject(comment);
@@ -109,7 +111,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
       >
         {/* Selection info */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontWeight: 'bold' }}>{selectedCount} valitud</span>
+          <span style={{ fontWeight: 'bold' }}>{t('bulkAction.selected', { count: selectedCount })}</span>
           <button
             onClick={onClearSelection}
             style={{
@@ -122,7 +124,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
               fontSize: '12px'
             }}
           >
-            Tühista valik
+            {t('bulkAction.clearSelection')}
           </button>
         </div>
 
@@ -146,7 +148,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
               gap: '4px'
             }}
           >
-            <span>✓</span> Kinnita
+            <span>✓</span> {t('bulkAction.approve')}
           </button>
 
           {/* Return */}
@@ -167,7 +169,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
               gap: '4px'
             }}
           >
-            <span>↩</span> Tagasi
+            <span>↩</span> {t('bulkAction.return')}
           </button>
 
           {/* Reject */}
@@ -188,7 +190,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
               gap: '4px'
             }}
           >
-            <span>✕</span> Lükka tagasi
+            <span>✕</span> {t('bulkAction.reject')}
           </button>
 
           {/* Assign dropdown */}
@@ -211,7 +213,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
                   gap: '4px'
                 }}
               >
-                <span>👤</span> Määra
+                <span>👤</span> {t('bulkAction.assign')}
               </button>
 
               {showAssignDropdown && (
@@ -273,7 +275,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
                 gap: '4px'
               }}
             >
-              <span>↓</span> Ekspordi
+              <span>↓</span> {t('bulkAction.export')}
             </button>
 
             {showExportDropdown && (
@@ -372,13 +374,13 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             <h3 style={{ margin: '0 0 16px', color: '#111827' }}>
-              {showCommentModal === 'approve' && 'Kinnita kontrollpunktid'}
-              {showCommentModal === 'return' && 'Suuna tagasi parandamiseks'}
-              {showCommentModal === 'reject' && 'Lükka tagasi'}
+              {showCommentModal === 'approve' && t('bulkAction.approveTitle')}
+              {showCommentModal === 'return' && t('bulkAction.returnTitle')}
+              {showCommentModal === 'reject' && t('bulkAction.rejectTitle')}
             </h3>
 
             <p style={{ margin: '0 0 12px', color: '#6B7280', fontSize: '14px' }}>
-              {selectedCount} kontrollpunkti
+              {selectedCount} {t('bulkAction.checkpoints')}
             </p>
 
             <textarea
@@ -386,8 +388,8 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
               onChange={(e) => setComment(e.target.value)}
               placeholder={
                 showCommentModal === 'approve'
-                  ? 'Kommentaar (valikuline)'
-                  : 'Kommentaar (kohustuslik)'
+                  ? t('bulkAction.commentOptional')
+                  : t('bulkAction.commentRequired')
               }
               style={{
                 width: '100%',
@@ -412,7 +414,7 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
                   fontSize: '14px'
                 }}
               >
-                Tühista
+                {t('buttons.cancel')}
               </button>
               <button
                 onClick={handleConfirmAction}
@@ -428,9 +430,9 @@ export const BulkActionBar: React.FC<BulkActionBarProps> = ({
                   fontSize: '14px'
                 }}
               >
-                {showCommentModal === 'approve' && 'Kinnita'}
-                {showCommentModal === 'return' && 'Suuna tagasi'}
-                {showCommentModal === 'reject' && 'Lükka tagasi'}
+                {showCommentModal === 'approve' && t('bulkAction.approve')}
+                {showCommentModal === 'return' && t('bulkAction.confirmReturn')}
+                {showCommentModal === 'reject' && t('bulkAction.reject')}
               </button>
             </div>
           </div>
