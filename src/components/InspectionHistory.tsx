@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useInspectionHistory } from '../hooks/useInspectionHistory';
 import { AuditAction } from '../supabase';
 
@@ -8,37 +9,6 @@ export interface InspectionHistoryProps {
   projectId?: string;
   onClose: () => void;
 }
-
-// Labels for audit actions in Estonian
-const ACTION_LABELS: Record<AuditAction, string> = {
-  created: 'Loodud',
-  updated: 'Uuendatud',
-  deleted: 'Kustutatud',
-  status_changed: 'Staatus muudetud',
-  guid_changed: 'GUID muudetud',
-  reviewed: 'Üle vaadatud',
-  approved: 'Kinnitatud',
-  rejected: 'Tagasi lükatud',
-  returned: 'Tagasi suunatud',
-  locked: 'Lukustatud',
-  unlocked: 'Lukust vabastatud',
-  photo_added: 'Foto lisatud',
-  photo_deleted: 'Foto kustutatud',
-  comment_added: 'Kommentaar lisatud',
-  comment_edited: 'Kommentaar muudetud',
-  comment_deleted: 'Kommentaar kustutatud',
-  assigned: 'Määratud',
-  unassigned: 'Määramine eemaldatud',
-  submitted: 'Esitatud',
-  reopened: 'Taasavatud',
-  result_recorded: 'Tulemus salvestatud',
-  result_updated: 'Tulemus uuendatud',
-  measurement_added: 'Mõõtmine lisatud',
-  bulk_operation: 'Hulgioperatsioon',
-  exported: 'Eksporditud',
-  imported: 'Imporditud',
-  synced: 'Sünkroniseeritud'
-};
 
 // Icon display for actions
 const ACTION_ICONS: Record<AuditAction, string> = {
@@ -78,7 +48,13 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
   planItemId,
   onClose
 }) => {
+  const { t } = useTranslation('common');
   const { history, loading, error, refresh } = useInspectionHistory(planItemId);
+
+  // Get translated label for audit action
+  const getActionLabel = useCallback((action: AuditAction) => {
+    return t(`auditActions.${action}`, { defaultValue: action });
+  }, [t]);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -171,7 +147,7 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
         >
           {loading && (
             <div style={{ textAlign: 'center', padding: '20px', color: '#6B7280' }}>
-              Laadin...
+              {t('status.loading')}
             </div>
           )}
 
@@ -183,7 +159,7 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
 
           {!loading && !error && history.length === 0 && (
             <div style={{ textAlign: 'center', padding: '20px', color: '#6B7280' }}>
-              Ajalugu puudub
+              {t('inspection:history.noHistory', { ns: 'inspection' })}
             </div>
           )}
 
@@ -249,7 +225,7 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
                         gap: '8px'
                       }}
                     >
-                      {ACTION_LABELS[entry.action] || entry.action}
+                      {getActionLabel(entry.action)}
                       {entry.is_bulk && (
                         <span
                           style={{
