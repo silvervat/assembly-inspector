@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink, FiUsers, FiEdit2, FiPlus, FiSave, FiCamera, FiVideo, FiTruck, FiAlertTriangle, FiBox, FiTarget, FiRotateCcw, FiMapPin } from 'react-icons/fi';
 import { BsQrCode } from 'react-icons/bs';
 import QRCode from 'qrcode';
@@ -215,15 +216,15 @@ const VIEW_PRESET_COLORS = [
 // Resource types configuration
 const RESOURCE_TYPES = [
   // Machines (matches InstallationScheduleScreen INSTALL_METHODS)
-  { key: 'crane', label: 'Kraana', icon: `${import.meta.env.BASE_URL}icons/crane.png` },
-  { key: 'forklift', label: 'Teleskooplaadur', icon: `${import.meta.env.BASE_URL}icons/forklift.png` },
-  { key: 'manual', label: 'Käsitsi', icon: `${import.meta.env.BASE_URL}icons/manual.png` },
-  { key: 'poomtostuk', label: 'Korvtõstuk', icon: `${import.meta.env.BASE_URL}icons/poomtostuk.png` },
-  { key: 'kaartostuk', label: 'Käärtõstuk', icon: `${import.meta.env.BASE_URL}icons/kaartostuk.png` },
+  { key: 'crane', icon: `${import.meta.env.BASE_URL}icons/crane.png` },
+  { key: 'forklift', icon: `${import.meta.env.BASE_URL}icons/forklift.png` },
+  { key: 'manual', icon: `${import.meta.env.BASE_URL}icons/manual.png` },
+  { key: 'poomtostuk', icon: `${import.meta.env.BASE_URL}icons/poomtostuk.png` },
+  { key: 'kaartostuk', icon: `${import.meta.env.BASE_URL}icons/kaartostuk.png` },
   // Labor (matches InstallationScheduleScreen INSTALL_METHODS)
-  { key: 'troppija', label: 'Troppija', icon: `${import.meta.env.BASE_URL}icons/troppija.png` },
-  { key: 'monteerija', label: 'Monteerija', icon: `${import.meta.env.BASE_URL}icons/monteerija.png` },
-  { key: 'keevitaja', label: 'Keevitaja', icon: `${import.meta.env.BASE_URL}icons/keevitaja.png` },
+  { key: 'troppija', icon: `${import.meta.env.BASE_URL}icons/troppija.png` },
+  { key: 'monteerija', icon: `${import.meta.env.BASE_URL}icons/monteerija.png` },
+  { key: 'keevitaja', icon: `${import.meta.env.BASE_URL}icons/keevitaja.png` },
 ] as const;
 
 export default function AdminScreen({
@@ -241,6 +242,13 @@ export default function AdminScreen({
   onStartCalibration,
   onCancelCalibration
 }: AdminScreenProps) {
+  const { t } = useTranslation('admin');
+
+  // Helper function to get translated resource type label
+  const getResourceLabel = useCallback((key: string) => {
+    return t(`resources.${key}`, { defaultValue: key });
+  }, [t]);
+
   // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin' | 'qrActivator' | 'positioner'
   const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin' | 'qrActivator' | 'positioner'>('main');
 
@@ -4394,7 +4402,7 @@ export default function AdminScreen({
         });
         setMessage('Seaded laetud andmebaasist');
       } else {
-        setMessage('Kasutan vaikimisi seadeid (pole veel salvestatud)');
+        setMessage(t('settings.usingDefaultSettings'));
       }
     } catch (e: any) {
       console.error('Error loading property mappings:', e);
@@ -5200,21 +5208,21 @@ export default function AdminScreen({
   // Get admin page title
   const getAdminTitle = () => {
     switch (adminView) {
-      case 'main': return 'Administratsioon';
-      case 'properties': return 'Avasta propertised';
-      case 'assemblyList': return 'Assembly list & Poldid';
-      case 'guidImport': return 'Import GUID (MS)';
-      case 'modelObjects': return 'Saada andmebaasi';
-      case 'propertyMappings': return 'Tekla property seaded';
-      case 'userPermissions': return 'Kasutajate õigused';
-      case 'resources': return 'Ressursside haldus';
-      case 'cameraPositions': return 'Kaamera positsioonid';
-      case 'qrActivator': return 'QR Aktivaator';
-      case 'positioner': return 'Positsioneerija';
-      case 'dataExport': return 'Ekspordi andmed';
-      case 'fontTester': return 'Fontide testija';
-      case 'deliveryScheduleAdmin': return 'Tarnegraafikud';
-      default: return 'Administratsioon';
+      case 'main': return t('title');
+      case 'properties': return t('menu.discoverProperties');
+      case 'assemblyList': return t('menu.assemblyListBolts');
+      case 'guidImport': return t('menu.importGuidMs');
+      case 'modelObjects': return t('menu.sendToDatabase');
+      case 'propertyMappings': return t('menu.teklaPropertySettings');
+      case 'userPermissions': return t('menu.userPermissions');
+      case 'resources': return t('menu.resourceManagement');
+      case 'cameraPositions': return t('menu.cameraPositions');
+      case 'qrActivator': return t('menu.qrActivator');
+      case 'positioner': return t('menu.positioner');
+      case 'dataExport': return t('menu.exportData');
+      case 'fontTester': return t('menu.fontTester');
+      case 'deliveryScheduleAdmin': return t('menu.deliverySchedules');
+      default: return t('title');
     }
   };
 
@@ -5239,34 +5247,34 @@ export default function AdminScreen({
         <div className="admin-tools-compact">
           <button className="admin-tool-btn" onClick={discoverProperties} disabled={isLoading}>
             <FiSearch size={18} />
-            <span>Avasta propertised</span>
+            <span>{t('menu.discoverProperties')}</span>
             {isLoading && <FiRefreshCw className="spin" size={14} />}
           </button>
 
           <button className="admin-tool-btn" onClick={() => setShowFunctionExplorer(true)}>
             <FiZap size={18} />
-            <span>Funktsioonide testija</span>
+            <span>{t('menu.functionTester')}</span>
           </button>
 
           <button className="admin-tool-btn" onClick={collectAssemblyData} disabled={assemblyListLoading}>
             <FiDownload size={18} />
-            <span>Assembly list & Poldid</span>
+            <span>{t('menu.assemblyListBolts')}</span>
             {assemblyListLoading && <FiRefreshCw className="spin" size={14} />}
           </button>
 
           <button className="admin-tool-btn" onClick={() => setAdminView('guidImport')}>
             <FiSearch size={18} />
-            <span>Import GUID (MS)</span>
+            <span>{t('menu.importGuidMs')}</span>
           </button>
 
           <button className="admin-tool-btn" onClick={() => setAdminView('modelObjects')}>
             <FiDatabase size={18} />
-            <span>Saada andmebaasi</span>
+            <span>{t('menu.sendToDatabase')}</span>
           </button>
 
           <button className="admin-tool-btn" onClick={openDeliveryPopup}>
             <FiExternalLink size={18} />
-            <span>Tarnegraafik uues aknas</span>
+            <span>{t('menu.deliveryNewWindow')}</span>
           </button>
 
           <button
@@ -5277,7 +5285,7 @@ export default function AdminScreen({
             }}
           >
             <FiTrash2 size={18} />
-            <span>Tarnegraafiku orvud</span>
+            <span>{t('menu.deliveryOrphans')}</span>
           </button>
 
           <button
@@ -5289,7 +5297,7 @@ export default function AdminScreen({
             style={{ background: '#7c3aed', color: 'white' }}
           >
             <FiDatabase size={18} />
-            <span>Tekla property seaded</span>
+            <span>{t('menu.teklaPropertySettings')}</span>
           </button>
 
           <button
@@ -5301,7 +5309,7 @@ export default function AdminScreen({
             style={{ background: '#059669', color: 'white' }}
           >
             <FiUsers size={18} />
-            <span>Kasutajate õigused</span>
+            <span>{t('menu.userPermissions')}</span>
           </button>
 
           <button
@@ -5314,7 +5322,7 @@ export default function AdminScreen({
             style={{ background: '#f59e0b', color: 'white' }}
           >
             <FiDatabase size={18} />
-            <span>Ressursside haldus</span>
+            <span>{t('menu.resourceManagement')}</span>
           </button>
 
           <button
@@ -5326,7 +5334,7 @@ export default function AdminScreen({
             style={{ background: '#8b5cf6', color: 'white' }}
           >
             <FiVideo size={18} />
-            <span>Kaamera positsioonid</span>
+            <span>{t('menu.cameraPositions')}</span>
           </button>
 
           <button
@@ -5335,7 +5343,7 @@ export default function AdminScreen({
             style={{ background: '#f97316', color: 'white' }}
           >
             <FiBox size={18} />
-            <span>Kraanade Andmebaas</span>
+            <span>{t('menu.craneDatabase')}</span>
           </button>
 
           <button
@@ -5347,7 +5355,7 @@ export default function AdminScreen({
             style={{ background: '#10b981', color: 'white' }}
           >
             <BsQrCode size={18} />
-            <span>QR Aktivaator</span>
+            <span>{t('menu.qrActivator')}</span>
           </button>
 
           <button
@@ -5359,7 +5367,7 @@ export default function AdminScreen({
             style={{ background: '#8b5cf6', color: 'white' }}
           >
             <FiTarget size={18} />
-            <span>Positsioneerija</span>
+            <span>{t('menu.positioner')}</span>
           </button>
 
           <button
@@ -5368,7 +5376,7 @@ export default function AdminScreen({
             style={{ background: '#dc2626', color: 'white' }}
           >
             <FiDownload size={18} />
-            <span>Ekspordi andmed</span>
+            <span>{t('menu.exportData')}</span>
           </button>
 
           <button
@@ -5377,7 +5385,7 @@ export default function AdminScreen({
             style={{ background: '#6366f1', color: 'white' }}
           >
             <FiZap size={18} />
-            <span>Fontide testija</span>
+            <span>{t('menu.fontTester')}</span>
           </button>
 
           <button
@@ -5389,7 +5397,7 @@ export default function AdminScreen({
             style={{ background: '#0ea5e9', color: 'white' }}
           >
             <FiTruck size={18} />
-            <span>Tarnegraafikud</span>
+            <span>{t('menu.deliverySchedules')}</span>
           </button>
         </div>
 
@@ -5467,7 +5475,7 @@ export default function AdminScreen({
       {showFunctionExplorer && (
         <div className="function-explorer">
           <div className="function-explorer-header">
-            <h3>Funktsioonide testija</h3>
+            <h3>{t('menu.functionTester')}</h3>
             <button className="close-btn" onClick={() => setShowFunctionExplorer(false)}>✕</button>
           </div>
 
@@ -14198,9 +14206,9 @@ export default function AdminScreen({
                     };
 
                     const resourceLabels: Record<string, string> = {
-                      crane: '🏗️ Kraana', forklift: '🚜 Teleskooplaadur', poomtostuk: '🚁 Korvtõstuk',
-                      kaartostuk: '📐 Käärtõstuk', manual: '🤲 Käsitsi', troppija: '🔗 Troppija',
-                      monteerija: '🔧 Monteerija', keevitaja: '⚡ Keevitaja'
+                      crane: `🏗️ ${t('resources.crane')}`, forklift: `🚜 ${t('resources.forklift')}`, poomtostuk: `🚁 ${t('resources.poomtostuk')}`,
+                      kaartostuk: `📐 ${t('resources.kaartostuk')}`, manual: `🤲 ${t('resources.manual')}`, troppija: `🔗 ${t('resources.troppija')}`,
+                      monteerija: `🔧 ${t('resources.monteerija')}`, keevitaja: `⚡ ${t('resources.keevitaja')}`
                     };
 
                     const html = `<!DOCTYPE html>
@@ -15861,14 +15869,12 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
           {propertyMappingsLoading ? (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <FiRefreshCw className="spin" size={32} />
-              <p>Laadin seadeid...</p>
+              <p>{t('settings.loadingSettings')}</p>
             </div>
           ) : (
             <div style={{ display: 'grid', gap: '16px' }}>
               <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>
-                Määra millistest Tekla property set'idest ja property'dest andmeid lugeda.
-                Vaikimisi kasutatakse standardseid Tekla Assembly propertiseid.
-                Skaneeri mudel, et näha kõiki saadaolevaid propertiseid.
+                {t('settings.definePropertyLocations')}
               </p>
 
               {/* Property Mapping Fields */}
@@ -16454,7 +16460,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   }}
                 >
                   <img src={type.icon} alt="" style={{ width: '18px', height: '18px', objectFit: 'contain' }} />
-                  <span>{type.label}</span>
+                  <span>{getResourceLabel(type.key)}</span>
                   {count > 0 && (
                     <span style={{
                       background: selectedResourceType === type.key ? 'rgba(255,255,255,0.3)' : '#e5e7eb',
@@ -16482,7 +16488,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
               style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <FiPlus size={14} />
-              Lisa uus {RESOURCE_TYPES.find(t => t.key === selectedResourceType)?.label.toLowerCase()}
+              {t('resources.addNew', { type: getResourceLabel(selectedResourceType).toLowerCase() })}
             </button>
           </div>
 
@@ -16510,10 +16516,10 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h3 style={{ margin: 0 }}>
                     {editingInstallationResource
-                      ? `Muuda ressurssi nime`
+                      ? t('resources.editResourceName')
                       : editingResource
-                        ? 'Muuda ressurssi'
-                        : `Lisa ${RESOURCE_TYPES.find(t => t.key === selectedResourceType)?.label.toLowerCase()}`}
+                        ? t('resources.editResource')
+                        : t('resources.add', { type: getResourceLabel(selectedResourceType).toLowerCase() })}
                   </h3>
                   <button onClick={() => {
                     setShowResourceForm(false);
@@ -16526,7 +16532,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
 
                 <div style={{ marginBottom: '12px', position: 'relative' }} ref={resourceSuggestionRef}>
                   <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 500 }}>
-                    Nimi *
+                    {t('resources.name')} *
                   </label>
                   <input
                     type="text"
@@ -16683,9 +16689,9 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
               if (!hasAnyResources) {
                 return (
                   <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
-                    <p>Seda tüüpi ressursse pole veel lisatud.</p>
+                    <p>{t('resources.noResourcesYet')}</p>
                     <p style={{ fontSize: '12px' }}>
-                      Klõpsa "Lisa uus" et lisada esimene {RESOURCE_TYPES.find(t => t.key === selectedResourceType)?.label.toLowerCase()}.
+                      {t('resources.clickAddNew', { type: getResourceLabel(selectedResourceType).toLowerCase() })}
                     </p>
                   </div>
                 );
@@ -16695,11 +16701,11 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: '#f9fafb' }}>
-                      <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>Nimi</th>
-                      <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>Märksõnad</th>
-                      <th style={{ textAlign: 'center', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '60px' }}>Kasutus</th>
-                      <th style={{ textAlign: 'center', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '80px' }}>Aktiivne</th>
-                      <th style={{ textAlign: 'right', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '100px' }}>Tegevused</th>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>{t('resources.name')}</th>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>{t('resources.keywords')}</th>
+                      <th style={{ textAlign: 'center', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '60px' }}>{t('resources.usage')}</th>
+                      <th style={{ textAlign: 'center', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '80px' }}>{t('resources.active')}</th>
+                      <th style={{ textAlign: 'right', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '100px' }}>{t('resources.actions')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -17062,9 +17068,9 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
             ) : cameraPositions.length === 0 ? (
               <div style={{ padding: '24px', textAlign: 'center', color: '#6b7280' }}>
                 <FiVideo size={24} style={{ marginBottom: '6px', opacity: 0.5 }} />
-                <p style={{ fontSize: '12px', margin: '0 0 4px' }}>Vaateid pole veel salvestatud.</p>
+                <p style={{ fontSize: '12px', margin: '0 0 4px' }}>{t('settings.noViewsSaved')}</p>
                 <p style={{ fontSize: '10px', margin: 0 }}>
-                  Klõpsa "Salvesta praegune vaade".
+                  {t('settings.clickSaveCurrentView')}
                 </p>
               </div>
             ) : (

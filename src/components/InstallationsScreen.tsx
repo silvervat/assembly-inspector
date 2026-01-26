@@ -28,15 +28,15 @@ interface MethodConfig {
 
 const INSTALL_METHODS_CONFIG: MethodConfig[] = [
   // Machines
-  { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 2, defaultCount: 1, category: 'machine' },
-  { key: 'forklift', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 2, defaultCount: 1, category: 'machine' },
-  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 1, defaultCount: 1, category: 'machine' },
-  { key: 'poomtostuk', label: 'Korvtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 4, defaultCount: 2, category: 'machine' },
-  { key: 'kaartostuk', label: 'Käärtõstuk', icon: 'kaartostuk.png', bgColor: '#ffedd5', activeBgColor: '#f5840b', filterCss: 'invert(50%) sepia(90%) saturate(1500%) hue-rotate(360deg) brightness(100%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'crane', label: 'crane', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 2, defaultCount: 1, category: 'machine' },
+  { key: 'forklift', label: 'forklift', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 2, defaultCount: 1, category: 'machine' },
+  { key: 'manual', label: 'manual', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 1, defaultCount: 1, category: 'machine' },
+  { key: 'poomtostuk', label: 'poomtostuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 4, defaultCount: 2, category: 'machine' },
+  { key: 'kaartostuk', label: 'kaartostuk', icon: 'kaartostuk.png', bgColor: '#ffedd5', activeBgColor: '#f5840b', filterCss: 'invert(50%) sepia(90%) saturate(1500%) hue-rotate(360deg) brightness(100%)', maxCount: 4, defaultCount: 1, category: 'machine' },
   // Labor
-  { key: 'troppija', label: 'Troppija', icon: 'troppija.png', bgColor: '#ccfbf1', activeBgColor: '#11625b', filterCss: 'invert(30%) sepia(40%) saturate(800%) hue-rotate(140deg) brightness(80%)', maxCount: 4, defaultCount: 1, category: 'labor' },
-  { key: 'monteerija', label: 'Monteerija', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 8, defaultCount: 1, category: 'labor' },
-  { key: 'keevitaja', label: 'Keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', activeBgColor: '#6b7280', filterCss: 'grayscale(100%) brightness(30%)', maxCount: 4, defaultCount: 1, category: 'labor' },
+  { key: 'troppija', label: 'troppija', icon: 'troppija.png', bgColor: '#ccfbf1', activeBgColor: '#11625b', filterCss: 'invert(30%) sepia(40%) saturate(800%) hue-rotate(140deg) brightness(80%)', maxCount: 4, defaultCount: 1, category: 'labor' },
+  { key: 'monteerija', label: 'monteerija', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 8, defaultCount: 1, category: 'labor' },
+  { key: 'keevitaja', label: 'keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', activeBgColor: '#6b7280', filterCss: 'grayscale(100%) brightness(30%)', maxCount: 4, defaultCount: 1, category: 'labor' },
 ];
 
 // Load default counts from localStorage
@@ -393,6 +393,11 @@ export default function InstallationsScreen({
   onOpenPartDatabase
 }: InstallationsScreenProps) {
   const { t } = useTranslation(['common', 'installation']);
+
+  // Helper function to get translated method/resource label
+  const getMethodLabel = useCallback((key: string): string => {
+    return t(`installation:resources.${key}`, { defaultValue: key });
+  }, [t]);
 
   // Property mappings for this project
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
@@ -6260,11 +6265,11 @@ export default function InstallationsScreen({
                           backgroundColor: isActive ? method.activeBgColor : method.bgColor,
                         }}
                         onClick={() => toggleInstallMethod(method.key)}
-                        title={method.label}
+                        title={getMethodLabel(method.key)}
                       >
                         <img
                           src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
-                          alt={method.label}
+                          alt={getMethodLabel(method.key)}
                           style={{ filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
                         />
                         {isActive && count > 0 && (
@@ -8923,11 +8928,11 @@ export default function InstallationsScreen({
                             position: 'relative'
                           }}
                           onClick={() => toggleEditMethod(method.key)}
-                          title={method.label}
+                          title={getMethodLabel(method.key)}
                         >
                           <img
                             src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
-                            alt={method.label}
+                            alt={getMethodLabel(method.key)}
                             style={{ width: '24px', height: '24px', filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
                           />
                           {isActive && count > 0 && (
@@ -9025,11 +9030,11 @@ export default function InstallationsScreen({
                             position: 'relative'
                           }}
                           onClick={() => toggleEditMethod(method.key)}
-                          title={method.label}
+                          title={getMethodLabel(method.key)}
                         >
                           <img
                             src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
-                            alt={method.label}
+                            alt={getMethodLabel(method.key)}
                             style={{ width: '24px', height: '24px', filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
                           />
                           {isActive && count > 0 && (
@@ -9400,11 +9405,11 @@ export default function InstallationsScreen({
                             position: 'relative'
                           }}
                           onClick={() => toggleInstallMethod(method.key)}
-                          title={method.label}
+                          title={getMethodLabel(method.key)}
                         >
                           <img
                             src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
-                            alt={method.label}
+                            alt={getMethodLabel(method.key)}
                             style={{ width: '24px', height: '24px', filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
                           />
                           {isActive && count > 0 && (
@@ -9502,11 +9507,11 @@ export default function InstallationsScreen({
                             position: 'relative'
                           }}
                           onClick={() => toggleInstallMethod(method.key)}
-                          title={method.label}
+                          title={getMethodLabel(method.key)}
                         >
                           <img
                             src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
-                            alt={method.label}
+                            alt={getMethodLabel(method.key)}
                             style={{ width: '24px', height: '24px', filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
                           />
                           {isActive && count > 0 && (
@@ -10024,11 +10029,11 @@ export default function InstallationsScreen({
                                 return newMethods;
                               });
                             }}
-                            title={method.label}
+                            title={getMethodLabel(method.key)}
                           >
                             <img
                               src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
-                              alt={method.label}
+                              alt={getMethodLabel(method.key)}
                               style={{
                                 width: '24px',
                                 height: '24px',
@@ -10138,11 +10143,11 @@ export default function InstallationsScreen({
                                 return newMethods;
                               });
                             }}
-                            title={method.label}
+                            title={getMethodLabel(method.key)}
                           >
                             <img
                               src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
-                              alt={method.label}
+                              alt={getMethodLabel(method.key)}
                               style={{
                                 width: '24px',
                                 height: '24px',
@@ -10243,10 +10248,10 @@ export default function InstallationsScreen({
                         <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', marginBottom: '4px', color: '#374151' }}>
                           <img
                             src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
-                            alt={method.label}
+                            alt={getMethodLabel(method.key)}
                             style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)' }}
                           />
-                          {method.label} ({names.length}/{count})
+                          {getMethodLabel(method.key)} ({names.length}/{count})
                         </label>
                         {/* Existing badges */}
                         {names.length > 0 && (
@@ -10312,7 +10317,7 @@ export default function InstallationsScreen({
                                     setEditDayResourceInputs(prev => ({ ...prev, [method.key]: '' }));
                                   }
                                 }}
-                                placeholder={`${method.label} ${names.length + 1}/${count}`}
+                                placeholder={`${getMethodLabel(method.key)} ${names.length + 1}/${count}`}
                                 style={{
                                   flex: 1,
                                   padding: '6px 10px',

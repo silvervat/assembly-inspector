@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase, InspectionPlanItem, TrimbleExUser, ElementLifecycleStats } from '../supabase';
 import { useBulkOperations } from '../hooks/useBulkOperations';
 import { BulkActionBar } from './BulkActionBar';
@@ -25,19 +26,19 @@ interface ExtendedPlanItem extends InspectionPlanItem {
   can_edit?: boolean;
 }
 
-// Status configuration
-const STATUS_CONFIG = {
-  planned: { label: 'Planeeritud', color: '#6B7280', bgColor: '#F3F4F6' },
-  in_progress: { label: 'Käimas', color: '#F59E0B', bgColor: '#FEF3C7' },
-  completed: { label: 'Lõpetatud', color: '#3B82F6', bgColor: '#DBEAFE' },
-  skipped: { label: 'Vahele jäetud', color: '#9CA3AF', bgColor: '#F9FAFB' }
+// Status colors configuration (labels come from translations)
+const STATUS_COLORS = {
+  planned: { color: '#6B7280', bgColor: '#F3F4F6' },
+  in_progress: { color: '#F59E0B', bgColor: '#FEF3C7' },
+  completed: { color: '#3B82F6', bgColor: '#DBEAFE' },
+  skipped: { color: '#9CA3AF', bgColor: '#F9FAFB' }
 };
 
-const REVIEW_STATUS_CONFIG = {
-  pending: { label: 'Ootel', color: '#6B7280', bgColor: '#F3F4F6' },
-  approved: { label: 'Kinnitatud', color: '#10B981', bgColor: '#D1FAE5' },
-  rejected: { label: 'Tagasi lükatud', color: '#EF4444', bgColor: '#FEE2E2' },
-  returned: { label: 'Tagasi suunatud', color: '#F97316', bgColor: '#FFEDD5' }
+const REVIEW_STATUS_COLORS = {
+  pending: { color: '#6B7280', bgColor: '#F3F4F6' },
+  approved: { color: '#10B981', bgColor: '#D1FAE5' },
+  rejected: { color: '#EF4444', bgColor: '#FEE2E2' },
+  returned: { color: '#F97316', bgColor: '#FFEDD5' }
 };
 
 /**
@@ -49,6 +50,12 @@ export const InspectionAdminPanel: React.FC<InspectionAdminPanelProps> = ({
   user,
   onClose
 }) => {
+  const { t } = useTranslation('inspection');
+
+  // Helper functions for translated status labels
+  const getStatusLabel = useCallback((status: string) => t(`status.${status}`, { defaultValue: status }), [t]);
+  const getReviewStatusLabel = useCallback((status: string) => t(`status.${status}`, { defaultValue: status }), [t]);
+
   // API available for future viewer integration
   void _api;
   // Data state
@@ -171,7 +178,7 @@ void setFilterCategory;
   const handleBulkApprove = async (comment?: string) => {
     const result = await bulkOps.bulkApprove(Array.from(selectedIds), comment);
     if (result) {
-      alert(`Kinnitatud: ${result.success_count}, Ebaõnnestunud: ${result.failure_count}`);
+      alert(t('adminPanel.confirmedCount', { success: result.success_count, failure: result.failure_count }));
       setSelectedIds(new Set());
       loadData();
     }
@@ -180,7 +187,7 @@ void setFilterCategory;
   const handleBulkReturn = async (comment: string) => {
     const result = await bulkOps.bulkReturn(Array.from(selectedIds), comment);
     if (result) {
-      alert(`Tagasi suunatud: ${result.success_count}, Ebaõnnestunud: ${result.failure_count}`);
+      alert(t('adminPanel.redirectedCount', { success: result.success_count, failure: result.failure_count }));
       setSelectedIds(new Set());
       loadData();
     }
@@ -189,7 +196,7 @@ void setFilterCategory;
   const handleBulkReject = async (comment: string) => {
     const result = await bulkOps.bulkReject(Array.from(selectedIds), comment);
     if (result) {
-      alert(`Tagasi lükatud: ${result.success_count}, Ebaõnnestunud: ${result.failure_count}`);
+      alert(t('adminPanel.rejectedCount', { success: result.success_count, failure: result.failure_count }));
       setSelectedIds(new Set());
       loadData();
     }
@@ -198,7 +205,7 @@ void setFilterCategory;
   const handleBulkAssign = async (userId: string, userName: string) => {
     const result = await bulkOps.bulkAssign(Array.from(selectedIds), userId, userName);
     if (result) {
-      alert(`Määratud: ${result.success_count}, Ebaõnnestunud: ${result.failure_count}`);
+      alert(t('adminPanel.assignedCount', { success: result.success_count, failure: result.failure_count }));
       setSelectedIds(new Set());
       loadData();
     }
@@ -303,27 +310,27 @@ void setFilterCategory;
           }}
         >
           <div style={{ backgroundColor: '#F3F4F6', padding: '8px 12px', borderRadius: '6px' }}>
-            <div style={{ fontSize: '11px', color: '#6B7280' }}>Kokku</div>
+            <div style={{ fontSize: '11px', color: '#6B7280' }}>{t('adminPanel.total')}</div>
             <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#111827' }}>{stats.total_elements}</div>
           </div>
           <div style={{ backgroundColor: '#FEF3C7', padding: '8px 12px', borderRadius: '6px' }}>
-            <div style={{ fontSize: '11px', color: '#92400E' }}>Käimas</div>
+            <div style={{ fontSize: '11px', color: '#92400E' }}>{t('status.in_progress')}</div>
             <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#F59E0B' }}>{stats.in_progress_count}</div>
           </div>
           <div style={{ backgroundColor: '#DBEAFE', padding: '8px 12px', borderRadius: '6px' }}>
-            <div style={{ fontSize: '11px', color: '#1E40AF' }}>Ootel ülevaatust</div>
+            <div style={{ fontSize: '11px', color: '#1E40AF' }}>{t('status.pendingReview')}</div>
             <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#3B82F6' }}>{stats.awaiting_review_count}</div>
           </div>
           <div style={{ backgroundColor: '#D1FAE5', padding: '8px 12px', borderRadius: '6px' }}>
-            <div style={{ fontSize: '11px', color: '#065F46' }}>Kinnitatud</div>
+            <div style={{ fontSize: '11px', color: '#065F46' }}>{t('status.approved')}</div>
             <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#10B981' }}>{stats.approved_count}</div>
           </div>
           <div style={{ backgroundColor: '#FFEDD5', padding: '8px 12px', borderRadius: '6px' }}>
-            <div style={{ fontSize: '11px', color: '#9A3412' }}>Tagasi suunatud</div>
+            <div style={{ fontSize: '11px', color: '#9A3412' }}>{t('status.returned')}</div>
             <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#F97316' }}>{stats.returned_count}</div>
           </div>
           <div style={{ backgroundColor: '#E0E7FF', padding: '8px 12px', borderRadius: '6px' }}>
-            <div style={{ fontSize: '11px', color: '#3730A3' }}>Valmidus</div>
+            <div style={{ fontSize: '11px', color: '#3730A3' }}>{t('adminPanel.readiness')}</div>
             <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#6366F1' }}>{stats.completion_percentage}%</div>
           </div>
         </div>
@@ -363,10 +370,10 @@ void setFilterCategory;
             fontSize: '14px'
           }}
         >
-          <option value="all">Kõik staatused</option>
-          <option value="planned">Planeeritud</option>
-          <option value="in_progress">Käimas</option>
-          <option value="completed">Lõpetatud</option>
+          <option value="all">{t('adminPanel.allStatuses')}</option>
+          <option value="planned">{t('status.planned')}</option>
+          <option value="in_progress">{t('status.in_progress')}</option>
+          <option value="completed">{t('status.completed')}</option>
         </select>
         <select
           value={filterReviewStatus}
@@ -378,11 +385,11 @@ void setFilterCategory;
             fontSize: '14px'
           }}
         >
-          <option value="all">Kõik ülevaatused</option>
-          <option value="pending">Ootel</option>
-          <option value="approved">Kinnitatud</option>
-          <option value="returned">Tagasi suunatud</option>
-          <option value="rejected">Tagasi lükatud</option>
+          <option value="all">{t('adminPanel.allReviews')}</option>
+          <option value="pending">{t('status.pending')}</option>
+          <option value="approved">{t('status.approved')}</option>
+          <option value="returned">{t('status.returned')}</option>
+          <option value="rejected">{t('status.rejected')}</option>
         </select>
       </div>
 
@@ -463,11 +470,11 @@ void setFilterCategory;
                         padding: '2px 8px',
                         borderRadius: '10px',
                         fontSize: '11px',
-                        backgroundColor: STATUS_CONFIG[item.status]?.bgColor || '#F3F4F6',
-                        color: STATUS_CONFIG[item.status]?.color || '#6B7280'
+                        backgroundColor: STATUS_COLORS[item.status as keyof typeof STATUS_COLORS]?.bgColor || '#F3F4F6',
+                        color: STATUS_COLORS[item.status as keyof typeof STATUS_COLORS]?.color || '#6B7280'
                       }}
                     >
-                      {STATUS_CONFIG[item.status]?.label || item.status}
+                      {getStatusLabel(item.status)}
                     </span>
                   </td>
                   <td style={{ padding: '8px' }}>
@@ -476,11 +483,11 @@ void setFilterCategory;
                         padding: '2px 8px',
                         borderRadius: '10px',
                         fontSize: '11px',
-                        backgroundColor: REVIEW_STATUS_CONFIG[item.review_status || 'pending']?.bgColor || '#F3F4F6',
-                        color: REVIEW_STATUS_CONFIG[item.review_status || 'pending']?.color || '#6B7280'
+                        backgroundColor: REVIEW_STATUS_COLORS[(item.review_status || 'pending') as keyof typeof REVIEW_STATUS_COLORS]?.bgColor || '#F3F4F6',
+                        color: REVIEW_STATUS_COLORS[(item.review_status || 'pending') as keyof typeof REVIEW_STATUS_COLORS]?.color || '#6B7280'
                       }}
                     >
-                      {REVIEW_STATUS_CONFIG[item.review_status || 'pending']?.label || 'Ootel'}
+                      {getReviewStatusLabel(item.review_status || 'pending')}
                     </span>
                     {item.reviewed_by_name && (
                       <div style={{ fontSize: '10px', color: '#6B7280', marginTop: '2px' }}>

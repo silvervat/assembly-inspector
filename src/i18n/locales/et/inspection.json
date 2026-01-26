@@ -2,11 +2,16 @@
   "title": "Inspektsioon",
   "status": {
     "pending": "Ootel",
-    "inProgress": "Töös",
+    "planned": "Planeeritud",
+    "in_progress": "Käimas",
+    "inProgress": "Käimas",
     "completed": "Lõpetatud",
     "approved": "Kinnitatud",
     "rejected": "Tagasi lükatud",
-    "reviewed": "Üle vaadatud"
+    "returned": "Tagasi suunatud",
+    "skipped": "Vahele jäetud",
+    "reviewed": "Üle vaadatud",
+    "pendingReview": "Ootel ülevaatust"
   },
   "plan": {
     "title": "Inspektsiooni kava",
@@ -69,7 +74,13 @@
     "confirmedCount": "Kinnitatud: {{success}}, Ebaõnnestunud: {{failure}}",
     "redirectedCount": "Tagasi suunatud: {{success}}, Ebaõnnestunud: {{failure}}",
     "rejectedCount": "Tagasi lükatud: {{success}}, Ebaõnnestunud: {{failure}}",
-    "assignedCount": "Määratud: {{success}}, Ebaõnnestunud: {{failure}}"
+    "assignedCount": "Määratud: {{success}}, Ebaõnnestunud: {{failure}}",
+    "total": "Kokku",
+    "readiness": "Valmidus",
+    "filterStatus": "Staatus",
+    "filterReview": "Ülevaatus",
+    "allStatuses": "Kõik staatused",
+    "allReviews": "Kõik ülevaatused"
   },
   "bulkAction": {
     "commentRequired": "Kommentaar on kohustuslik tagasi lükkamisel"

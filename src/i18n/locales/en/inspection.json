@@ -2,11 +2,16 @@
   "title": "Inspection",
   "status": {
     "pending": "Pending",
+    "planned": "Planned",
+    "in_progress": "In progress",
     "inProgress": "In progress",
     "completed": "Completed",
     "approved": "Approved",
     "rejected": "Rejected",
-    "reviewed": "Reviewed"
+    "returned": "Returned",
+    "skipped": "Skipped",
+    "reviewed": "Reviewed",
+    "pendingReview": "Pending review"
   },
   "plan": {
     "title": "Inspection plan",
@@ -69,7 +74,13 @@
     "confirmedCount": "Confirmed: {{success}}, Failed: {{failure}}",
     "redirectedCount": "Redirected: {{success}}, Failed: {{failure}}",
     "rejectedCount": "Rejected: {{success}}, Failed: {{failure}}",
-    "assignedCount": "Assigned: {{success}}, Failed: {{failure}}"
+    "assignedCount": "Assigned: {{success}}, Failed: {{failure}}",
+    "total": "Total",
+    "readiness": "Readiness",
+    "filterStatus": "Status",
+    "filterReview": "Review",
+    "allStatuses": "All statuses",
+    "allReviews": "All reviews"
   },
   "bulkAction": {
     "commentRequired": "Comment is required when rejecting"
