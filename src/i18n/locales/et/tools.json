@@ -54,5 +54,39 @@
     "foundBoltsExportOnly": "{{count}} erinevat polti leitud (tabel >10 - ainult eksport)",
     "error": "Viga skanneerimisel",
     "rowsCopied": "{{count}} rida kopeeritud"
+  },
+  "gpsSearch": {
+    "title": "GPS Location Search",
+    "description": "Leia ja jälgi detaile ehitusplatsil GPS-i abil",
+    "searchPlaceholder": "Otsi cast unit marki järgi...",
+    "loading": "Laadin andmeid...",
+    "noItems": "Paigaldamata elemente pole",
+    "noResults": "Ühtegi elementi ei leitud",
+    "selected": "{{count}} valitud",
+    "addMarkers": "Lisa markerid mudelile",
+    "clearSelection": "Tühista valik",
+    "fixPosition": "Fikseeri",
+    "updatePosition": "Uuenda",
+    "positionSaved": "{{mark}} positsioon salvestatud (±{{accuracy}}m)",
+    "noGpsPosition": "GPS positsioon pole saadaval",
+    "selectItemsForMarkers": "Vali elemendid, millele markerid lisada",
+    "noGpsPositions": "Valitud elementidel pole GPS positsioone",
+    "markersAdded": "{{count}} markerit lisatud mudelile",
+    "markerError": "Viga markerite lisamisel",
+    "loadError": "Viga andmete laadimisel",
+    "saveError": "Viga salvestamisel",
+    "signal": {
+      "excellent": "Suurepärane",
+      "good": "Hea",
+      "fair": "Nõrk",
+      "poor": "Halb",
+      "none": "Puudub"
+    },
+    "stats": "{{total}} elementi • {{withGps}} GPS positsiooniga",
+    "close": "Sulge",
+    "allowGps": "Luba GPS",
+    "waitingForSignal": "Ootan GPS signaali...",
+    "map": "Kaart",
+    "secondsAgo": "{{seconds}}s tagasi"
   }
 }

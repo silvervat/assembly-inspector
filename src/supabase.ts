@@ -55,6 +55,9 @@ export interface TrimbleExUser {
   // Admin access
   can_access_admin: boolean;
 
+  // GPS Location Search access (Tools -> GPS Search)
+  can_access_gps_search: boolean;
+
   // User preferences
   preferred_language?: 'et' | 'en' | 'ru' | 'fi';
 

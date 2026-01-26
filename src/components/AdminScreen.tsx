@@ -325,7 +325,9 @@ export default function AdminScreen({
     can_edit_inspections: true,
     can_delete_inspections: false,
     // Admin
-    can_access_admin: false
+    can_access_admin: false,
+    // GPS Search
+    can_access_gps_search: false
   });
 
   // Project Resources state
@@ -2560,7 +2562,9 @@ export default function AdminScreen({
       can_edit_inspections: userFormData.can_edit_inspections,
       can_delete_inspections: userFormData.can_delete_inspections,
       // Admin
-      can_access_admin: userFormData.can_access_admin
+      can_access_admin: userFormData.can_access_admin,
+      // GPS Search
+      can_access_gps_search: userFormData.can_access_gps_search
     };
 
     setUsersLoading(true);
@@ -2627,7 +2631,8 @@ export default function AdminScreen({
       can_view_inspections: true,
       can_edit_inspections: true,
       can_delete_inspections: false,
-      can_access_admin: false
+      can_access_admin: false,
+      can_access_gps_search: false
     });
   };
 
@@ -4361,7 +4366,8 @@ export default function AdminScreen({
       can_view_inspections: user.can_view_inspections ?? true,
       can_edit_inspections: user.can_edit_inspections ?? true,
       can_delete_inspections: user.can_delete_inspections ?? false,
-      can_access_admin: user.can_access_admin ?? false
+      can_access_admin: user.can_access_admin ?? false,
+      can_access_gps_search: user.can_access_gps_search ?? false
     });
     setShowUserForm(true);
   };
@@ -16362,6 +16368,10 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
                       <input type="checkbox" checked={userFormData.can_access_admin} onChange={e => setUserFormData(prev => ({ ...prev, can_access_admin: e.target.checked }))} />
                       Admin ligipääs
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
+                      <input type="checkbox" checked={userFormData.can_access_gps_search} onChange={e => setUserFormData(prev => ({ ...prev, can_access_gps_search: e.target.checked }))} />
+                      GPS Location Search
                     </label>
                   </div>
                 </div>
