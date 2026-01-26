@@ -1,5 +1,16 @@
 {
   "title": "Inspektsioon",
+  "modes": {
+    "paigaldatud": "Paigaldatud detailide inspektsioon",
+    "poldid": "Poltide inspektsioon",
+    "muu": "Muu inspektsioon",
+    "mittevastavus": "Mitte vastavus",
+    "varviparandus": "Värviparandused inspektsioon",
+    "keevis": "Keeviste inspektsioon",
+    "paigaldatud_detailid": "Paigaldatud detailid",
+    "eos2": "Saada EOS2 tabelisse",
+    "inspection_type": "Inspektsioon"
+  },
   "status": {
     "pending": "Ootel",
     "planned": "Planeeritud",
