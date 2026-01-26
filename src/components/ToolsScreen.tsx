@@ -4,8 +4,9 @@ import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import * as XLSX from 'xlsx-js-style';
 import html2canvas from 'html2canvas';
 import { TrimbleExUser, supabase, MarkeerijPreset } from '../supabase';
-import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet, FiTarget, FiDatabase, FiPlus, FiEye, FiSave, FiShare2, FiInfo, FiList, FiPlay, FiPause } from 'react-icons/fi';
+import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet, FiTarget, FiDatabase, FiPlus, FiEye, FiSave, FiShare2, FiInfo, FiList, FiPlay, FiPause, FiMapPin } from 'react-icons/fi';
 import PartDatabasePanel from './PartDatabasePanel';
+import GpsLocationSearchModal from './GpsLocationSearchModal';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
 import { findObjectsInLoadedModels, selectObjectsByGuid } from '../utils/navigationHelper';
@@ -141,6 +142,9 @@ export default function ToolsScreen({
 
   // Accordion state - which section is expanded (null = all collapsed by default)
   const [expandedSection, setExpandedSection] = useState<'crane' | 'export' | 'markup' | 'marker' | 'markeerija' | 'steps' | 'partdb' | null>(null);
+
+  // GPS Location Search modal
+  const [showGpsSearchModal, setShowGpsSearchModal] = useState(false);
 
   // Marker (Märgista) feature state
   const [markerCategories, setMarkerCategories] = useState<MarkerCategory[]>([
@@ -4137,6 +4141,23 @@ export default function ToolsScreen({
         </div>
 
         {/* Part Database Section - Collapsible */}
+        {/* GPS Location Search - only visible if user has permission */}
+        {(user.can_access_gps_search || user.can_access_admin || user.role === 'admin') && (
+          <div className="tools-section">
+            <div
+              className="tools-section-header tools-section-header-clickable"
+              onClick={() => setShowGpsSearchModal(true)}
+              style={{ cursor: 'pointer' }}
+            >
+              <FiMapPin size={18} style={{ color: '#16a34a' }} />
+              <h3>GPS Location Search</h3>
+              <span style={{ marginLeft: 'auto', fontSize: 12, color: '#6b7280' }}>
+                Ava →
+              </span>
+            </div>
+          </div>
+        )}
+
         <div className="tools-section" ref={(el) => { sectionRefs.current['partdb'] = el; }}>
           <div
             className="tools-section-header tools-section-header-clickable"
@@ -4168,6 +4189,17 @@ export default function ToolsScreen({
         </div>
 
       </div>
+
+      {/* GPS Location Search Modal */}
+      {showGpsSearchModal && (
+        <GpsLocationSearchModal
+          api={api}
+          projectId={_projectId}
+          userEmail={user.email}
+          userName={user.name}
+          onClose={() => setShowGpsSearchModal(false)}
+        />
+      )}
     </div>
   );
 }

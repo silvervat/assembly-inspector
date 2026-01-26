@@ -129,6 +129,7 @@ export const SUPER_ADMIN_PERMISSIONS = {
   can_bolt_inspection: true,
   is_active: true,
   can_access_admin: true,
+  can_access_gps_search: true,
   can_view_delivery: true,
   can_edit_delivery: true,
   can_delete_delivery: true,

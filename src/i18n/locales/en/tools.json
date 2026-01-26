@@ -54,5 +54,39 @@
     "foundBoltsExportOnly": "{{count}} different bolts found (table >10 - export only)",
     "error": "Error scanning",
     "rowsCopied": "{{count}} rows copied"
+  },
+  "gpsSearch": {
+    "title": "GPS Location Search",
+    "description": "Find and track elements on construction site using GPS",
+    "searchPlaceholder": "Search by cast unit mark...",
+    "loading": "Loading data...",
+    "noItems": "No uninstalled elements",
+    "noResults": "No elements found",
+    "selected": "{{count}} selected",
+    "addMarkers": "Add markers to model",
+    "clearSelection": "Clear selection",
+    "fixPosition": "Fix position",
+    "updatePosition": "Update",
+    "positionSaved": "{{mark}} position saved (±{{accuracy}}m)",
+    "noGpsPosition": "GPS position not available",
+    "selectItemsForMarkers": "Select items to add markers to",
+    "noGpsPositions": "Selected items have no GPS positions",
+    "markersAdded": "{{count}} markers added to model",
+    "markerError": "Error adding markers",
+    "loadError": "Error loading data",
+    "saveError": "Error saving",
+    "signal": {
+      "excellent": "Excellent",
+      "good": "Good",
+      "fair": "Fair",
+      "poor": "Poor",
+      "none": "None"
+    },
+    "stats": "{{total}} elements • {{withGps}} with GPS position",
+    "close": "Close",
+    "allowGps": "Allow GPS",
+    "waitingForSignal": "Waiting for GPS signal...",
+    "map": "Map",
+    "secondsAgo": "{{seconds}}s ago"
   }
 }
