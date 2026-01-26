@@ -803,10 +803,6 @@ export interface DeliveryItem {
   created_by: string;
   updated_at: string;
   updated_by?: string;
-  // Algandmed (esimesest impordist) - ajaloo ja võrdluse jaoks
-  original_date?: string | null;         // Algne kuupäev (esimene import)
-  original_vehicle_code?: string | null; // Algne veoki kood (esimene import)
-  schedule_version_count?: number;       // Mitu korda on graafik uuenenud
   // Joined data (laaditakse eraldi päringuga)
   vehicle?: DeliveryVehicle;
 }
@@ -915,13 +911,6 @@ export interface ScheduleVersion {
   // Muutuste kokkuvõte JSON-na
   changes_summary?: Record<string, unknown>;
   created_at: string;
-}
-
-// Elemendi algandmed (esimene import) - salvestatakse history tabelisse
-export interface OriginalScheduleData {
-  original_date?: string | null;
-  original_vehicle_code?: string | null;
-  original_import_version_id?: string;
 }
 
 // Kommentaarid

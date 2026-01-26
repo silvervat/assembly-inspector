@@ -685,9 +685,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     { id: 'keevitaja', label: 'Keevitaja', labelEn: 'Welder', enabled: true },
     { id: 'guid_ms', label: 'GUID (MS)', labelEn: 'GUID (MS)', enabled: true },
     { id: 'guid_ifc', label: 'GUID (IFC)', labelEn: 'GUID (IFC)', enabled: true },
-    { id: 'original_date', label: 'Algne kuupäev', labelEn: 'Original Date', enabled: true },
-    { id: 'original_vehicle', label: 'Algne veok', labelEn: 'Original Vehicle', enabled: true },
-    { id: 'version_count', label: 'Versioonid', labelEn: 'Version Count', enabled: false },
     { id: 'comments', label: 'Kommentaarid', labelEn: 'Comments', enabled: true }
   ]);
 
@@ -4066,15 +4063,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           updateData.vehicle_id = targetVehicleId;
         }
 
-        // Track original data if this is first update
-        if (!existingItem.original_date) {
-          updateData.original_date = existingItem.scheduled_date;
-          updateData.original_vehicle_code = change.currentVehicleCode;
-        }
-
-        // Increment version count
-        updateData.schedule_version_count = (existingItem.schedule_version_count || 1) + 1;
-
         // Update item
         const { error } = await supabase
           .from('trimble_delivery_items')
@@ -4402,11 +4390,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           sort_order: idx,
           status: 'planned' as const,
           created_by: tcUserEmail,
-          notes: row.comment || null,
-          // Track original data
-          original_date: scheduledDate,
-          original_vehicle_code: vehicle!.vehicle_code,
-          schedule_version_count: 1
+          notes: row.comment || null
         };
       });
 
@@ -5582,32 +5566,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             case 'keevitaja': row.push(vehicle?.resources?.keevitaja || ''); break;
             case 'guid_ms': row.push(item.guid_ms || ''); break;
             case 'guid_ifc': row.push(item.guid_ifc || ''); break;
-            case 'original_date': {
-              // Show original date if different from current (from first import)
-              const origDate = item.original_date;
-              if (origDate && origDate !== item.scheduled_date) {
-                row.push(formatDateDisplay(origDate));
-              } else {
-                row.push('');
-              }
-              break;
-            }
-            case 'original_vehicle': {
-              // Show original vehicle if different from current (from first import)
-              const origVehicle = item.original_vehicle_code;
-              if (origVehicle && origVehicle !== vehicle?.vehicle_code) {
-                row.push(origVehicle);
-              } else {
-                row.push('');
-              }
-              break;
-            }
-            case 'version_count': {
-              // Number of schedule versions (how many times this item's schedule changed)
-              const vCount = item.schedule_version_count || 1;
-              row.push(vCount > 1 ? vCount : '');
-              break;
-            }
             case 'comments':
               row.push(itemComments.map(c =>
                 `[${c.created_by_name || c.created_by} ${new Date(c.created_at).toLocaleDateString('et-EE')}]: ${c.comment_text}`
