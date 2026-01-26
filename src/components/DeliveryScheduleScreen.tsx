@@ -5,7 +5,8 @@ import { WorkspaceAPI } from 'trimble-connect-workspace-api';
 import {
   supabase, TrimbleExUser, DeliveryFactory, DeliveryVehicle, DeliveryItem,
   DeliveryComment, DeliveryHistory, UnloadMethods, DeliveryResources,
-  DeliveryVehicleStatus, ArrivalItemConfirmation, SheetsSyncConfig, SheetsSyncLog
+  DeliveryVehicleStatus, ArrivalItemConfirmation, SheetsSyncConfig, SheetsSyncLog,
+  ScheduleChange, ScheduleComparisonResult
 } from '../supabase';
 import {
   findObjectsInLoadedModels,
@@ -635,6 +636,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     comment?: string;
   }[]>([]);
 
+  // Schedule comparison (graafiku võrdlemine)
+  const [showComparisonModal, setShowComparisonModal] = useState(false);
+  const [comparisonResult, setComparisonResult] = useState<ScheduleComparisonResult | null>(null);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [importMode, setImportMode] = useState<'add_new' | 'update_all'>('update_all');
+  const [importSourceDescription, setImportSourceDescription] = useState('');
+
   // Refresh from model
   const [refreshing, setRefreshing] = useState(false);
 
@@ -679,6 +687,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     { id: 'guid_ifc', label: 'GUID (IFC)', labelEn: 'GUID (IFC)', enabled: true },
     { id: 'original_date', label: 'Algne kuupäev', labelEn: 'Original Date', enabled: true },
     { id: 'original_vehicle', label: 'Algne veok', labelEn: 'Original Vehicle', enabled: true },
+    { id: 'version_count', label: 'Versioonid', labelEn: 'Version Count', enabled: false },
     { id: 'comments', label: 'Kommentaarid', labelEn: 'Comments', enabled: true }
   ]);
 
@@ -3787,6 +3796,631 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setMessage(t('messages.templateDownloaded'));
   };
 
+  // ============================================
+  // SCHEDULE COMPARISON (Graafiku võrdlemine)
+  // ============================================
+
+  // Compare imported schedule with current schedule
+  const compareSchedule = async (): Promise<ScheduleComparisonResult | null> => {
+    setComparisonLoading(true);
+
+    try {
+      // Parse GUIDs from import text
+      const lines = importText.split('\n').map(l => l.trim()).filter(l => l);
+      const importGuids = lines.map(line => {
+        const parts = line.split(/[\t,;]/);
+        return parts[0].trim();
+      }).filter(g => g);
+
+      if (importGuids.length === 0) {
+        setMessage(t('messages.noGuidsFound'));
+        return null;
+      }
+
+      // Build lookup from parsed data (with dates and vehicle codes)
+      const parsedDataByGuid = new Map<string, typeof parsedImportData[0]>();
+      for (const row of parsedImportData) {
+        const guidLower = row.guid.toLowerCase();
+        const guidIfc = row.guid.length === 36 ? msToIfcGuid(row.guid).toLowerCase() : guidLower;
+        parsedDataByGuid.set(guidLower, row);
+        if (guidIfc !== guidLower) {
+          parsedDataByGuid.set(guidIfc, row);
+        }
+      }
+
+      // Build lookup from current items
+      const currentItemsByGuid = new Map<string, DeliveryItem>();
+      for (const item of items) {
+        if (item.guid) currentItemsByGuid.set(item.guid.toLowerCase(), item);
+        if (item.guid_ifc) currentItemsByGuid.set(item.guid_ifc.toLowerCase(), item);
+      }
+
+      // Load arrival confirmations for these items
+      const { data: confirmations } = await supabase
+        .from('trimble_arrival_confirmations')
+        .select('item_id, status')
+        .eq('trimble_project_id', projectId)
+        .in('status', ['confirmed', 'added']);
+
+      const confirmedItemIds = new Set((confirmations || [])
+        .filter(c => c.status === 'confirmed')
+        .map(c => c.item_id));
+
+      // Load installation data (paigaldused)
+      const { data: installations } = await supabase
+        .from('inspection_results')
+        .select('assembly_guid')
+        .eq('project_id', projectId)
+        .not('assembly_guid', 'is', null);
+
+      const installedGuids = new Set((installations || []).map(i => i.assembly_guid?.toLowerCase()));
+
+      // Compare each item
+      const result: ScheduleComparisonResult = {
+        totalInImport: importGuids.length,
+        totalInCurrent: items.length,
+        newItems: [],
+        dateChanges: [],
+        vehicleChanges: [],
+        unchanged: [],
+        confirmedItemsWithChanges: [],
+        installedItemsWithChanges: [],
+        notInImport: []
+      };
+
+      const processedCurrentGuids = new Set<string>();
+
+      for (const guid of importGuids) {
+        const guidLower = guid.toLowerCase();
+        const guidIfc = guid.length === 36 ? msToIfcGuid(guid).toLowerCase() : (guid.length === 22 ? guidLower : '');
+
+        // Check if exists in current schedule
+        const currentItem = currentItemsByGuid.get(guidLower) || (guidIfc ? currentItemsByGuid.get(guidIfc) : undefined);
+        const parsedData = parsedDataByGuid.get(guidLower) || (guidIfc ? parsedDataByGuid.get(guidIfc) : undefined);
+
+        if (currentItem) {
+          processedCurrentGuids.add(currentItem.guid?.toLowerCase() || '');
+          if (currentItem.guid_ifc) processedCurrentGuids.add(currentItem.guid_ifc.toLowerCase());
+
+          const currentVehicle = vehicles.find(v => v.id === currentItem.vehicle_id);
+          const isArrivalConfirmed = confirmedItemIds.has(currentItem.id);
+          const isInstalled = installedGuids.has(guidIfc) || installedGuids.has(guidLower);
+
+          // Check for changes
+          const newDate = parsedData?.date || null;
+          const newVehicleCode = parsedData?.vehicleCode || null;
+
+          const dateChanged = newDate !== null && newDate !== currentItem.scheduled_date;
+          const vehicleChanged = newVehicleCode !== null && currentVehicle?.vehicle_code !== newVehicleCode;
+
+          const change: ScheduleChange = {
+            guid,
+            guid_ifc: guidIfc,
+            assembly_mark: currentItem.assembly_mark,
+            changeType: dateChanged ? 'date_changed' : (vehicleChanged ? 'vehicle_changed' : 'unchanged'),
+            currentDate: currentItem.scheduled_date,
+            currentVehicleCode: currentVehicle?.vehicle_code || null,
+            currentVehicleId: currentItem.vehicle_id,
+            currentStatus: currentItem.status,
+            newDate,
+            newVehicleCode,
+            isArrivalConfirmed,
+            isInstalled
+          };
+
+          if (dateChanged) {
+            result.dateChanges.push(change);
+            if (isArrivalConfirmed) result.confirmedItemsWithChanges.push(change);
+            if (isInstalled) result.installedItemsWithChanges.push(change);
+          } else if (vehicleChanged) {
+            result.vehicleChanges.push(change);
+            if (isArrivalConfirmed) result.confirmedItemsWithChanges.push(change);
+            if (isInstalled) result.installedItemsWithChanges.push(change);
+          } else {
+            result.unchanged.push(change);
+          }
+        } else {
+          // New item
+          result.newItems.push({
+            guid,
+            guid_ifc: guidIfc,
+            changeType: 'new',
+            newDate: parsedData?.date || null,
+            newVehicleCode: parsedData?.vehicleCode || null
+          });
+        }
+      }
+
+      // Find items that are in current schedule but not in import
+      for (const item of items) {
+        const guidLower = item.guid?.toLowerCase() || '';
+        const guidIfcLower = item.guid_ifc?.toLowerCase() || '';
+
+        if (!processedCurrentGuids.has(guidLower) && !processedCurrentGuids.has(guidIfcLower)) {
+          const currentVehicle = vehicles.find(v => v.id === item.vehicle_id);
+          const isArrivalConfirmed = confirmedItemIds.has(item.id);
+          const isInstalled = installedGuids.has(guidIfcLower) || installedGuids.has(guidLower);
+
+          result.notInImport.push({
+            guid: item.guid || item.guid_ifc || '',
+            guid_ifc: item.guid_ifc || '',
+            assembly_mark: item.assembly_mark,
+            changeType: 'unchanged',
+            currentDate: item.scheduled_date,
+            currentVehicleCode: currentVehicle?.vehicle_code || null,
+            currentVehicleId: item.vehicle_id,
+            currentStatus: item.status,
+            isArrivalConfirmed,
+            isInstalled
+          });
+        }
+      }
+
+      return result;
+    } catch (e) {
+      console.error('Error comparing schedule:', e);
+      setMessage('Viga graafiku võrdlemisel');
+      return null;
+    } finally {
+      setComparisonLoading(false);
+    }
+  };
+
+  // Show comparison modal before import
+  const handleCompareBeforeImport = async () => {
+    if (!importText.trim()) {
+      setMessage(t('messages.pasteGuids'));
+      return;
+    }
+
+    const result = await compareSchedule();
+    if (result) {
+      setComparisonResult(result);
+      setShowComparisonModal(true);
+    }
+  };
+
+  // Apply schedule update (uuendab olemasolevaid elemente, säilitades staatused)
+  const applyScheduleUpdate = async () => {
+    if (!comparisonResult) return;
+
+    setImporting(true);
+    setShowComparisonModal(false);
+    setImportProgress({ stage: 'saving', current: 0, total: 100, message: 'Uuendan graafikut...' });
+
+    try {
+      const historyEntries: Array<{
+        trimble_project_id: string;
+        item_id: string;
+        vehicle_id?: string;
+        change_type: string;
+        old_date?: string | null;
+        new_date?: string | null;
+        old_vehicle_id?: string;
+        new_vehicle_id?: string;
+        old_vehicle_code?: string;
+        new_vehicle_code?: string;
+        change_reason?: string;
+        changed_by: string;
+        is_snapshot: boolean;
+        import_source?: string;
+      }> = [];
+
+      // Build lookup for existing items
+      const currentItemsByGuid = new Map<string, DeliveryItem>();
+      for (const item of items) {
+        if (item.guid) currentItemsByGuid.set(item.guid.toLowerCase(), item);
+        if (item.guid_ifc) currentItemsByGuid.set(item.guid_ifc.toLowerCase(), item);
+      }
+
+      // Build vehicle lookup by code
+      const vehicleByCode = new Map<string, DeliveryVehicle>();
+      for (const v of vehicles) {
+        if (v.vehicle_code) vehicleByCode.set(v.vehicle_code.toLowerCase(), v);
+      }
+
+      let updatedCount = 0;
+      let skippedConfirmed = 0;
+
+      // Process date and vehicle changes
+      const allChanges = [...comparisonResult.dateChanges, ...comparisonResult.vehicleChanges];
+
+      for (const change of allChanges) {
+        // Skip confirmed/installed items (they keep their current schedule)
+        if (change.isArrivalConfirmed || change.isInstalled) {
+          skippedConfirmed++;
+          continue;
+        }
+
+        const existingItem = currentItemsByGuid.get(change.guid.toLowerCase()) ||
+                            currentItemsByGuid.get(change.guid_ifc.toLowerCase());
+
+        if (!existingItem) continue;
+
+        // Find or create target vehicle
+        let targetVehicleId = existingItem.vehicle_id;
+        let newVehicleCode = change.currentVehicleCode;
+
+        if (change.newVehicleCode) {
+          const targetVehicle = vehicleByCode.get(change.newVehicleCode.toLowerCase());
+          if (targetVehicle) {
+            targetVehicleId = targetVehicle.id;
+            newVehicleCode = targetVehicle.vehicle_code;
+          }
+          // If vehicle doesn't exist, we'll handle it in the new items import
+        }
+
+        // Prepare update data
+        const updateData: Partial<DeliveryItem> = {
+          updated_at: new Date().toISOString(),
+          updated_by: tcUserEmail
+        };
+
+        // Update date if changed
+        if (change.changeType === 'date_changed' && change.newDate !== null) {
+          updateData.scheduled_date = change.newDate;
+        }
+
+        // Update vehicle if changed
+        if (change.changeType === 'vehicle_changed' && targetVehicleId !== existingItem.vehicle_id) {
+          updateData.vehicle_id = targetVehicleId;
+        }
+
+        // Track original data if this is first update
+        if (!existingItem.original_date && !existingItem.first_imported_at) {
+          updateData.original_date = existingItem.scheduled_date;
+          updateData.original_vehicle_code = change.currentVehicleCode;
+          updateData.first_imported_at = existingItem.created_at;
+        }
+
+        // Increment version count
+        updateData.schedule_version_count = (existingItem.schedule_version_count || 1) + 1;
+
+        // Update item
+        const { error } = await supabase
+          .from('trimble_delivery_items')
+          .update(updateData)
+          .eq('id', existingItem.id);
+
+        if (error) {
+          console.error('Error updating item:', error);
+          continue;
+        }
+
+        // Log to history
+        historyEntries.push({
+          trimble_project_id: projectId,
+          item_id: existingItem.id,
+          vehicle_id: existingItem.vehicle_id,
+          change_type: 'schedule_import',
+          old_date: existingItem.scheduled_date,
+          new_date: change.newDate,
+          old_vehicle_id: existingItem.vehicle_id,
+          new_vehicle_id: targetVehicleId,
+          old_vehicle_code: change.currentVehicleCode || undefined,
+          new_vehicle_code: newVehicleCode || undefined,
+          change_reason: importSourceDescription || 'Graafiku uuendus',
+          changed_by: tcUserEmail || '',
+          is_snapshot: false,
+          import_source: importSourceDescription || undefined
+        });
+
+        updatedCount++;
+        setImportProgress({
+          stage: 'saving',
+          current: Math.round((updatedCount / allChanges.length) * 50),
+          total: 100,
+          message: `Uuendatud ${updatedCount}/${allChanges.length} elementi`
+        });
+      }
+
+      // Insert history entries
+      if (historyEntries.length > 0) {
+        await supabase.from('trimble_delivery_history').insert(historyEntries);
+      }
+
+      // Now import new items using the existing import logic
+      if (comparisonResult.newItems.length > 0 && importMode === 'update_all') {
+        setImportProgress({ stage: 'saving', current: 50, total: 100, message: 'Lisan uusi elemente...' });
+
+        // Filter import text to only new items
+        const newGuidsSet = new Set(comparisonResult.newItems.map(i => i.guid.toLowerCase()));
+        const newGuidsIfcSet = new Set(comparisonResult.newItems.map(i => i.guid_ifc.toLowerCase()));
+
+        // Create filtered import data for new items only
+        const newItemsImportData = parsedImportData.filter(row => {
+          const guidLower = row.guid.toLowerCase();
+          const guidIfc = row.guid.length === 36 ? msToIfcGuid(row.guid).toLowerCase() : guidLower;
+          return newGuidsSet.has(guidLower) || newGuidsIfcSet.has(guidIfc);
+        });
+
+        // Set the filtered data and call regular import
+        if (newItemsImportData.length > 0) {
+          // Process these new items using the detailed import logic
+          await importNewItems(newItemsImportData);
+        }
+      }
+
+      // Reload data
+      await Promise.all([loadItems(), loadVehicles()]);
+      broadcastReload();
+
+      const skippedInfo = skippedConfirmed > 0 ? ` (${skippedConfirmed} kinnitatud/paigaldatud elementi jäeti vahele)` : '';
+      setMessage(`✅ Graafik uuendatud! ${updatedCount} elementi uuendatud, ${comparisonResult.newItems.length} uut lisatud${skippedInfo}`);
+      setShowImportModal(false);
+      setImportText('');
+      setParsedImportData([]);
+      setComparisonResult(null);
+    } catch (e: any) {
+      console.error('Error applying schedule update:', e);
+      setMessage(`Viga graafiku uuendamisel: ${e.message}`);
+    } finally {
+      setImporting(false);
+      setImportProgress({ stage: 'idle', current: 0, total: 0, message: '' });
+    }
+  };
+
+  // Import only new items (helper for applyScheduleUpdate)
+  const importNewItems = async (newItemsData: typeof parsedImportData) => {
+    // This reuses much of the detailed import logic but only for new items
+    const hasDetailedData = newItemsData.some(row => row.date || row.vehicleCode);
+
+    if (!hasDetailedData) return;
+
+    // Group by date + vehicleCode + factoryCode
+    const extractFactoryCode = (vehicleCode: string): string | null => {
+      if (!vehicleCode) return null;
+      const match = vehicleCode.match(/^(.+?)\d+$/);
+      return match ? match[1] : null;
+    };
+
+    // Get fresh factories list
+    const { data: currentFactories } = await supabase
+      .from('trimble_delivery_factories')
+      .select('*')
+      .eq('trimble_project_id', projectId);
+
+    const factoriesMap = new Map((currentFactories || []).map(f => [f.factory_code.toLowerCase(), f]));
+
+    // Find objects in loaded models
+    const guidsToImport = newItemsData.map(r => r.guid);
+    const ifcGuidsToLookup = guidsToImport.map(guid =>
+      guid.length === 36 ? msToIfcGuid(guid) : (guid.length === 22 ? guid : '')
+    ).filter(Boolean);
+
+    const foundObjects = await findObjectsInLoadedModels(api, ifcGuidsToLookup);
+
+    // Fetch properties from model
+    const objectsByModel = new Map<string, Array<{ guid_ifc: string; guid_ms: string; runtime_id: number }>>();
+    for (const [guid_ifc, found] of foundObjects) {
+      if (!objectsByModel.has(found.modelId)) {
+        objectsByModel.set(found.modelId, []);
+      }
+      objectsByModel.get(found.modelId)!.push({
+        guid_ifc,
+        guid_ms: ifcToMsGuid(guid_ifc),
+        runtime_id: found.runtimeId
+      });
+    }
+
+    const freshPropertiesMap = new Map<string, {
+      assembly_mark: string;
+      product_name: string | null;
+      cast_unit_weight: string | null;
+      cast_unit_position_code: string | null;
+    }>();
+
+    const currentMappings = propertyMappingsRef.current;
+    const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+
+    for (const [modelId, objects] of objectsByModel) {
+      try {
+        const runtimeIds = objects.map(o => o.runtime_id);
+        const props = await (api.viewer as any).getObjectProperties(modelId, runtimeIds, { includeHidden: true });
+
+        if (props && props.length > 0) {
+          for (let idx = 0; idx < props.length; idx++) {
+            const objProps = props[idx];
+            const objInfo = objects[idx];
+
+            let assemblyMark: string | undefined;
+            let productName: string | undefined;
+            let weight: string | undefined;
+            let positionCode: string | undefined;
+
+            for (const pset of objProps.properties || []) {
+              const setName = (pset as any).set || (pset as any).name || '';
+              const setNameNorm = normalize(setName);
+              const propArray = pset.properties || [];
+
+              for (const prop of propArray) {
+                const propNameOriginal = (prop as any).name || '';
+                const propNameNorm = normalize(propNameOriginal);
+                const propName = propNameOriginal.toLowerCase();
+                const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                if (!propValue) continue;
+
+                if (!assemblyMark) {
+                  if (setNameNorm === normalize(currentMappings.assembly_mark_set) && propNameNorm === normalize(currentMappings.assembly_mark_prop)) {
+                    assemblyMark = String(propValue);
+                  } else if (propName.includes('cast') && propName.includes('mark')) {
+                    assemblyMark = String(propValue);
+                  }
+                }
+
+                if (!weight) {
+                  if (setNameNorm === normalize(currentMappings.weight_set) && propNameNorm === normalize(currentMappings.weight_prop)) {
+                    weight = String(propValue);
+                  } else if (propName.includes('weight')) {
+                    weight = String(propValue);
+                  }
+                }
+
+                if (!positionCode) {
+                  if (setNameNorm === normalize(currentMappings.position_code_set) && propNameNorm === normalize(currentMappings.position_code_prop)) {
+                    positionCode = String(propValue);
+                  } else if (propName.includes('position') && propName.includes('code')) {
+                    positionCode = String(propValue);
+                  }
+                }
+
+                if (setName === 'Product' && propName === 'name' && !productName) {
+                  productName = String(propValue);
+                }
+              }
+            }
+
+            freshPropertiesMap.set(objInfo.guid_ifc, {
+              assembly_mark: assemblyMark || `Import-${freshPropertiesMap.size + 1}`,
+              product_name: productName || null,
+              cast_unit_weight: weight || null,
+              cast_unit_position_code: positionCode || null
+            });
+          }
+        }
+      } catch (error) {
+        console.error(`Error fetching properties for model ${modelId}:`, error);
+      }
+    }
+
+    // Group items
+    const groups = new Map<string, typeof newItemsData>();
+
+    for (const row of newItemsData) {
+      let factoryCode = row.factoryCode;
+      if (!factoryCode && row.vehicleCode) {
+        factoryCode = extractFactoryCode(row.vehicleCode) || undefined;
+      }
+
+      let factoryId = importFactoryId;
+      if (factoryCode) {
+        const matchingFactory = factoriesMap.get(factoryCode.toLowerCase());
+        if (matchingFactory) {
+          factoryId = matchingFactory.id;
+        }
+      }
+
+      if (!factoryId) continue;
+
+      const date = row.date || 'UNASSIGNED';
+      const vehicleCode = row.vehicleCode || '';
+      const time = row.time || '';
+      const groupKey = `${date}|${vehicleCode}|${factoryId}|${time}`;
+
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, []);
+      }
+      groups.get(groupKey)!.push(row);
+    }
+
+    // Create vehicles and items
+    for (const [groupKey, groupItems] of groups) {
+      const [dateStr, vehicleCode, factoryId, timeStr] = groupKey.split('|');
+      const scheduledDate = dateStr === 'UNASSIGNED' ? null : dateStr;
+
+      const factory = (currentFactories || []).find(f => f.id === factoryId);
+      if (!factory) continue;
+
+      // Find or create vehicle
+      let vehicle = vehicleCode
+        ? vehicles.find(v =>
+            v.vehicle_code === vehicleCode &&
+            v.scheduled_date === scheduledDate &&
+            v.factory_id === factoryId
+          )
+        : null;
+
+      if (!vehicle && vehicleCode) {
+        let query = supabase
+          .from('trimble_delivery_vehicles')
+          .select('*')
+          .eq('trimble_project_id', projectId)
+          .eq('vehicle_code', vehicleCode)
+          .eq('factory_id', factoryId);
+
+        if (scheduledDate === null) {
+          query = query.is('scheduled_date', null);
+        } else {
+          query = query.eq('scheduled_date', scheduledDate);
+        }
+
+        const { data: existingVehicle } = await query.maybeSingle();
+        if (existingVehicle) {
+          vehicle = existingVehicle;
+        }
+      }
+
+      if (!vehicle) {
+        const separator = factory.vehicle_separator || '';
+        const factoryVehicles = vehicles.filter(v => v.factory_id === factoryId);
+        const maxNumber = factoryVehicles.reduce((max, v) => Math.max(max, v.vehicle_number || 0), 0);
+        const vehicleNumber = maxNumber + 1;
+        const newVehicleCode = vehicleCode || `${factory.factory_code}${separator}${vehicleNumber}`;
+
+        const { data: newVehicle, error: vehicleError } = await supabase
+          .from('trimble_delivery_vehicles')
+          .insert({
+            trimble_project_id: projectId,
+            factory_id: factoryId,
+            vehicle_number: vehicleNumber,
+            vehicle_code: newVehicleCode,
+            scheduled_date: scheduledDate,
+            unload_start_time: timeStr || null,
+            status: 'planned',
+            created_by: tcUserEmail
+          })
+          .select()
+          .single();
+
+        if (vehicleError || !newVehicle) {
+          console.error('Vehicle creation error:', vehicleError);
+          continue;
+        }
+
+        vehicle = newVehicle;
+      }
+
+      // Create items
+      const newItems = groupItems.map((row, idx) => {
+        const ifcGuid = row.guid.length === 22 ? row.guid : (row.guid.length === 36 ? msToIfcGuid(row.guid) : '');
+        const foundObj = ifcGuid ? foundObjects.get(ifcGuid) : undefined;
+        const freshProps = ifcGuid ? freshPropertiesMap.get(ifcGuid) : undefined;
+
+        return {
+          trimble_project_id: projectId,
+          vehicle_id: vehicle!.id,
+          guid: row.guid,
+          guid_ifc: ifcGuid,
+          guid_ms: row.guid.length === 36 ? row.guid : (row.guid.length === 22 ? ifcToMsGuid(row.guid) : ''),
+          assembly_mark: freshProps?.assembly_mark || `Import-${idx + 1}`,
+          product_name: freshProps?.product_name || null,
+          cast_unit_weight: freshProps?.cast_unit_weight || null,
+          cast_unit_position_code: freshProps?.cast_unit_position_code || null,
+          model_id: foundObj?.modelId || null,
+          object_runtime_id: foundObj?.runtimeId || null,
+          scheduled_date: scheduledDate,
+          sort_order: idx,
+          status: 'planned' as const,
+          created_by: tcUserEmail,
+          notes: row.comment || null,
+          // Track original data
+          original_date: scheduledDate,
+          original_vehicle_code: vehicle!.vehicle_code,
+          first_imported_at: new Date().toISOString(),
+          schedule_version_count: 1
+        };
+      });
+
+      // Batch insert
+      const INSERT_BATCH_SIZE = 500;
+      for (let i = 0; i < newItems.length; i += INSERT_BATCH_SIZE) {
+        const batch = newItems.slice(i, i + INSERT_BATCH_SIZE);
+        await supabase.from('trimble_delivery_items').insert(batch);
+      }
+    }
+  };
+
   const handleImport = async () => {
     // DEBUG: Log that function was called
     console.log('🚀 handleImport called');
@@ -4950,8 +5584,32 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             case 'keevitaja': row.push(vehicle?.resources?.keevitaja || ''); break;
             case 'guid_ms': row.push(item.guid_ms || ''); break;
             case 'guid_ifc': row.push(item.guid_ifc || ''); break;
-            case 'original_date': row.push(''); break; // TODO: from history
-            case 'original_vehicle': row.push(''); break; // TODO: from history
+            case 'original_date': {
+              // Show original date if different from current (from first import)
+              const origDate = item.original_date;
+              if (origDate && origDate !== item.scheduled_date) {
+                row.push(formatDateDisplay(origDate));
+              } else {
+                row.push('');
+              }
+              break;
+            }
+            case 'original_vehicle': {
+              // Show original vehicle if different from current (from first import)
+              const origVehicle = item.original_vehicle_code;
+              if (origVehicle && origVehicle !== vehicle?.vehicle_code) {
+                row.push(origVehicle);
+              } else {
+                row.push('');
+              }
+              break;
+            }
+            case 'version_count': {
+              // Number of schedule versions (how many times this item's schedule changed)
+              const vCount = item.schedule_version_count || 1;
+              row.push(vCount > 1 ? vCount : '');
+              break;
+            }
             case 'comments':
               row.push(itemComments.map(c =>
                 `[${c.created_by_name || c.created_by} ${new Date(c.created_at).toLocaleDateString('et-EE')}]: ${c.comment_text}`
@@ -9784,6 +10442,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         {h.change_type === 'vehicle_changed' && `Veok: ${h.old_vehicle_code || '-'} → ${h.new_vehicle_code || '-'}`}
                         {h.change_type === 'status_changed' && `Staatus: ${h.old_status} → ${h.new_status}`}
                         {h.change_type === 'daily_snapshot' && 'Päevalõpu hetktõmmis'}
+                        {h.change_type === 'schedule_import' && `Graafiku uuendus: ${h.old_date || '—'} → ${h.new_date || '—'}`}
                       </div>
                       {h.change_reason && (
                         <div className="history-comment">{h.change_reason}</div>
@@ -9797,6 +10456,255 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             <div className="modal-footer">
               <button className="cancel-btn" onClick={() => setShowHistoryModal(false)}>
                 Sulge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Schedule Comparison Modal (Graafiku võrdlemine) */}
+      {showComparisonModal && comparisonResult && (
+        <div className="modal-overlay" onClick={() => setShowComparisonModal(false)}>
+          <div className="modal comparison-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 900, width: '95%' }}>
+            <div className="modal-header">
+              <h2>
+                <FiLayers style={{ marginRight: 8 }} />
+                Graafiku võrdlus
+              </h2>
+              <button className="close-btn" onClick={() => setShowComparisonModal(false)}>
+                <FiX />
+              </button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              {/* Summary statistics */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
+                <div style={{ padding: 12, background: '#f0fdf4', borderRadius: 8, textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: '#16a34a' }}>{comparisonResult.newItems.length}</div>
+                  <div style={{ fontSize: 12, color: '#166534' }}>Uued elemendid</div>
+                </div>
+                <div style={{ padding: 12, background: '#fef3c7', borderRadius: 8, textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: '#d97706' }}>{comparisonResult.dateChanges.length}</div>
+                  <div style={{ fontSize: 12, color: '#92400e' }}>Kuupäeva muutused</div>
+                </div>
+                <div style={{ padding: 12, background: '#dbeafe', borderRadius: 8, textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: '#2563eb' }}>{comparisonResult.vehicleChanges.length}</div>
+                  <div style={{ fontSize: 12, color: '#1e40af' }}>Veoki muutused</div>
+                </div>
+                <div style={{ padding: 12, background: '#f3f4f6', borderRadius: 8, textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, fontWeight: 700, color: '#6b7280' }}>{comparisonResult.unchanged.length}</div>
+                  <div style={{ fontSize: 12, color: '#4b5563' }}>Muutmata</div>
+                </div>
+              </div>
+
+              {/* Warnings for confirmed/installed items */}
+              {(comparisonResult.confirmedItemsWithChanges.length > 0 || comparisonResult.installedItemsWithChanges.length > 0) && (
+                <div style={{ marginBottom: 20, padding: 12, background: '#fef2f2', borderRadius: 8, border: '1px solid #fecaca' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <FiAlertTriangle style={{ color: '#dc2626' }} />
+                    <strong style={{ color: '#991b1b' }}>Hoiatus</strong>
+                  </div>
+                  {comparisonResult.confirmedItemsWithChanges.length > 0 && (
+                    <p style={{ margin: '4px 0', fontSize: 13, color: '#7f1d1d' }}>
+                      {comparisonResult.confirmedItemsWithChanges.length} elementi on juba saabumisega kinnitatud - nende andmed jäetakse muutmata.
+                    </p>
+                  )}
+                  {comparisonResult.installedItemsWithChanges.length > 0 && (
+                    <p style={{ margin: '4px 0', fontSize: 13, color: '#7f1d1d' }}>
+                      {comparisonResult.installedItemsWithChanges.length} elementi on juba paigaldatud - nende andmed jäetakse muutmata.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Items not in new schedule */}
+              {comparisonResult.notInImport.length > 0 && (
+                <div style={{ marginBottom: 20, padding: 12, background: '#fef9c3', borderRadius: 8, border: '1px solid #fde047' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <FiAlertTriangle style={{ color: '#ca8a04' }} />
+                    <strong style={{ color: '#854d0e' }}>Elemendid mida uues graafikus pole</strong>
+                  </div>
+                  <p style={{ margin: '4px 0', fontSize: 13, color: '#713f12' }}>
+                    {comparisonResult.notInImport.length} elementi on praeguses graafikus, aga uues graafikus neid pole. Need jäävad alles.
+                  </p>
+                </div>
+              )}
+
+              {/* Source description input */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 500 }}>
+                  Graafiku allikas (valikuline)
+                </label>
+                <input
+                  type="text"
+                  value={importSourceDescription}
+                  onChange={(e) => setImportSourceDescription(e.target.value)}
+                  placeholder="Nt: Kliendi graafik 15.01.2026"
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14 }}
+                />
+              </div>
+
+              {/* Date changes table */}
+              {comparisonResult.dateChanges.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: '#d97706' }}>
+                    Kuupäeva muutused ({comparisonResult.dateChanges.length})
+                  </h4>
+                  <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', maxHeight: 200, overflowY: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead style={{ position: 'sticky', top: 0, background: '#f9fafb' }}>
+                        <tr>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>Märk</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>Praegune kuupäev</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'center' }}>→</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>Uus kuupäev</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'center' }}>Staatus</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {comparisonResult.dateChanges.slice(0, 50).map((change, idx) => (
+                          <tr key={idx} style={{ borderTop: '1px solid #e5e7eb', background: change.isArrivalConfirmed || change.isInstalled ? '#fef2f2' : undefined }}>
+                            <td style={{ padding: '6px 10px', fontWeight: 500 }}>{change.assembly_mark || change.guid.substring(0, 8)}</td>
+                            <td style={{ padding: '6px 10px' }}>{change.currentDate || '—'}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'center', color: '#9ca3af' }}>→</td>
+                            <td style={{ padding: '6px 10px', fontWeight: 500, color: '#d97706' }}>{change.newDate || '—'}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                              {change.isArrivalConfirmed && <span style={{ background: '#fecaca', color: '#991b1b', padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>Kinnitatud</span>}
+                              {change.isInstalled && <span style={{ background: '#bbf7d0', color: '#166534', padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>Paigaldatud</span>}
+                            </td>
+                          </tr>
+                        ))}
+                        {comparisonResult.dateChanges.length > 50 && (
+                          <tr style={{ borderTop: '1px solid #e5e7eb' }}>
+                            <td colSpan={5} style={{ padding: '8px 10px', textAlign: 'center', color: '#6b7280', fontStyle: 'italic' }}>
+                              ... ja veel {comparisonResult.dateChanges.length - 50} elementi
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Vehicle changes table */}
+              {comparisonResult.vehicleChanges.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: '#2563eb' }}>
+                    Veoki muutused ({comparisonResult.vehicleChanges.length})
+                  </h4>
+                  <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', maxHeight: 200, overflowY: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead style={{ position: 'sticky', top: 0, background: '#f9fafb' }}>
+                        <tr>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>Märk</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>Praegune veok</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'center' }}>→</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>Uus veok</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'center' }}>Staatus</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {comparisonResult.vehicleChanges.slice(0, 50).map((change, idx) => (
+                          <tr key={idx} style={{ borderTop: '1px solid #e5e7eb', background: change.isArrivalConfirmed || change.isInstalled ? '#fef2f2' : undefined }}>
+                            <td style={{ padding: '6px 10px', fontWeight: 500 }}>{change.assembly_mark || change.guid.substring(0, 8)}</td>
+                            <td style={{ padding: '6px 10px' }}>{change.currentVehicleCode || '—'}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'center', color: '#9ca3af' }}>→</td>
+                            <td style={{ padding: '6px 10px', fontWeight: 500, color: '#2563eb' }}>{change.newVehicleCode || '—'}</td>
+                            <td style={{ padding: '6px 10px', textAlign: 'center' }}>
+                              {change.isArrivalConfirmed && <span style={{ background: '#fecaca', color: '#991b1b', padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>Kinnitatud</span>}
+                              {change.isInstalled && <span style={{ background: '#bbf7d0', color: '#166534', padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>Paigaldatud</span>}
+                            </td>
+                          </tr>
+                        ))}
+                        {comparisonResult.vehicleChanges.length > 50 && (
+                          <tr style={{ borderTop: '1px solid #e5e7eb' }}>
+                            <td colSpan={5} style={{ padding: '8px 10px', textAlign: 'center', color: '#6b7280', fontStyle: 'italic' }}>
+                              ... ja veel {comparisonResult.vehicleChanges.length - 50} elementi
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* New items table */}
+              {comparisonResult.newItems.length > 0 && (
+                <div style={{ marginBottom: 20 }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: '#16a34a' }}>
+                    Uued elemendid ({comparisonResult.newItems.length})
+                  </h4>
+                  <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', maxHeight: 200, overflowY: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead style={{ position: 'sticky', top: 0, background: '#f9fafb' }}>
+                        <tr>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>GUID</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>Kuupäev</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>Veok</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {comparisonResult.newItems.slice(0, 50).map((change, idx) => (
+                          <tr key={idx} style={{ borderTop: '1px solid #e5e7eb' }}>
+                            <td style={{ padding: '6px 10px', fontFamily: 'monospace', fontSize: 11 }}>{change.guid.substring(0, 20)}...</td>
+                            <td style={{ padding: '6px 10px' }}>{change.newDate || '—'}</td>
+                            <td style={{ padding: '6px 10px' }}>{change.newVehicleCode || '—'}</td>
+                          </tr>
+                        ))}
+                        {comparisonResult.newItems.length > 50 && (
+                          <tr style={{ borderTop: '1px solid #e5e7eb' }}>
+                            <td colSpan={3} style={{ padding: '8px 10px', textAlign: 'center', color: '#6b7280', fontStyle: 'italic' }}>
+                              ... ja veel {comparisonResult.newItems.length - 50} elementi
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Import mode selection */}
+              <div style={{ marginTop: 16, padding: 12, background: '#f9fafb', borderRadius: 8 }}>
+                <div style={{ fontWeight: 500, marginBottom: 8 }}>Impordi režiim</div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="importMode"
+                    checked={importMode === 'update_all'}
+                    onChange={() => setImportMode('update_all')}
+                  />
+                  <span>
+                    <strong>Uuenda graafik</strong> - uuenda olemasolevaid elemente ja lisa uued
+                    <br />
+                    <span style={{ fontSize: 12, color: '#6b7280' }}>Kinnitatud ja paigaldatud elemendid jäetakse muutmata</span>
+                  </span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="importMode"
+                    checked={importMode === 'add_new'}
+                    onChange={() => setImportMode('add_new')}
+                  />
+                  <span>
+                    <strong>Lisa ainult uued</strong> - olemasolevaid elemente ei muudeta
+                  </span>
+                </label>
+              </div>
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <button className="cancel-btn" onClick={() => setShowComparisonModal(false)}>
+                Tühista
+              </button>
+              <button
+                className="submit-btn primary"
+                onClick={applyScheduleUpdate}
+                disabled={importing}
+                style={{ minWidth: 150 }}
+              >
+                {importing ? 'Uuendan...' : importMode === 'update_all' ? 'Uuenda graafik' : 'Lisa uued'}
               </button>
             </div>
           </div>
@@ -10083,6 +10991,17 @@ ${importText.split('\n').slice(0, 5).join('\n')}
               <button className="cancel-btn" onClick={() => setShowImportModal(false)}>
                 Tühista
               </button>
+              {/* Compare button - shown when there are existing items */}
+              {items.length > 0 && parsedImportData.length > 0 && (
+                <button
+                  className="submit-btn"
+                  disabled={!importText.trim() || comparisonLoading}
+                  onClick={handleCompareBeforeImport}
+                  style={{ background: '#f59e0b', marginRight: 8 }}
+                >
+                  {comparisonLoading ? 'Võrdlen...' : 'Võrdle graafikut'}
+                </button>
+              )}
               <button
                 className="submit-btn primary"
                 disabled={(() => {
@@ -10105,11 +11024,10 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                 })()}
                 onClick={() => {
                   console.log('🔵 Import button clicked!');
-                  alert('Import button clicked! Vaata konsooli.');
                   handleImport();
                 }}
               >
-                {importing ? 'Importimisel...' : 'Impordi'}
+                {importing ? 'Importimisel...' : 'Impordi uued'}
               </button>
             </div>
           </div>

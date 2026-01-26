@@ -796,6 +796,11 @@ export interface DeliveryItem {
   created_by: string;
   updated_at: string;
   updated_by?: string;
+  // Algandmed (esimesest impordist) - ajaloo ja võrdluse jaoks
+  original_date?: string | null;         // Algne kuupäev (esimene import)
+  original_vehicle_code?: string | null; // Algne veoki kood (esimene import)
+  first_imported_at?: string;            // Esimese impordi kuupäev
+  schedule_version_count?: number;       // Mitu korda on graafik uuenenud
   // Joined data (laaditakse eraldi päringuga)
   vehicle?: DeliveryVehicle;
 }
@@ -807,7 +812,8 @@ export type DeliveryHistoryChangeType =
   | 'vehicle_changed'   // Veok muutus
   | 'status_changed'    // Staatus muutus
   | 'removed'           // Eemaldatud koormast
-  | 'daily_snapshot';   // Päevalõpu hetktõmmis
+  | 'daily_snapshot'    // Päevalõpu hetktõmmis
+  | 'schedule_import';  // Graafiku uuendamine (kliendi uus versioon)
 
 // Ajalugu
 export interface DeliveryHistory {
@@ -832,8 +838,85 @@ export interface DeliveryHistory {
   changed_at: string;
   is_snapshot: boolean;
   snapshot_date?: string;
+  // Graafiku versiooni info (schedule_import tüübi jaoks)
+  schedule_version_id?: string;
+  import_source?: string;  // Nt "Kliendi graafik 15.01.2026"
   // Joined data
   item?: DeliveryItem;
+}
+
+// ============================================
+// TARNEGRAAFIKU VÕRDLEMINE (Schedule Comparison)
+// ============================================
+
+// Ühe elemendi muutuse tüüp
+export type ScheduleChangeType =
+  | 'new'           // Uus element (pole veel graafikus)
+  | 'date_changed'  // Kuupäev muutunud
+  | 'vehicle_changed' // Veok muutunud
+  | 'unchanged';    // Muutusteta
+
+// Ühe elemendi muutuse kirjeldus
+export interface ScheduleChange {
+  guid: string;
+  guid_ifc: string;
+  assembly_mark?: string;
+  changeType: ScheduleChangeType;
+  // Praegused väärtused (kui eksisteerib)
+  currentDate?: string | null;
+  currentVehicleCode?: string | null;
+  currentVehicleId?: string | null;
+  currentStatus?: string;
+  // Uued väärtused (importist)
+  newDate?: string | null;
+  newVehicleCode?: string | null;
+  // Staatuse info
+  isArrivalConfirmed?: boolean;  // Kas saabumise kinnitus olemas
+  isInstalled?: boolean;         // Kas paigaldatud
+}
+
+// Võrdluse kokkuvõte
+export interface ScheduleComparisonResult {
+  // Kokku
+  totalInImport: number;
+  totalInCurrent: number;
+  // Muutused
+  newItems: ScheduleChange[];           // Uued elemendid
+  dateChanges: ScheduleChange[];        // Kuupäeva muutused
+  vehicleChanges: ScheduleChange[];     // Veoki muutused
+  unchanged: ScheduleChange[];          // Muutmata
+  // Hoiatused
+  confirmedItemsWithChanges: ScheduleChange[];  // Kinnitatud elemendid mille kohta on muutus
+  installedItemsWithChanges: ScheduleChange[];  // Paigaldatud elemendid mille kohta on muutus
+  // Elemendid mida uues graafikus pole
+  notInImport: ScheduleChange[];
+}
+
+// Graafiku versiooni info (ajaloo jaoks)
+export interface ScheduleVersion {
+  id: string;
+  trimble_project_id: string;
+  version_number: number;
+  import_date: string;
+  imported_by: string;
+  imported_by_name?: string;
+  source_description?: string;  // Nt "Kliendi graafik 15.01.2026"
+  // Statistika
+  total_items: number;
+  new_items_count: number;
+  updated_items_count: number;
+  unchanged_count: number;
+  // Muutuste kokkuvõte JSON-na
+  changes_summary?: Record<string, unknown>;
+  created_at: string;
+}
+
+// Elemendi algandmed (esimene import) - salvestatakse history tabelisse
+export interface OriginalScheduleData {
+  original_date?: string | null;
+  original_vehicle_code?: string | null;
+  original_import_version_id?: string;
+  first_imported_at?: string;
 }
 
 // Kommentaarid
