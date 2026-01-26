@@ -1,0 +1,58 @@
+{
+  "title": "Tööriistad",
+  "presets": {
+    "nameRequired": "Sisesta eelseadistuse nimi",
+    "saved": "Eelseadistus salvestatud",
+    "saveError": "Viga salvestamisel",
+    "deleted": "Eelseadistus kustutatud",
+    "loaded": "Eelseadistus \"{{name}}\" laetud"
+  },
+  "data": {
+    "deliveryReadError": "Viga tarneandmete lugemisel",
+    "installationReadError": "Viga paigaldusandmete lugemisel",
+    "readError": "Viga andmete lugemisel",
+    "databaseReadError": "Viga andmebaasi lugemisel"
+  },
+  "color": {
+    "noObjectsInCategory": "Selles kategoorias pole objekte",
+    "objectsNotFoundInModels": "Objekte ei leitud laetud mudelitest",
+    "coloringError": "Viga värvimisel"
+  },
+  "model": {
+    "selectFromModel": "Vali mudelist detailid!",
+    "selectedNoInfo": "Valitud objektidel puudub info"
+  },
+  "markup": {
+    "notCreated": "Markupe ei loodud (template tühi või propertid puuduvad)",
+    "boltsNotFound": "Polte ei leitud (või washer count = 0)",
+    "fastenersNotFound": "Kinnitustarvikuid washer count = 0 ei leitud",
+    "noMarkups": "Markupe pole",
+    "stepsRemoved": "Sammud eemaldatud",
+    "tooManyObjects": "Liiga palju objekte ({{count}}). Max {{max}} korraga!",
+    "tooManyMarkups": "Liiga palju markupe ({{count}}). Max {{max}} korraga!",
+    "created": "{{count}} markupit loodud",
+    "createError": "Viga markupite loomisel",
+    "fastenersCreated": "Loodud {{count}} kinnitustarviku markupit",
+    "removed": "{{count}} markupit eemaldatud",
+    "removeError": "Viga markupite eemaldamisel"
+  },
+  "image": {
+    "copiedToClipboard": "Pilt kopeeritud lõikelauale",
+    "openedInNewWindow": "Pilt avatud uues aknas",
+    "copyFailed": "Pildi kopeerimine ebaõnnestus",
+    "downloaded": "Pilt allalaaditud",
+    "downloadFailed": "Pildi allalaadimine ebaõnnestus"
+  },
+  "results": {
+    "cleared": "Tulemused tühjendatud"
+  },
+  "export": {
+    "error": "Viga eksportimisel"
+  },
+  "scan": {
+    "foundBolts": "{{count}} erinevat polti leitud",
+    "foundBoltsExportOnly": "{{count}} erinevat polti leitud (tabel >10 - ainult eksport)",
+    "error": "Viga skanneerimisel",
+    "rowsCopied": "{{count}} rida kopeeritud"
+  }
+}

@@ -30,23 +30,13 @@ import {
   colorModelByGroupLink
 } from './utils/navigationHelper';
 import { initOfflineQueue } from './utils/offlineQueue';
+import { isSuperAdminEmail, createSuperAdminUser } from './constants/roles';
 import './App.css';
 
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.981';
-
-// Super admin emails from environment variable (comma-separated)
-// These users always have full access regardless of database settings
-const SUPER_ADMIN_EMAILS = (import.meta.env.VITE_SUPER_ADMIN_EMAILS || '')
-  .split(',')
-  .map((email: string) => email.trim().toLowerCase())
-  .filter((email: string) => email.length > 0);
-
-const isSuperAdminEmail = (email: string): boolean => {
-  return SUPER_ADMIN_EMAILS.includes(email.toLowerCase());
-};
+export const APP_VERSION = '3.0.982';
 
 // Trimble Connect kasutaja info
 interface TrimbleConnectUser {
@@ -742,25 +732,8 @@ export default function App() {
             console.log('Auth check:', { email: userData.email.toLowerCase(), projectId: project.id, dbUser, dbError });
 
             if (isSuperAdmin) {
-              // Super admin - override with full permissions
-              const superAdminUser: TrimbleExUser = dbUser ? {
-                ...dbUser,
-                role: 'admin',
-                can_assembly_inspection: true,
-                can_bolt_inspection: true,
-                is_active: true
-              } : {
-                id: 'super-admin',
-                project_id: '',
-                trimble_project_id: project.id,
-                email: userData.email,
-                name: 'Super Admin',
-                role: 'admin',
-                can_assembly_inspection: true,
-                can_bolt_inspection: true,
-                is_active: true,
-                created_at: new Date().toISOString()
-              };
+              // Super admin - override with full permissions using centralized configuration
+              const superAdminUser = createSuperAdminUser(userData.email, project.id, dbUser);
               console.log('Super admin authenticated:', superAdminUser);
               setUser(superAdminUser);
 

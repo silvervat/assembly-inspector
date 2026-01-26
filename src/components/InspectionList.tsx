@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 import { FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiInfo, FiChevronLeft, FiEdit2, FiSave, FiTrash2 } from 'react-icons/fi';
 import { supabase, InspectionResult, InspectionCheckpoint, TrimbleExUser } from '../supabase';
+import { isAdminOrModerator as checkIsAdminOrModerator } from '../constants/roles';
 
 export interface InspectionItem {
   id: string;
@@ -185,7 +186,7 @@ export default function InspectionList({
 }: InspectionListProps) {
   void _onSelectInspection; // Suppress unused warning
   // Permission helpers
-  const isAdminOrModerator = currentUser.role === 'admin' || currentUser.role === 'moderator';
+  const isAdminOrModerator = checkIsAdminOrModerator(currentUser);
 
   // Check if current user can edit this inspection
   const canEditInspection = (inspection: InspectionItem): boolean => {
