@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import {
   FiPlus, FiEdit2, FiTrash2, FiEye, FiEyeOff, FiMapPin, FiRotateCw,
@@ -81,6 +82,7 @@ export default function CranePlannerScreen({
   user,
   onNavigate
 }: CranePlannerScreenProps) {
+  const { t } = useTranslation('common');
   // Hooks
   const { cranes: craneModels, loading: cranesLoading } = useCranes();
   const { projectCranes, loading: projectCranesLoading, createProjectCrane, updateProjectCrane, deleteProjectCrane, updateMarkupIds, refetch } = useProjectCranes(projectId);
@@ -1299,7 +1301,7 @@ export default function CranePlannerScreen({
         <PageHeader title="Kraanade Planeerimine" onBack={onBackToMenu} user={user} onNavigate={onNavigate} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
           <FiLoader className="animate-spin" size={24} style={{ marginRight: '8px' }} />
-          <span>Laadin...</span>
+          <span>{t('buttons.loading')}</span>
         </div>
       </div>
     );

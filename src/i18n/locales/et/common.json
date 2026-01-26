@@ -32,6 +32,8 @@
     "editSignature": "Muuda allkirja",
     "login": "Logi sisse",
     "checking": "Kontrollin...",
+    "loading": "Laadin...",
+    "loadingData": "Laadin andmeid...",
     "download": "Lae alla",
     "upload": "Lae üles",
     "copy": "Kopeeri",
@@ -606,5 +608,10 @@
     "saveError": "Viga salvestamisel",
     "cameraError": "Kaamera viga: {{message}}",
     "gpsError": "GPS viga: {{message}}"
+  },
+  "crane": {
+    "loadingCranes": "Laadin kraanasid...",
+    "title": "Kraanade Andmebaas",
+    "plannerTitle": "Kraanade Planeerimine"
   }
 }
