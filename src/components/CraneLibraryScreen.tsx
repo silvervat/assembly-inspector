@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FiPlus, FiEdit2, FiTrash2, FiChevronDown, FiChevronRight, FiLoader, FiAlertCircle, FiDatabase, FiUpload, FiImage, FiDownload, FiInfo, FiFileText } from 'react-icons/fi';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
@@ -27,6 +28,7 @@ interface CraneLibraryScreenProps {
 }
 
 export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail, user }: CraneLibraryScreenProps) {
+  const { t } = useTranslation('common');
   const { cranes, loading, error, createCrane, updateCrane, deleteCrane, uploadCraneImage } = useCranes();
 
   const [editingCraneId, setEditingCraneId] = useState<string | null>(null);
@@ -190,7 +192,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
         <PageHeader title="Kraanade Andmebaas" onBack={onBackToMenu} onNavigate={onNavigate} user={user} />
         <div className="flex items-center justify-center p-8">
           <FiLoader className="animate-spin mr-2" size={24} />
-          <span>Laadin kraanasid...</span>
+          <span>{t('crane.loadingCranes')}</span>
         </div>
       </div>
     );

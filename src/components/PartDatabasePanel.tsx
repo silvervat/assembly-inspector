@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase } from '../supabase';
 import { FiDatabase, FiSearch, FiZap, FiRefreshCw, FiTruck, FiBox, FiCheck, FiAlertTriangle, FiExternalLink, FiGrid } from 'react-icons/fi';
@@ -22,6 +23,7 @@ interface PartDbData {
 }
 
 export default function PartDatabasePanel({ api, projectId, compact = false, onNavigateToDelivery, autoLoadOnMount = true }: PartDatabasePanelProps) {
+  const { t } = useTranslation('common');
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -552,7 +554,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
       {loading && (
         <div style={{ textAlign: 'center', padding: '30px' }}>
           <FiRefreshCw className="spin" size={24} style={{ color: '#6366f1' }} />
-          <p style={{ marginTop: '8px', color: '#64748b', fontSize: '12px' }}>Laadin...</p>
+          <p style={{ marginTop: '8px', color: '#64748b', fontSize: '12px' }}>{t('buttons.loading')}</p>
         </div>
       )}
 

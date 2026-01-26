@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase, DeliveryVehicle } from '../supabase';
 import { FiSave, FiRefreshCw, FiX, FiCheck, FiAlertTriangle } from 'react-icons/fi';
 import './DeliverySpreadsheetEditor.css';
@@ -75,6 +76,7 @@ const parseTime = (value: string): string | null => {
 };
 
 export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props) {
+  const { t } = useTranslation('common');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -588,7 +590,7 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
       <div className="spreadsheet-editor">
         <div className="spreadsheet-loading">
           <FiRefreshCw className="spinning" size={24} />
-          <span>Laadin andmeid...</span>
+          <span>{t('buttons.loadingData')}</span>
         </div>
       </div>
     );
