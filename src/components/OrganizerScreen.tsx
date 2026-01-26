@@ -76,17 +76,8 @@ interface TeamMember {
 // Sharing mode for groups
 type SharingMode = 'private' | 'shared' | 'project';
 
-// Field type labels
-const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
-  text: 'Tekst',
-  number: 'Number',
-  currency: 'Valuuta (€)',
-  date: 'Kuupäev',
-  tags: 'Sildid',
-  dropdown: 'Valik',
-  photo: 'Foto',
-  attachment: 'Manus'
-};
+// Field types for iteration
+const FIELD_TYPES: CustomFieldType[] = ['text', 'number', 'currency', 'date', 'tags', 'dropdown', 'photo', 'attachment'];
 
 // Performance constants
 const BATCH_SIZE = 100;  // Items per database batch insert
@@ -456,6 +447,11 @@ export default function OrganizerScreen({
   const { t } = useTranslation(['common', 'organizer']);
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
   const { getCachedData, setCachedData, isCacheValid } = useOrganizerCache(projectId);
+
+  // Translated field type labels
+  const getFieldTypeLabel = useCallback((type: CustomFieldType): string => {
+    return t(`organizer:fieldTypes.${type}`);
+  }, [t]);
 
   // Data
   const [groups, setGroups] = useState<OrganizerGroup[]>([]);
@@ -10915,31 +10911,31 @@ export default function OrganizerScreen({
                           editingGroup.custom_fields.map(f => (
                             <div key={f.id} className="custom-field-item">
                               <span className="field-name">{f.name}</span>
-                              <span className="field-type">{FIELD_TYPE_LABELS[f.type]}</span>
+                              <span className="field-type">{getFieldTypeLabel(f.type)}</span>
                               <div className="field-actions">
-                                <button className="field-edit-btn" onClick={() => startEditingField(f)} title="Muuda"><FiEdit2 size={12} /></button>
-                                <button className="field-delete-btn" onClick={() => deleteCustomField(f.id, editingGroup.id)} title="Kustuta"><FiTrash2 size={12} /></button>
+                                <button className="field-edit-btn" onClick={() => startEditingField(f)} title={t('organizer:field.edit')}><FiEdit2 size={12} /></button>
+                                <button className="field-delete-btn" onClick={() => deleteCustomField(f.id, editingGroup.id)} title={t('common:buttons.delete')}><FiTrash2 size={12} /></button>
                               </div>
                             </div>
                           ))
                         )}
                         <button className="org-add-field-btn" onClick={() => { resetFieldForm(); setShowFieldForm(true); }}>
-                          <FiPlus size={14} /> Lisa väli
+                          <FiPlus size={14} /> {t('organizer:field.new')}
                         </button>
                       </>
                     ) : (
                       // Creating new group
                       <>
                         {formCustomFields.length === 0 ? (
-                          <p className="org-empty-hint">Lisavälju pole veel lisatud</p>
+                          <p className="org-empty-hint">{t('organizer:field.noFieldsYet')}</p>
                         ) : (
                           formCustomFields.map(f => (
                             <div key={f.id} className="custom-field-item">
                               <span className="field-name">{f.name}</span>
-                              <span className="field-type">{FIELD_TYPE_LABELS[f.type]}</span>
+                              <span className="field-type">{getFieldTypeLabel(f.type)}</span>
                               <div className="field-actions">
-                                <button className="field-edit-btn" onClick={() => startEditingField(f)} title="Muuda"><FiEdit2 size={12} /></button>
-                                <button className="field-delete-btn" onClick={() => deleteFormCustomField(f.id)} title="Kustuta"><FiTrash2 size={12} /></button>
+                                <button className="field-edit-btn" onClick={() => startEditingField(f)} title={t('organizer:field.edit')}><FiEdit2 size={12} /></button>
+                                <button className="field-delete-btn" onClick={() => deleteFormCustomField(f.id)} title={t('common:buttons.delete')}><FiTrash2 size={12} /></button>
                               </div>
                             </div>
                           ))
@@ -10983,14 +10979,14 @@ export default function OrganizerScreen({
                 <input type="text" value={fieldName} onChange={(e) => setFieldName(e.target.value)} placeholder="nt. Kommentaarid, Hind" autoFocus />
               </div>
               <div className="org-field">
-                <label>Tüüp</label>
+                <label>{t('organizer:field.type')}</label>
                 <select value={fieldType} onChange={(e) => setFieldType(e.target.value as CustomFieldType)}>
-                  {Object.entries(FIELD_TYPE_LABELS).map(([key, label]) => (<option key={key} value={key}>{label}</option>))}
+                  {FIELD_TYPES.map(type => (<option key={type} value={type}>{getFieldTypeLabel(type)}</option>))}
                 </select>
               </div>
               {fieldType === 'number' && (
                 <div className="org-field">
-                  <label>Komakohti</label>
+                  <label>{t('organizer:field.decimals')}</label>
                   <select value={fieldDecimals} onChange={(e) => setFieldDecimals(Number(e.target.value))}>
                     <option value={0}>0</option><option value={1}>1</option><option value={2}>2</option><option value={3}>3</option>
                   </select>
@@ -10998,7 +10994,7 @@ export default function OrganizerScreen({
               )}
               {fieldType === 'dropdown' && (
                 <div className="org-field">
-                  <label>Valikud (üks rea kohta)</label>
+                  <label>{t('organizer:field.dropdownOptions')}</label>
                   <textarea value={fieldDropdownOptions} onChange={(e) => setFieldDropdownOptions(e.target.value)} rows={4} />
                 </div>
               )}
@@ -11111,7 +11107,7 @@ export default function OrganizerScreen({
                           {f.required && <span style={{ color: '#ef4444', marginLeft: '2px' }}>*</span>}
                         </span>
                         <span style={{ fontSize: '10px', color: '#9ca3af', marginLeft: '2px' }}>
-                          {FIELD_TYPE_LABELS[f.type]}
+                          {getFieldTypeLabel(f.type)}
                         </span>
                         <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px' }}>
                           <button
@@ -11120,7 +11116,7 @@ export default function OrganizerScreen({
                               startEditingField(f);
                               setShowFieldsManagementModal(false);
                             }}
-                            title="Muuda"
+                            title={t('organizer:field.edit')}
                             style={{
                               background: 'none',
                               border: 'none',
@@ -11435,10 +11431,10 @@ export default function OrganizerScreen({
               <button onClick={() => setShowBulkEdit(false)}><FiX size={18} /></button>
             </div>
             <div className="org-modal-body">
-              <p className="org-bulk-hint">Täida väljad, mida soovid muuta. Tühjad väljad jäetakse vahele.</p>
+              <p className="org-bulk-hint">{t('organizer:bulkEdit.hint')}</p>
               {effectiveCustomFields.map(f => (
                 <div key={f.id} className="org-field">
-                  <label>{f.name} <span className="field-type-hint">({FIELD_TYPE_LABELS[f.type]})</span></label>
+                  <label>{f.name} <span className="field-type-hint">({getFieldTypeLabel(f.type)})</span></label>
                   {(f.type === 'photo' || f.type === 'attachment') ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

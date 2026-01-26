@@ -1,37 +1,9 @@
 {
   "title": "Delivery Schedule",
-  "weekdays": {
-    "sunday": "Sunday",
-    "monday": "Monday",
-    "tuesday": "Tuesday",
-    "wednesday": "Wednesday",
-    "thursday": "Thursday",
-    "friday": "Friday",
-    "saturday": "Saturday"
-  },
-  "weekdaysShort": {
-    "mon": "M",
-    "tue": "T",
-    "wed": "W",
-    "thu": "T",
-    "fri": "F",
-    "sat": "S",
-    "sun": "S"
-  },
-  "months": {
-    "january": "January",
-    "february": "February",
-    "march": "March",
-    "april": "April",
-    "may": "May",
-    "june": "June",
-    "july": "July",
-    "august": "August",
-    "september": "September",
-    "october": "October",
-    "november": "November",
-    "december": "December"
-  },
+  "unassigned": "UNASSIGNED",
+  "weekdaysList": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+  "weekdaysMinMon": ["M", "T", "W", "T", "F", "S", "S"],
+  "monthsList": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
   "vehicleStatus": {
     "planned": "Planned",
     "loading": "Loading",

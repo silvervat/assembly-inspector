@@ -1,5 +1,15 @@
 {
   "title": "Organizer",
+  "fieldTypes": {
+    "text": "Text",
+    "number": "Number",
+    "currency": "Currency (€)",
+    "date": "Date",
+    "tags": "Tags",
+    "dropdown": "Dropdown",
+    "photo": "Photo",
+    "attachment": "Attachment"
+  },
   "group": {
     "new": "New group",
     "edit": "Edit group",
@@ -28,7 +38,14 @@
     "saving": "Saving...",
     "saveError": "Error saving field",
     "updateError": "Error updating field",
-    "enterValue": "Enter at least one value or select files"
+    "enterValue": "Enter at least one value or select files",
+    "noFieldsYet": "No custom fields added yet",
+    "type": "Type",
+    "decimals": "Decimals",
+    "dropdownOptions": "Options (one per line)"
+  },
+  "bulkEdit": {
+    "hint": "Fill in fields you want to change. Empty fields will be skipped."
   },
   "item": {
     "add": "Add items",

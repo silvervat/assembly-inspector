@@ -59,7 +59,13 @@
     "lastWeek": "Eelmine nädal",
     "nextWeek": "Järgmine nädal",
     "date": "Kuupäev",
-    "time": "Kellaaeg"
+    "time": "Kellaaeg",
+    "weekdays": ["Pühapäev", "Esmaspäev", "Teisipäev", "Kolmapäev", "Neljapäev", "Reede", "Laupäev"],
+    "weekdaysShort": ["Püh", "Esm", "Tei", "Kol", "Nel", "Ree", "Lau"],
+    "weekdaysMin": ["P", "E", "T", "K", "N", "R", "L"],
+    "weekdaysMinMon": ["E", "T", "K", "N", "R", "L", "P"],
+    "months": ["Jaanuar", "Veebruar", "Märts", "Aprill", "Mai", "Juuni", "Juuli", "August", "September", "Oktoober", "November", "Detsember"],
+    "monthsShort": ["Jaan", "Veebr", "Märts", "Apr", "Mai", "Juuni", "Juuli", "Aug", "Sept", "Okt", "Nov", "Dets"]
   },
   "navigation": {
     "menu": "Menüü",
