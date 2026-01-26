@@ -17,6 +17,7 @@ import DeliveryShareGallery from './components/DeliveryShareGallery';
 import QRActivationPage from './components/QRActivationPage';
 import DeliverySpreadsheetEditor from './components/DeliverySpreadsheetEditor';
 import PositionerPopupPage from './components/PositionerPopupPage';
+import GpsFixerPopupPage from './components/admin/GpsFixerPopupPage';
 import CranePlannerScreen from './components/CranePlannerScreen';
 import CraneLibraryScreen from './components/CraneLibraryScreen';
 import KeyboardShortcutsScreen from './components/KeyboardShortcutsScreen';
@@ -58,6 +59,7 @@ const popupType = new URLSearchParams(window.location.search).get('popup');
 const isPopupMode = popupType === 'delivery';
 const isSpreadsheetMode = popupType === 'spreadsheet';
 const isPositionerMode = popupType === 'positioner';
+const isGpsFixerMode = popupType === 'gpsfixer';
 const popupProjectId = new URLSearchParams(window.location.search).get('projectId') || '';
 const popupGuid = new URLSearchParams(window.location.search).get('guid') || '';
 const popupMark = new URLSearchParams(window.location.search).get('mark') || '';
@@ -2610,6 +2612,11 @@ export default function App() {
         initialMark={popupMark}
       />
     );
+  }
+
+  // GPS Fixer popup mode - standalone GPS capture window for calibration
+  if (isGpsFixerMode) {
+    return <GpsFixerPopupPage />;
   }
 
   // Popup mode - show only delivery schedule

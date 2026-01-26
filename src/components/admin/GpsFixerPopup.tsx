@@ -1,106 +1,80 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+/**
+ * GpsFixerPopup - Opens GPS fixer in a new window to bypass iframe geolocation restrictions
+ * The actual GPS capture happens in GpsFixerPopupPage which runs in the separate window
+ */
+
+import { useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FiX, FiMapPin, FiCheck, FiAlertCircle, FiRefreshCw } from 'react-icons/fi';
-import { useGpsTracking, GpsSignalQuality } from '../../hooks/useGpsTracking';
+import { FiMapPin, FiExternalLink, FiX, FiAlertCircle } from 'react-icons/fi';
 
 interface GpsFixerPopupProps {
   onFix: (gps: { lat: number; lng: number; accuracy?: number; altitude?: number }) => void;
   onClose: () => void;
 }
 
-// Signal quality colors and labels
-const SIGNAL_QUALITY_CONFIG: Record<GpsSignalQuality, { color: string; bg: string; label: string }> = {
-  excellent: { color: '#16a34a', bg: '#dcfce7', label: 'Suurepärane' },
-  good: { color: '#2563eb', bg: '#dbeafe', label: 'Hea' },
-  fair: { color: '#ca8a04', bg: '#fef3c7', label: 'Rahuldav' },
-  poor: { color: '#dc2626', bg: '#fee2e2', label: 'Halb' },
-  none: { color: '#64748b', bg: '#f1f5f9', label: 'Puudub' }
-};
-
 export function GpsFixerPopup({ onFix, onClose }: GpsFixerPopupProps) {
   const { t } = useTranslation('admin');
-  const {
-    position,
-    error,
-    signalQuality,
-    permissionStatus,
-    lastUpdateAge,
-    startTracking,
-    stopTracking,
-    requestPermission
-  } = useGpsTracking({ enableHighAccuracy: true });
+  const popupRef = useRef<Window | null>(null);
+  const popupOpenedRef = useRef(false);
 
-  const [averaging, setAveraging] = useState(false);
-  const [averageCount] = useState(5);
-  const [samples, setSamples] = useState<Array<{ lat: number; lng: number; accuracy: number }>>([]);
-  const samplesRef = useRef(samples);
-  samplesRef.current = samples;
-
-  // Start tracking on mount
+  // Listen for messages from the popup window
   useEffect(() => {
-    if (permissionStatus === 'granted' || permissionStatus === 'unknown') {
-      startTracking();
-    }
-    return () => stopTracking();
-  }, [permissionStatus]);
+    const handleMessage = (event: MessageEvent) => {
+      // Only accept messages from our popup
+      if (event.data?.type === 'GPS_FIXED' && event.data?.data) {
+        onFix(event.data.data);
+      } else if (event.data?.type === 'GPS_CANCELLED') {
+        onClose();
+      }
+    };
 
-  // Collect samples for averaging
+    window.addEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      // Close popup if still open when component unmounts
+      if (popupRef.current && !popupRef.current.closed) {
+        popupRef.current.close();
+      }
+    };
+  }, [onFix, onClose]);
+
+  // Open the GPS fixer in a new window
+  const openGpsWindow = useCallback(() => {
+    const baseUrl = window.location.origin + (import.meta.env.BASE_URL || '/');
+    const gpsUrl = `${baseUrl}?popup=gpsfixer`;
+
+    // Close existing popup if any
+    if (popupRef.current && !popupRef.current.closed) {
+      popupRef.current.close();
+    }
+
+    const popup = window.open(gpsUrl, 'gpsfixer', 'width=420,height=700,scrollbars=yes');
+
+    if (popup) {
+      popupRef.current = popup;
+      popupOpenedRef.current = true;
+
+      // Check if popup was closed without fixing
+      const checkClosed = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkClosed);
+          // If popup was closed but we didn't receive GPS data, close the modal
+          if (!popupOpenedRef.current) {
+            onClose();
+          }
+        }
+      }, 500);
+    }
+  }, [onClose]);
+
+  // Auto-open popup on mount
   useEffect(() => {
-    if (averaging && position && samples.length < averageCount) {
-      setSamples(prev => [
-        ...prev,
-        { lat: position.latitude, lng: position.longitude, accuracy: position.accuracy }
-      ]);
-    }
-
-    // If we have enough samples, calculate average and fix
-    if (averaging && samples.length >= averageCount) {
-      const avgLat = samples.reduce((sum, s) => sum + s.lat, 0) / samples.length;
-      const avgLng = samples.reduce((sum, s) => sum + s.lng, 0) / samples.length;
-      const avgAccuracy = samples.reduce((sum, s) => sum + s.accuracy, 0) / samples.length;
-
-      onFix({
-        lat: avgLat,
-        lng: avgLng,
-        accuracy: avgAccuracy,
-        altitude: position?.altitude ?? undefined
-      });
-    }
-  }, [averaging, position, samples.length, averageCount, onFix]);
-
-  // Handle fix button
-  const handleFix = useCallback(() => {
-    if (!position) return;
-
-    if (averaging) {
-      // Already averaging, reset
-      setAveraging(false);
-      setSamples([]);
-      return;
-    }
-
-    // Just fix immediately with current position
-    onFix({
-      lat: position.latitude,
-      lng: position.longitude,
-      accuracy: position.accuracy,
-      altitude: position.altitude ?? undefined
-    });
-  }, [position, averaging, onFix]);
-
-  // Start averaging
-  const handleStartAveraging = useCallback(() => {
-    setSamples([]);
-    setAveraging(true);
-  }, []);
-
-  // Request permission if denied
-  const handleRequestPermission = useCallback(async () => {
-    await requestPermission();
-  }, [requestPermission]);
-
-  const qualityConfig = SIGNAL_QUALITY_CONFIG[signalQuality];
-  const accuracyPercent = position ? Math.min(100, Math.max(0, 100 - (position.accuracy / 50) * 100)) : 0;
+    // Small delay to ensure the component is mounted
+    const timer = setTimeout(() => {
+      openGpsWindow();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [openGpsWindow]);
 
   return (
     <div
@@ -151,184 +125,63 @@ export function GpsFixerPopup({ onFix, onClose }: GpsFixerPopupProps) {
 
         {/* Content */}
         <div style={{ padding: '24px' }}>
-          {/* Permission denied */}
-          {permissionStatus === 'denied' && (
-            <div style={{
-              textAlign: 'center',
-              padding: '24px',
-              background: '#fee2e2',
-              borderRadius: '12px',
-              marginBottom: '16px'
-            }}>
-              <FiAlertCircle size={32} style={{ color: '#dc2626', marginBottom: '12px' }} />
-              <div style={{ fontSize: '14px', fontWeight: 500, color: '#dc2626', marginBottom: '8px' }}>
-                {t('coordinateSettings.gpsFixer.permissionDenied', 'GPS ligipääs keelatud')}
-              </div>
-              <button
-                onClick={handleRequestPermission}
-                style={{
-                  padding: '10px 20px',
-                  background: '#dc2626',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '13px'
-                }}
-              >
-                {t('coordinateSettings.gpsFixer.requestPermission', 'Küsi luba uuesti')}
-              </button>
+          {/* Info about popup */}
+          <div style={{
+            textAlign: 'center',
+            padding: '24px',
+            background: '#eff6ff',
+            borderRadius: '12px',
+            marginBottom: '16px'
+          }}>
+            <FiExternalLink size={40} style={{ color: '#2563eb', marginBottom: '12px' }} />
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#1e40af', marginBottom: '8px' }}>
+              {t('coordinateSettings.gpsFixer.openedInNewWindow', 'GPS aken avatud')}
             </div>
-          )}
+            <p style={{ fontSize: '13px', color: '#3b82f6', margin: 0 }}>
+              {t('coordinateSettings.gpsFixer.completeInPopup', 'Fikseeri oma asukoht eraldi aknas ja see sulgub automaatselt.')}
+            </p>
+          </div>
 
-          {/* Signal quality indicator */}
-          {permissionStatus !== 'denied' && (
-            <>
-              <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
-                  {t('coordinateSettings.gpsFixer.signal', 'GPS SIGNAAL')}
-                </div>
+          {/* Why popup is needed */}
+          <div style={{
+            background: '#fef3c7',
+            borderRadius: '8px',
+            padding: '12px',
+            marginBottom: '16px',
+            fontSize: '12px',
+            color: '#92400e',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '8px'
+          }}>
+            <FiAlertCircle style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div>
+              {t('coordinateSettings.gpsFixer.whyPopup', 'GPS vajab eraldi akent, kuna Trimble Connect piirab asukoha tuvastamist turvalisuse kaalutlustel.')}
+            </div>
+          </div>
 
-                {/* Progress bar */}
-                <div style={{
-                  height: '8px',
-                  background: '#e2e8f0',
-                  borderRadius: '4px',
-                  overflow: 'hidden',
-                  marginBottom: '8px'
-                }}>
-                  <div style={{
-                    height: '100%',
-                    width: `${accuracyPercent}%`,
-                    background: qualityConfig.color,
-                    transition: 'width 0.5s ease'
-                  }} />
-                </div>
-
-                <div style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '4px 12px',
-                  borderRadius: '12px',
-                  background: qualityConfig.bg,
-                  color: qualityConfig.color,
-                  fontSize: '12px',
-                  fontWeight: 500
-                }}>
-                  {position && `±${position.accuracy.toFixed(1)}m`}
-                  <span style={{ marginLeft: '4px' }}>
-                    ({t(`coordinateSettings.gpsFixer.accuracy.${signalQuality}`, qualityConfig.label)})
-                  </span>
-                </div>
-              </div>
-
-              {/* Current location */}
-              <div style={{
-                background: '#f8fafc',
-                borderRadius: '12px',
-                padding: '16px',
-                marginBottom: '20px'
-              }}>
-                <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '8px' }}>
-                  {t('coordinateSettings.gpsFixer.currentLocation', 'PRAEGUNE ASUKOHT')}
-                </div>
-
-                {position ? (
-                  <div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '8px' }}>
-                      <div>
-                        <div style={{ fontSize: '10px', color: '#94a3b8' }}>
-                          {t('coordinateSettings.gpsFixer.latitude', 'Laiuskraad')}
-                        </div>
-                        <div style={{ fontSize: '14px', fontWeight: 600, fontFamily: 'monospace' }}>
-                          {position.latitude.toFixed(6)}°
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '10px', color: '#94a3b8' }}>
-                          {t('coordinateSettings.gpsFixer.longitude', 'Pikkuskraad')}
-                        </div>
-                        <div style={{ fontSize: '14px', fontWeight: 600, fontFamily: 'monospace' }}>
-                          {position.longitude.toFixed(6)}°
-                        </div>
-                      </div>
-                    </div>
-                    {position.altitude && (
-                      <div style={{ fontSize: '12px', color: '#64748b' }}>
-                        {t('coordinateSettings.gpsFixer.altitude', 'Kõrgus')}: {position.altitude.toFixed(1)}m
-                      </div>
-                    )}
-                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>
-                      {t('coordinateSettings.gpsFixer.lastUpdate', 'Viimane uuendus')}: {' '}
-                      {lastUpdateAge === 0 ? t('coordinateSettings.gpsFixer.justNow', 'just praegu') : `${lastUpdateAge}s tagasi`}
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ textAlign: 'center', padding: '12px', color: '#64748b' }}>
-                    <FiRefreshCw className="spin" style={{ marginRight: '8px' }} />
-                    {t('coordinateSettings.gpsFixer.waiting', 'Ootan GPS signaali...')}
-                  </div>
-                )}
-              </div>
-
-              {/* Tips */}
-              <div style={{
-                background: '#eff6ff',
-                borderRadius: '8px',
-                padding: '12px',
-                marginBottom: '20px',
-                fontSize: '11px',
-                color: '#1e40af'
-              }}>
-                <div style={{ fontWeight: 600, marginBottom: '6px' }}>
-                  💡 {t('coordinateSettings.gpsFixer.tips.title', 'Parema täpsuse saamiseks')}:
-                </div>
-                <ul style={{ margin: 0, paddingLeft: '16px' }}>
-                  <li>{t('coordinateSettings.gpsFixer.tips.tip1', 'Seisa paigal vähemalt 10 sekundit')}</li>
-                  <li>{t('coordinateSettings.gpsFixer.tips.tip2', 'Hoia telefoni rinnakõrgusel')}</li>
-                  <li>{t('coordinateSettings.gpsFixer.tips.tip3', 'Väldi kõrgeid hooneid ja puid')}</li>
-                </ul>
-              </div>
-
-              {/* Averaging option */}
-              <label style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                marginBottom: '16px',
-                cursor: 'pointer',
-                fontSize: '12px'
-              }}>
-                <input
-                  type="checkbox"
-                  checked={averaging}
-                  onChange={() => averaging ? setAveraging(false) : handleStartAveraging()}
-                  disabled={!position}
-                />
-                {t('coordinateSettings.gpsFixer.averaging', 'Keskmista')} {averageCount} {t('coordinateSettings.gpsFixer.measurements', 'mõõtmist')}
-                {averaging && ` (${samples.length}/${averageCount})`}
-              </label>
-
-              {/* Error message */}
-              {error && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '10px',
-                  background: '#fee2e2',
-                  borderRadius: '6px',
-                  color: '#dc2626',
-                  fontSize: '12px',
-                  marginBottom: '16px'
-                }}>
-                  <FiAlertCircle />
-                  {error}
-                </div>
-              )}
-            </>
-          )}
+          {/* Reopen button */}
+          <button
+            onClick={openGpsWindow}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              width: '100%',
+              padding: '14px',
+              background: '#2563eb',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 500
+            }}
+          >
+            <FiExternalLink />
+            {t('coordinateSettings.gpsFixer.reopenWindow', 'Ava GPS aken uuesti')}
+          </button>
         </div>
 
         {/* Footer */}
@@ -352,28 +205,6 @@ export function GpsFixerPopup({ onFix, onClose }: GpsFixerPopupProps) {
             }}
           >
             {t('coordinateSettings.gpsFixer.cancel', 'Tühista')}
-          </button>
-          <button
-            onClick={handleFix}
-            disabled={!position || permissionStatus === 'denied'}
-            style={{
-              flex: 2,
-              padding: '12px',
-              background: !position || permissionStatus === 'denied' ? '#94a3b8' : '#059669',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: !position || permissionStatus === 'denied' ? 'not-allowed' : 'pointer',
-              fontSize: '13px',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px'
-            }}
-          >
-            <FiCheck />
-            {t('coordinateSettings.gpsFixer.fix', 'FIKSEERI SEE ASUKOHT')}
           </button>
         </div>
       </div>
