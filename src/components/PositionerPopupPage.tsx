@@ -194,7 +194,7 @@ export default function PositionerPopupPage({ projectId, initialGuid, initialMar
           setMessage(t('positionerPopup.saveError'));
         } else {
           addDebugLog('Saved successfully!');
-          setMessage(`✅ Salvestatud: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+          setMessage(`✅ ${t('positionerPopup.saved')}: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
           setSuccess(true);
 
           // Clear for next scan
