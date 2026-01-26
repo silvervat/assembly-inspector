@@ -9427,9 +9427,9 @@ export default function OrganizerScreen({
                           e.stopPropagation();
                           applySortAsOrder(node.id);
                         }}
-                        title="Salvesta praegune järjestus positsioonidena"
+                        title={t('common:buttons.save')}
                       >
-                        Salvesta
+                        {t('common:buttons.save')}
                       </button>
                     )}
                   </div>
@@ -11131,7 +11131,7 @@ export default function OrganizerScreen({
                           </button>
                           <button
                             onClick={() => deleteCustomField(f.id, effectiveGroup.id)}
-                            title="Kustuta"
+                            title={t('common:buttons.delete')}
                             style={{
                               background: 'none',
                               border: 'none',
@@ -11392,7 +11392,7 @@ export default function OrganizerScreen({
                                       border: 'none', cursor: 'pointer', fontSize: '12px',
                                       display: 'flex', alignItems: 'center', justifyContent: 'center'
                                     }}
-                                    title="Eemalda"
+                                    title={t('common:buttons.remove')}
                                   >×</button>
                                 </div>
                               ))}
@@ -12011,7 +12011,7 @@ export default function OrganizerScreen({
                           borderRadius: '4px',
                           cursor: 'pointer'
                         }}
-                        title="Vali markup värv"
+                        title={t('organizer:color.selectMarkupColor')}
                       />
                     </div>
                   )}
@@ -13526,7 +13526,7 @@ export default function OrganizerScreen({
                   </span>
                 )}
                 {lightboxMeta.addedAt && (
-                  <span title="Lisatud">
+                  <span title={t('organizer:toast.added')}>
                     {new Date(lightboxMeta.addedAt).toLocaleDateString('et-EE')}
                   </span>
                 )}
@@ -13613,10 +13613,10 @@ export default function OrganizerScreen({
                   gap: '4px',
                   fontSize: '12px'
                 }}
-                title="Kopeeri link"
+                title={t('organizer:link.copied')}
               >
                 <FiCopy size={12} />
-                Kopeeri link
+                {t('common:actions.copyToClipboard')}
               </button>
               {/* Delete button - only show if we have item and field info */}
               {lightboxItemId && lightboxFieldId && (
@@ -13634,10 +13634,10 @@ export default function OrganizerScreen({
                     gap: '4px',
                     fontSize: '12px'
                   }}
-                  title="Kustuta"
+                  title={t('common:buttons.delete')}
                 >
                   <FiTrash2 size={12} />
-                  Kustuta
+                  {t('common:buttons.delete')}
                 </button>
               )}
             </div>
@@ -13865,7 +13865,7 @@ export default function OrganizerScreen({
                           alignItems: 'center',
                           justifyContent: 'center'
                         }}
-                        title="Eemalda"
+                        title={t('common:buttons.remove')}
                       >
                         <FiX size={12} />
                       </button>
@@ -14070,7 +14070,7 @@ export default function OrganizerScreen({
                                       setManagementColorPickerGroupId(null);
                                       loadData();
                                     }}
-                                    title="Eemalda värv"
+                                    title={t('common:buttons.remove')}
                                   >
                                     <FiX size={12} />
                                   </div>
@@ -14237,7 +14237,7 @@ export default function OrganizerScreen({
                                     color: '#9ca3af',
                                     borderRadius: '3px'
                                   }}
-                                  title="Muuda grupi seadeid"
+                                  title={t('organizer:group.settings')}
                                   onMouseOver={(e) => { e.currentTarget.style.background = '#f3f4f6'; e.currentTarget.style.color = '#6b7280'; }}
                                   onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#9ca3af'; }}
                                 >
@@ -14256,7 +14256,7 @@ export default function OrganizerScreen({
                                       color: '#9ca3af',
                                       borderRadius: '3px'
                                     }}
-                                    title="Lisa alamgrupp"
+                                    title={t('common:buttons.add')}
                                     onMouseOver={(e) => { e.currentTarget.style.background = '#f3f4f6'; e.currentTarget.style.color = '#6b7280'; }}
                                     onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#9ca3af'; }}
                                   >

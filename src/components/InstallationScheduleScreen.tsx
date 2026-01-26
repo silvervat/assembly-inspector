@@ -6449,7 +6449,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         setShowVersionModal(true);
                         setShowVersionDropdown(false);
                       }}
-                      title="Muuda"
+                      title={t('common:buttons.edit')}
                     >
                       <FiEdit size={12} />
                     </button>
@@ -6657,15 +6657,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     setShowScheduledEditModal(true);
                   }
                 }}
-                title="Muuda valitud detaile"
+                title={t('common:buttons.edit')}
               >
                 <FiEdit size={12} />
-                Muuda
+                {t('common:buttons.edit')}
               </button>
-              <button onClick={clearItemSelection}>Tühista</button>
+              <button onClick={clearItemSelection}>{t('common:buttons.cancel')}</button>
               <button className="delete-selected-btn" onClick={deleteSelectedItems}>
                 <FiTrash2 size={12} />
-                Kustuta
+                {t('common:buttons.delete')}
               </button>
             </div>
           </div>
@@ -7747,9 +7747,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           <button
             className="select-all-btn"
             onClick={selectAllItems}
-            title="Vali kõik listis olevad detailid"
+            title={t('common:buttons.selectAll')}
           >
-            Vali kõik
+            {t('common:buttons.selectAll')}
           </button>
         )}
         <span className="search-count">{filteredItems.length}</span>
@@ -8056,7 +8056,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         <button
                           className="date-copy-btn"
                           onClick={(e) => { e.stopPropagation(); copyDateMarksToClipboard(date); }}
-                          title="Kopeeri kõik markid clipboardi"
+                          title={t('common:actions.copyToClipboard')}
                         >
                           <FiCopy size={12} />
                         </button>
@@ -8925,7 +8925,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                             <button
                               className="comment-delete-btn"
                               onClick={() => deleteComment(comment.id)}
-                              title="Kustuta"
+                              title={t('common:buttons.delete')}
                             >
                               <FiTrash2 size={12} />
                             </button>

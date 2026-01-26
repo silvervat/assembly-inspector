@@ -236,6 +236,7 @@
   "calendar": {
     "today": "Today",
     "week": "Week",
+    "weekPrefix": "W",
     "month": "Month",
     "previousWeek": "Previous Week",
     "nextWeek": "Next Week",
