@@ -58,6 +58,10 @@ export interface TrimbleExUser {
   // GPS Location Search access (Tools -> GPS Search)
   can_access_gps_search: boolean;
 
+  // Coordinate System & Calibration permissions
+  can_manage_coordinate_system: boolean;  // Can change country and coordinate system
+  can_manage_calibration: boolean;        // Can add/remove calibration points
+
   // User preferences
   preferred_language?: 'et' | 'en' | 'ru' | 'fi';
 
@@ -2540,5 +2544,259 @@ export interface MarkeerijPreset {
   created_by_name?: string;
   created_at: string;
   updated_at: string;
+}
+
+// ============================================
+// COORDINATE SYSTEM & CALIBRATION (v3.4.0)
+// ============================================
+
+// Coordinate system reference data
+export interface CoordinateSystem {
+  id: string;                           // 'estonian_lest97', 'belgian_lambert_72', etc.
+  name: string;                         // 'L-EST97', 'Belgian Lambert 72'
+  country_code: string;                 // 'EE', 'BE', 'SE', 'FI', 'LOCAL'
+  country_name: string;                 // 'Eesti', 'Belgia', 'Rootsi'
+  epsg_code: number | null;             // 3301, 31370, null for local
+  proj4_string: string | null;          // Proj4 definition string
+  unit: 'meters' | 'feet';              // Unit of measure
+  description?: string;
+  is_active: boolean;
+}
+
+// Model units
+export type ModelUnits = 'millimeters' | 'meters' | 'feet';
+
+// Calibration status
+export type CalibrationStatus = 'not_calibrated' | 'in_progress' | 'calibrated';
+
+// Calibration quality
+export type CalibrationQuality = 'excellent' | 'good' | 'fair' | 'poor';
+
+// Transform type
+export type TransformType = 'helmert_2d' | 'affine_2d' | 'affine_3d';
+
+// Helmert 2D transformation parameters
+export interface HelmertTransformParams {
+  type: 'helmert_2d';
+  translation: { x: number; y: number };
+  rotation_rad: number;
+  rotation_deg: number;
+  scale: number;
+  origin_model: { x: number; y: number };
+  origin_gps: { lat: number; lng: number };
+}
+
+// Project coordinate settings
+export interface ProjectCoordinateSettings {
+  id: string;
+  trimble_project_id: string;
+
+  // Country and coordinate system
+  country_code: string;                 // 'EE', 'BE', 'SE', 'FI', 'LOCAL'
+  coordinate_system_id: string;         // References CoordinateSystem.id
+
+  // Model units
+  model_units: ModelUnits;
+
+  // Is model already in real coordinates?
+  model_has_real_coordinates: boolean;
+
+  // Calibration status
+  calibration_status: CalibrationStatus;
+  calibration_points_count: number;
+
+  // Calculated transformation (for local system)
+  transform_type?: TransformType;
+  transform_matrix?: HelmertTransformParams;
+
+  // Calibration quality
+  calibration_rmse_m?: number;          // Root Mean Square Error in meters
+  calibration_max_error_m?: number;     // Maximum error in meters
+  calibration_quality?: CalibrationQuality;
+
+  // Metadata
+  calibrated_at?: string;
+  calibrated_by?: string;
+  calibrated_by_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Calibration point capture method
+export type CalibrationCaptureMethod = 'manual' | 'averaged' | 'rtk';
+
+// Calibration point
+export interface CalibrationPoint {
+  id: string;
+  trimble_project_id: string;
+  settings_id?: string;
+
+  // Point name/description
+  name?: string;
+  description?: string;
+
+  // Model coordinates (from Trimble Connect)
+  model_x: number;                      // Model X coordinate
+  model_y: number;                      // Model Y coordinate
+  model_z?: number;                     // Model Z coordinate (optional)
+
+  // Reference to model object (if selected a specific object)
+  reference_guid?: string;
+  reference_guid_ifc?: string;
+  reference_assembly_mark?: string;
+  reference_object_name?: string;
+
+  // GPS coordinates (WGS84)
+  gps_latitude: number;                 // Latitude (e.g., 58.1234)
+  gps_longitude: number;                // Longitude (e.g., 26.5678)
+  gps_altitude?: number;                // Altitude in meters
+  gps_accuracy_m?: number;              // GPS accuracy in meters
+  gps_timestamp?: string;               // When GPS was captured
+
+  // Calculated error after calibration
+  calculated_error_m?: number;
+
+  // Status
+  is_active: boolean;                   // Used in calculation
+  capture_method: CalibrationCaptureMethod;
+
+  // Metadata
+  created_at: string;
+  created_by?: string;
+  created_by_name?: string;
+}
+
+// Default coordinate systems (pre-populated reference data)
+export const COORDINATE_SYSTEMS: CoordinateSystem[] = [
+  {
+    id: 'estonian_lest97',
+    name: 'L-EST97',
+    country_code: 'EE',
+    country_name: 'Eesti',
+    epsg_code: 3301,
+    proj4_string: '+proj=lcc +lat_1=59.33333333333334 +lat_2=58 +lat_0=57.51755393055556 +lon_0=24 +x_0=500000 +y_0=6375000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+    unit: 'meters',
+    is_active: true
+  },
+  {
+    id: 'belgian_lambert_72',
+    name: 'Belgian Lambert 72',
+    country_code: 'BE',
+    country_name: 'Belgia',
+    epsg_code: 31370,
+    proj4_string: '+proj=lcc +lat_1=51.16666723333333 +lat_2=49.8333339 +lat_0=90 +lon_0=4.367486666666666 +x_0=150000.013 +y_0=5400088.438 +ellps=intl +towgs84=-106.8686,52.2978,-103.7239,0.3366,-0.457,1.8422,-1.2747 +units=m +no_defs',
+    unit: 'meters',
+    is_active: true
+  },
+  {
+    id: 'swedish_sweref99',
+    name: 'SWEREF99 TM',
+    country_code: 'SE',
+    country_name: 'Rootsi',
+    epsg_code: 3006,
+    proj4_string: '+proj=utm +zone=33 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+    unit: 'meters',
+    is_active: true
+  },
+  {
+    id: 'finnish_etrs',
+    name: 'ETRS-TM35FIN',
+    country_code: 'FI',
+    country_name: 'Soome',
+    epsg_code: 3067,
+    proj4_string: '+proj=utm +zone=35 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+    unit: 'meters',
+    is_active: true
+  },
+  {
+    id: 'dutch_rd',
+    name: 'Amersfoort / RD New',
+    country_code: 'NL',
+    country_name: 'Holland',
+    epsg_code: 28992,
+    proj4_string: '+proj=sterea +lat_0=52.15616055555555 +lon_0=5.38763888888889 +k=0.9999079 +x_0=155000 +y_0=463000 +ellps=bessel +towgs84=565.417,50.3319,465.552,-0.398957,0.343988,-1.8774,4.0725 +units=m +no_defs',
+    unit: 'meters',
+    is_active: true
+  },
+  {
+    id: 'german_utm32',
+    name: 'ETRS89 / UTM zone 32N',
+    country_code: 'DE',
+    country_name: 'Saksamaa',
+    epsg_code: 25832,
+    proj4_string: '+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+    unit: 'meters',
+    is_active: true
+  },
+  {
+    id: 'french_lambert93',
+    name: 'RGF93 / Lambert-93',
+    country_code: 'FR',
+    country_name: 'Prantsusmaa',
+    epsg_code: 2154,
+    proj4_string: '+proj=lcc +lat_1=49 +lat_2=44 +lat_0=46.5 +lon_0=3 +x_0=700000 +y_0=6600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+    unit: 'meters',
+    is_active: true
+  },
+  {
+    id: 'local_calibrated',
+    name: 'Kohalik (kalibreeritud)',
+    country_code: 'LOCAL',
+    country_name: 'Kohalik',
+    epsg_code: null,
+    proj4_string: null,
+    unit: 'meters',
+    is_active: true
+  }
+];
+
+// Country flag emojis
+export const COUNTRY_FLAGS: Record<string, string> = {
+  'EE': '🇪🇪',
+  'BE': '🇧🇪',
+  'SE': '🇸🇪',
+  'FI': '🇫🇮',
+  'NL': '🇳🇱',
+  'DE': '🇩🇪',
+  'FR': '🇫🇷',
+  'LOCAL': '📍'
+};
+
+// Calibration quality thresholds (in meters)
+export const CALIBRATION_QUALITY_THRESHOLDS = {
+  excellent: 1,    // < 1m
+  good: 3,         // 1-3m
+  fair: 10,        // 3-10m
+  poor: Infinity   // > 10m
+};
+
+// Calibration quality badges
+export const CALIBRATION_QUALITY_BADGES: Record<CalibrationQuality, {
+  color: string;
+  emoji: string;
+  bgColor: string;
+}> = {
+  excellent: { color: '#16A34A', emoji: '🟢', bgColor: '#DCFCE7' },
+  good: { color: '#2563EB', emoji: '🔵', bgColor: '#DBEAFE' },
+  fair: { color: '#CA8A04', emoji: '🟡', bgColor: '#FEF9C3' },
+  poor: { color: '#DC2626', emoji: '🔴', bgColor: '#FEE2E2' }
+};
+
+// Helper to get coordinate system by ID
+export function getCoordinateSystemById(id: string): CoordinateSystem | undefined {
+  return COORDINATE_SYSTEMS.find(cs => cs.id === id);
+}
+
+// Helper to get coordinate systems by country code
+export function getCoordinateSystemsByCountry(countryCode: string): CoordinateSystem[] {
+  return COORDINATE_SYSTEMS.filter(cs => cs.country_code === countryCode);
+}
+
+// Helper to determine calibration quality from RMSE
+export function getCalibrationQuality(rmseMeters: number): CalibrationQuality {
+  if (rmseMeters < CALIBRATION_QUALITY_THRESHOLDS.excellent) return 'excellent';
+  if (rmseMeters < CALIBRATION_QUALITY_THRESHOLDS.good) return 'good';
+  if (rmseMeters < CALIBRATION_QUALITY_THRESHOLDS.fair) return 'fair';
+  return 'poor';
 }
 
