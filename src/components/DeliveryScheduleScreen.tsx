@@ -2557,7 +2557,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                           (obj.guidIfc && existingGuidIfcs.has(obj.guidIfc));
 
       if (isDuplicate) {
-        duplicates.push(obj.assemblyMark || obj.guid || obj.guidIfc || 'Tundmatu');
+        duplicates.push(obj.assemblyMark || obj.guid || obj.guidIfc || t('item.unknown'));
       }
       return !isDuplicate;
     });
@@ -4077,7 +4077,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       } // End of model loop
 
       console.log(`✅ Fetched fresh properties for ${freshPropertiesMap.size} objects from model`);
-      setImportProgress({ stage: 'saving', current: 0, total: guidsToImport.length, message: 'Salvestan andmebaasi...' });
+      setImportProgress({ stage: 'saving', current: 0, total: guidsToImport.length, message: t('actions.savingDb') });
 
       if (hasDetailedData) {
         // DETAILED IMPORT: Group items by date + vehicleCode + factoryCode
@@ -4381,7 +4381,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             .insert(batch);
 
           if (error) throw error;
-          setImportProgress({ stage: 'saving', current: Math.min(i + INSERT_BATCH_SIZE, newItems.length), total: newItems.length, message: 'Salvestan andmebaasi...' });
+          setImportProgress({ stage: 'saving', current: Math.min(i + INSERT_BATCH_SIZE, newItems.length), total: newItems.length, message: t('actions.savingDb') });
         }
 
         await Promise.all([loadItems(), loadVehicles()]);
@@ -5108,7 +5108,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setShowExportModal(false);
     } catch (e: any) {
       console.error('Error exporting:', e);
-      setMessage(exportLanguage === 'en' ? 'Export error: ' + e.message : 'Viga eksportimisel: ' + e.message);
+      setMessage(t('messages.exportError') + ': ' + e.message);
     }
   };
 
@@ -9490,7 +9490,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   setShowVehicleModal(false);
                 }}
               >
-                {saving ? 'Salvestan...' : 'Salvesta'}
+                {saving ? t('actions.saving') : t('actions.save')}
               </button>
             </div>
           </div>
@@ -10450,7 +10450,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                   }
                 }}
               >
-                {tableEditorSaving ? 'Salvestamine...' : `Salvesta (${tableEditorData.filter(r => r.modified).length})`}
+                {tableEditorSaving ? t('messages.saving') : `${t('actions.save')} (${tableEditorData.filter(r => r.modified).length})`}
               </button>
             </div>
           </div>
@@ -10992,7 +10992,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                   onClick={addComment}
                   disabled={!newCommentText.trim() || savingComment}
                 >
-                  {savingComment ? 'Salvestan...' : 'Lisa kommentaar'}
+                  {savingComment ? t('actions.saving') : t('actions.addComment')}
                 </button>
               </div>
             </div>
@@ -11252,7 +11252,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                 disabled={saving}
                 onClick={saveItemEdit}
               >
-                {saving ? 'Salvestan...' : 'Salvesta'}
+                {saving ? t('actions.saving') : t('actions.save')}
               </button>
             </div>
           </div>

@@ -2,6 +2,11 @@
   "buttons": {
     "save": "Salvesta",
     "saving": "Salvestan...",
+    "savingDots": "Salvestab...",
+    "saveAndContinue": "Salvesta ja jätka",
+    "saveView": "Salvesta vaade",
+    "updateName": "Uuenda nimi",
+    "createVersion": "Loo versioon",
     "cancel": "Tühista",
     "delete": "Kustuta",
     "edit": "Muuda",
@@ -65,7 +70,10 @@
     "deleted": "Kustutatud",
     "updated": "Uuendatud",
     "noData": "Andmed puuduvad",
-    "noResults": "Tulemusi ei leitud"
+    "noResults": "Tulemusi ei leitud",
+    "loadError": "Viga andmete laadimisel",
+    "saveError": "Viga salvestamisel",
+    "changesSaved": "{{count}} muudatust salvestatud"
   },
   "confirm": {
     "delete": "Kas oled kindel, et soovid kustutada?",
@@ -254,7 +262,20 @@
     "selectItemsFromModel": "Vali mudelist detailid, mida soovid lisada...",
     "selectItemsButton": "Vali detailid 3D mudelist",
     "showOnlySelectedInModel": "Näita ainult mudelis valitud detaile",
-    "cancelFilter": "Tühista filter"
+    "cancelFilter": "Tühista filter",
+    "pdfError": "Viga PDF loomisel: {{message}}",
+    "shareLinkError": "Viga jagamislingi loomisel: {{message}}",
+    "removeItemError": "Viga detaili eemaldamisel: {{message}}",
+    "photoUploadError": "Viga foto üleslaadimisel: {{message}}",
+    "unknown": "Tundmatu",
+    "modelColorError": "Viga mudeli värvimisel",
+    "linkCreateError": "Viga lingi loomisel",
+    "saveError": "Viga salvestamisel",
+    "saveErrorMessage": "Viga salvestamisel: {{message}}",
+    "addItemsError": "Viga detailide lisamisel: {{message}}",
+    "addVehicle": "Lisa veok",
+    "saveAndContinue": "Salvesta ja jätka",
+    "pdfCreated": "PDF raport loodud"
   },
   "installations": {
     "title": "Paigaldamised",
@@ -620,6 +641,11 @@
   "crane": {
     "loadingCranes": "Laadin kraanasid...",
     "title": "Kraanade Andmebaas",
-    "plannerTitle": "Kraanade Planeerimine"
+    "plannerTitle": "Kraanade Planeerimine",
+    "addNewCrane": "Lisa Uus Kraana",
+    "editCrane": "Muuda: {{manufacturer}} {{model}}",
+    "importFailed": "Import ebaõnnestus: {{message}}",
+    "unknownError": "Tundmatu viga",
+    "rowError": "Rida {{row}}: {{message}}"
   }
 }

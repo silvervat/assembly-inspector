@@ -7264,7 +7264,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onClick={() => editingVersion ? updateVersion() : createNewVersion(copyFromCurrent)}
                   >
                     <FiSave size={14} />
-                    {editingVersion ? 'Salvesta' : 'Loo versioon'}
+                    {editingVersion ? t('actions.save') : t('actions.createVersion')}
                   </button>
                 </>
               ) : (
@@ -8865,7 +8865,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onClick={saveEditDay}
                     disabled={savingEditDay || (!editDayNewDate && !editDayResource.trim() && !editDayNotes.trim())}
                   >
-                    {savingEditDay ? 'Salvestan...' : 'Salvesta'}
+                    {savingEditDay ? t('actions.saving') : t('actions.save')}
                   </button>
                 </div>
               </div>
@@ -8952,7 +8952,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   onClick={addComment}
                   disabled={!newCommentText.trim() || savingComment}
                 >
-                  {savingComment ? 'Salvestan...' : 'Lisa kommentaar'}
+                  {savingComment ? t('actions.saving') : t('actions.addComment')}
                 </button>
               </div>
             </div>

@@ -48,7 +48,11 @@
     "settings": "Seaded",
     "refresh": "Värskenda",
     "selectInModel": "Vali mudelis",
-    "zoomTo": "Suumi"
+    "zoomTo": "Suumi",
+    "save": "Salvesta",
+    "saving": "Salvestan...",
+    "createVersion": "Loo versioon",
+    "addComment": "Lisa kommentaar"
   },
   "messages": {
     "loading": "Laadimine...",

@@ -2071,7 +2071,7 @@ export default function InstallationsScreen({
     let totalWeight = 0;
 
     month.allItems.forEach(inst => {
-      const recorder = inst.user_email || 'Tundmatu';
+      const recorder = inst.user_email || t('inspectionList.unknown');
       byRecorder.set(recorder, (byRecorder.get(recorder) || 0) + 1);
 
       const method = inst.installation_method_name || 'Määramata';
@@ -2079,7 +2079,7 @@ export default function InstallationsScreen({
 
       const installers = inst.team_members
         ? inst.team_members.split(',').map(s => s.trim())
-        : [inst.installer_name || 'Tundmatu'];
+        : [inst.installer_name || t('inspectionList.unknown')];
       installers.forEach(installer => {
         byInstaller.set(installer, (byInstaller.get(installer) || 0) + 1);
       });
@@ -2159,8 +2159,8 @@ export default function InstallationsScreen({
       for (const item of data || []) {
         const info: InstalledGuidInfo = {
           installedAt: item.installed_at,
-          userEmail: item.user_email || 'Tundmatu',
-          assemblyMark: item.assembly_mark || 'Tundmatu'
+          userEmail: item.user_email || t('inspectionList.unknown'),
+          assemblyMark: item.assembly_mark || t('inspectionList.unknown')
         };
         // Store guid_ifc first (IFC format - needed for coloring) - LOWERCASE for consistent lookup
         if (item.guid_ifc) {
@@ -5128,7 +5128,7 @@ export default function InstallationsScreen({
       // Get worker list from team_members field (comma-separated) or fall back to user_email
       const workers = item.team_members
         ? item.team_members.split(',').map(w => w.trim()).sort().join(',')
-        : item.user_email || 'Tundmatu';
+        : item.user_email || t('inspectionList.unknown');
 
       if (!workerMap[workers]) workerMap[workers] = [];
       workerMap[workers].push(item);
@@ -8239,7 +8239,7 @@ export default function InstallationsScreen({
                     <div
                       className="month-lock-indicator"
                       title={isMonthLocked(month.monthKey)
-                        ? `🔒 Lukustatud\n👤 ${getMonthLockInfo(month.monthKey)?.locked_by_name || getMonthLockInfo(month.monthKey)?.locked_by || 'Tundmatu'}\n📅 ${getMonthLockInfo(month.monthKey)?.locked_at ? new Date(getMonthLockInfo(month.monthKey)!.locked_at).toLocaleString('et-EE') : ''}\n\nAvada saavad ainult administraatorid`
+                        ? `🔒 Lukustatud\n👤 ${getMonthLockInfo(month.monthKey)?.locked_by_name || getMonthLockInfo(month.monthKey)?.locked_by || t('inspectionList.unknown')}\n📅 ${getMonthLockInfo(month.monthKey)?.locked_at ? new Date(getMonthLockInfo(month.monthKey)!.locked_at).toLocaleString('et-EE') : ''}\n\nAvada saavad ainult administraatorid`
                         : 'Kuu pole lukustatud'
                       }
                     >
@@ -8704,7 +8704,7 @@ export default function InstallationsScreen({
 
                 showDayInfo.items.forEach(inst => {
                   // By recorder
-                  const recorder = inst.user_email || 'Tundmatu';
+                  const recorder = inst.user_email || t('inspectionList.unknown');
                   if (!byRecorder.has(recorder)) byRecorder.set(recorder, []);
                   byRecorder.get(recorder)!.push(inst);
 
@@ -8716,7 +8716,7 @@ export default function InstallationsScreen({
                   // By installer (from team_members or installer_name)
                   const installers = inst.team_members
                     ? inst.team_members.split(',').map(s => s.trim())
-                    : [inst.installer_name || 'Tundmatu'];
+                    : [inst.installer_name || t('inspectionList.unknown')];
                   installers.forEach(installer => {
                     if (!byInstaller.has(installer)) byInstaller.set(installer, []);
                     byInstaller.get(installer)!.push(inst);
@@ -8790,7 +8790,7 @@ export default function InstallationsScreen({
 
                 showMonthStats.allItems.forEach(inst => {
                   // Count by recorder
-                  const recorder = inst.user_email || 'Tundmatu';
+                  const recorder = inst.user_email || t('inspectionList.unknown');
                   byRecorder.set(recorder, (byRecorder.get(recorder) || 0) + 1);
 
                   // Count by method
@@ -8800,7 +8800,7 @@ export default function InstallationsScreen({
                   // Count by installer
                   const installers = inst.team_members
                     ? inst.team_members.split(',').map(s => s.trim())
-                    : [inst.installer_name || 'Tundmatu'];
+                    : [inst.installer_name || t('inspectionList.unknown')];
                   installers.forEach(installer => {
                     byInstaller.set(installer, (byInstaller.get(installer) || 0) + 1);
                   });
