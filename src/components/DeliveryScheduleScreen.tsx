@@ -713,6 +713,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [vehicleMenuId, setVehicleMenuId] = useState<string | null>(null);
   const [dateMenuId, setDateMenuId] = useState<string | null>(null);
   const [menuFlipUp, setMenuFlipUp] = useState(false);
+  const [calendarContextMenu, setCalendarContextMenu] = useState<{ date: string; x: number; y: number } | null>(null);
   const [autoRecalcDates, setAutoRecalcDates] = useState<Set<string>>(new Set()); // Dates with auto time recalc enabled
   const [resourceHoverId, setResourceHoverId] = useState<string | null>(null); // For quick resource assignment
   const [quickHoveredMethod, setQuickHoveredMethod] = useState<string | null>(null); // For hover on method in quick assign
@@ -6968,6 +6969,152 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
+  // Color model showing delivery progress up to a specific date
+  // Green = delivered by that date (not installed), Dark blue = installed, White = rest
+  const colorDeliveredByDate = async (targetDate: string) => {
+    try {
+      setMessage('Värvin tarnitud detaile...');
+
+      // 1. Fetch all GUIDs from trimble_model_objects
+      const allGuids: string[] = [];
+      let offset = 0;
+      const PAGE = 5000;
+      while (true) {
+        const { data } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc')
+          .eq('trimble_project_id', projectId)
+          .range(offset, offset + PAGE - 1);
+        if (!data || data.length === 0) break;
+        for (const row of data) {
+          if (row.guid_ifc) allGuids.push(row.guid_ifc);
+        }
+        if (data.length < PAGE) break;
+        offset += PAGE;
+      }
+
+      // 2. Find objects in loaded models
+      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+      if (foundObjects.size === 0) {
+        setMessage('Objekte ei leitud mudelist');
+        return;
+      }
+
+      // 3. Fetch installed items from installations table
+      const installedGuids = new Set<string>();
+      offset = 0;
+      while (true) {
+        const { data } = await supabase
+          .from('installations')
+          .select('guid_ifc')
+          .eq('project_id', projectId)
+          .range(offset, offset + PAGE - 1);
+        if (!data || data.length === 0) break;
+        for (const row of data) {
+          const g = (row.guid_ifc || '').toLowerCase();
+          if (g) installedGuids.add(g);
+        }
+        if (data.length < PAGE) break;
+        offset += PAGE;
+      }
+
+      // 4. Find items delivered by targetDate
+      const deliveredGuids = new Set<string>();
+      for (const vehicle of vehicles) {
+        const date = vehicle.scheduled_date;
+        if (!date || date > targetDate) continue;
+        const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
+        for (const item of vehicleItems) {
+          const g = (item.guid_ifc || item.guid || '').toLowerCase();
+          if (g && !installedGuids.has(g)) {
+            deliveredGuids.add(g);
+          }
+        }
+      }
+
+      // 5. Color: white all, then green delivered, then dark blue installed
+      const INSTALLED_COLOR = { r: 10, g: 58, b: 103, a: 255 };
+      const DELIVERED_COLOR = { r: 34, g: 197, b: 94, a: 255 };
+      const WHITE = { r: 255, g: 255, b: 255, a: 255 };
+
+      const whiteByModel: Record<string, number[]> = {};
+      const deliveredByModel: Record<string, number[]> = {};
+      const installedByModel: Record<string, number[]> = {};
+
+      for (const [guid, found] of foundObjects) {
+        const guidLower = guid.toLowerCase();
+        if (installedGuids.has(guidLower)) {
+          if (!installedByModel[found.modelId]) installedByModel[found.modelId] = [];
+          installedByModel[found.modelId].push(found.runtimeId);
+        } else if (deliveredGuids.has(guidLower)) {
+          if (!deliveredByModel[found.modelId]) deliveredByModel[found.modelId] = [];
+          deliveredByModel[found.modelId].push(found.runtimeId);
+        } else {
+          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+          whiteByModel[found.modelId].push(found.runtimeId);
+        }
+      }
+
+      const BATCH = 5000;
+      for (const [modelId, ids] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < ids.length; i += BATCH) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: ids.slice(i, i + BATCH) }] },
+            { color: WHITE }
+          );
+        }
+      }
+      for (const [modelId, ids] of Object.entries(deliveredByModel)) {
+        for (let i = 0; i < ids.length; i += BATCH) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: ids.slice(i, i + BATCH) }] },
+            { color: DELIVERED_COLOR }
+          );
+        }
+      }
+      for (const [modelId, ids] of Object.entries(installedByModel)) {
+        for (let i = 0; i < ids.length; i += BATCH) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: ids.slice(i, i + BATCH) }] },
+            { color: INSTALLED_COLOR }
+          );
+        }
+      }
+
+      const totalDelivered = Object.values(deliveredByModel).reduce((s, a) => s + a.length, 0);
+      const totalInstalled = Object.values(installedByModel).reduce((s, a) => s + a.length, 0);
+      setMessage(`✓ Tarnitud ${targetDate}: ${totalDelivered} rohelist, ${totalInstalled} paigaldatud (sinine)`);
+    } catch (e) {
+      console.error('Error coloring delivered by date:', e);
+      setMessage('Viga värvimise ajal');
+    }
+  };
+
+  // Select items in model that should be delivered by a specific date
+  const selectDeliveredByDate = async (targetDate: string) => {
+    const guids: string[] = [];
+    for (const vehicle of vehicles) {
+      const date = vehicle.scheduled_date;
+      if (!date || date > targetDate) continue;
+      const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
+      for (const item of vehicleItems) {
+        const g = item.guid_ifc || item.guid;
+        if (g) guids.push(g);
+      }
+    }
+
+    if (guids.length === 0) {
+      setMessage('Selleks kuupäevaks pole tarneid planeeritud');
+      return;
+    }
+
+    const count = await selectObjectsByGuid(api, guids, 'set');
+    if (count > 0) {
+      await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+    }
+    setMessage(`${count} detaili valitud (tarnitud kuni ${targetDate})`);
+  };
+
   // Handle date click with CTRL support
   const handleDateClick = async (date: string, event: React.MouseEvent) => {
     event.stopPropagation();
@@ -7203,6 +7350,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         selectDateItemsInModel(dateStr);
                       }
                     }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setCalendarContextMenu({ date: dateStr, x: e.clientX, y: e.clientY });
+                    }}
                     onMouseEnter={() => {
                       if (vehicleCount > 0) {
                         hoverTimeoutRef.current = setTimeout(() => {
@@ -7284,6 +7435,41 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           </div>
           );
         })()}
+
+        {/* Calendar right-click context menu */}
+        {calendarContextMenu && (
+          <>
+            <div
+              className="context-menu-overlay"
+              onClick={() => setCalendarContextMenu(null)}
+              onContextMenu={(e) => { e.preventDefault(); setCalendarContextMenu(null); }}
+            />
+            <div
+              className="context-menu"
+              style={{
+                position: 'fixed',
+                left: calendarContextMenu.x,
+                top: calendarContextMenu.y,
+                zIndex: 10000
+              }}
+            >
+              <button onClick={() => {
+                const d = calendarContextMenu.date;
+                setCalendarContextMenu(null);
+                colorDeliveredByDate(d);
+              }}>
+                <FiDroplet size={14} /> Värvi tarnitud ({calendarContextMenu.date})
+              </button>
+              <button onClick={() => {
+                const d = calendarContextMenu.date;
+                setCalendarContextMenu(null);
+                selectDeliveredByDate(d);
+              }}>
+                <FiZoomIn size={14} /> Vali tarnitud detailid ({calendarContextMenu.date})
+              </button>
+            </div>
+          </>
+        )}
       </div>
     );
   };
