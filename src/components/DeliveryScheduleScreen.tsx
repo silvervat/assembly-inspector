@@ -4999,7 +4999,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             }
 
             // Second: update sort_order and notes individually only where needed
-            const itemsNeedingSortOrNotes = itemsToUpdate.filter((item, idx) => {
+            const itemsNeedingSortOrNotes = itemsToUpdate.filter((item) => {
               const needsSort = item.sort_order !== item.oldItem.sort_order;
               const needsNotes = item.notes !== (item.oldItem.notes || null);
               return needsSort || needsNotes;
@@ -6451,7 +6451,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     return colors;
   };
 
-  const applyColorMode = async (mode: 'none' | 'vehicle' | 'date') => {
+  const applyColorMode = async (mode: 'none' | 'vehicle' | 'date' | 'timeline' | 'progress') => {
     try {
       // Reset colors first
       if (mode === 'none') {
