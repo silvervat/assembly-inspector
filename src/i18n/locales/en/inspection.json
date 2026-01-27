@@ -1,5 +1,16 @@
 {
   "title": "Inspection",
+  "modes": {
+    "paigaldatud": "Installed details inspection",
+    "poldid": "Bolts inspection",
+    "muu": "Other inspection",
+    "mittevastavus": "Non-conformance",
+    "varviparandus": "Paint repair inspection",
+    "keevis": "Welding inspection",
+    "paigaldatud_detailid": "Installed details",
+    "eos2": "Send to EOS2 table",
+    "inspection_type": "Inspection"
+  },
   "status": {
     "pending": "Pending",
     "planned": "Planned",
@@ -12,6 +23,12 @@
     "skipped": "Skipped",
     "reviewed": "Reviewed",
     "pendingReview": "Pending review"
+  },
+  "plans": {
+    "loading": "Loading inspection plans...",
+    "noPlans": "No inspection plans in this project yet",
+    "createHint": "Create an inspection plan from the administration menu",
+    "adminPanel": "Admin panel"
   },
   "plan": {
     "title": "Inspection plan",
