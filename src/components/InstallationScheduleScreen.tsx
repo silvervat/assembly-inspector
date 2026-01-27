@@ -57,10 +57,8 @@ const PLAYBACK_SPEEDS = [
   { label: '4x', value: 100 }
 ];
 
-// Estonian weekday names
-const WEEKDAY_NAMES = ['Pühapäev', 'Esmaspäev', 'Teisipäev', 'Kolmapäev', 'Neljapäev', 'Reede', 'Laupäev'];
-const WEEKDAY_NAMES_SHORT = ['Püh', 'Esm', 'Tei', 'Kol', 'Nel', 'Ree', 'Lau'];
-// English weekday names
+// Weekday names are now loaded from translations (t('weekdaysList'), t('weekdaysShortList'))
+// Keep English names as fallback for non-component contexts
 const WEEKDAY_NAMES_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // Convert IFC GUID to MS GUID (UUID format)
@@ -88,24 +86,24 @@ const ifcToMsGuid = (ifcGuid: string): string => {
 };
 
 // Format date as DD.MM.YY Day (parsing local date from YYYY-MM-DD string)
-const formatDateEstonian = (dateStr: string): string => {
+const formatDateEstonianWithNames = (dateStr: string, weekdayNames: string[]): string => {
   const [year, month, day] = dateStr.split('-').map(Number);
   const date = new Date(year, month - 1, day);
   const dayStr = String(day).padStart(2, '0');
   const monthStr = String(month).padStart(2, '0');
   const yearStr = String(year).slice(-2);
-  const weekday = WEEKDAY_NAMES[date.getDay()];
+  const weekday = weekdayNames[date.getDay()];
   return `${dayStr}.${monthStr}.${yearStr} ${weekday}`;
 };
 
 // Format date with short weekday (3 chars) for date headers
-const formatDateShort = (dateStr: string): string => {
+const formatDateShortWithNames = (dateStr: string, weekdayNamesShort: string[]): string => {
   const [year, month, day] = dateStr.split('-').map(Number);
   const date = new Date(year, month - 1, day);
   const dayStr = String(day).padStart(2, '0');
   const monthStr = String(month).padStart(2, '0');
   const yearStr = String(year).slice(-2);
-  const weekday = WEEKDAY_NAMES_SHORT[date.getDay()];
+  const weekday = weekdayNamesShort[date.getDay()];
   return `${dayStr}.${monthStr}.${yearStr} ${weekday}`;
 };
 
@@ -163,15 +161,15 @@ interface MethodConfig {
 // Labor row: Troppija, Monteerija, Keevitaja
 const INSTALL_METHODS: MethodConfig[] = [
   // Machines
-  { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, defaultCount: 1, category: 'machine' },
-  { key: 'forklift', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
-  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
-  { key: 'poomtostuk', label: 'Korvtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 8, defaultCount: 2, category: 'machine' },
-  { key: 'kaartostuk', label: 'Käärtõstuk', icon: 'kaartostuk.png', bgColor: '#ffedd5', activeBgColor: '#f5840b', filterCss: 'invert(50%) sepia(90%) saturate(1500%) hue-rotate(360deg) brightness(100%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'crane', label: 'crane', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'forklift', label: 'forklift', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'manual', label: 'manual', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'poomtostuk', label: 'poomtostuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 8, defaultCount: 2, category: 'machine' },
+  { key: 'kaartostuk', label: 'kaartostuk', icon: 'kaartostuk.png', bgColor: '#ffedd5', activeBgColor: '#f5840b', filterCss: 'invert(50%) sepia(90%) saturate(1500%) hue-rotate(360deg) brightness(100%)', maxCount: 4, defaultCount: 1, category: 'machine' },
   // Labor
-  { key: 'troppija', label: 'Troppija', icon: 'troppija.png', bgColor: '#ccfbf1', activeBgColor: '#11625b', filterCss: 'invert(30%) sepia(40%) saturate(800%) hue-rotate(140deg) brightness(80%)', maxCount: 4, defaultCount: 1, category: 'labor' },
-  { key: 'monteerija', label: 'Monteerija', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 15, defaultCount: 1, category: 'labor' },
-  { key: 'keevitaja', label: 'Keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', activeBgColor: '#6b7280', filterCss: 'grayscale(100%) brightness(30%)', maxCount: 5, defaultCount: 1, category: 'labor' },
+  { key: 'troppija', label: 'troppija', icon: 'troppija.png', bgColor: '#ccfbf1', activeBgColor: '#11625b', filterCss: 'invert(30%) sepia(40%) saturate(800%) hue-rotate(140deg) brightness(80%)', maxCount: 4, defaultCount: 1, category: 'labor' },
+  { key: 'monteerija', label: 'monteerija', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 15, defaultCount: 1, category: 'labor' },
+  { key: 'keevitaja', label: 'keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', activeBgColor: '#6b7280', filterCss: 'grayscale(100%) brightness(30%)', maxCount: 5, defaultCount: 1, category: 'labor' },
 ];
 
 // Load default counts from localStorage
@@ -202,6 +200,12 @@ const saveDefaultCounts = (defaults: Record<InstallMethodType, number>) => {
 export default function InstallationScheduleScreen({ api, projectId, user, tcUserEmail, tcUserName, onBackToMenu, onNavigate, onColorModelWhite, onOpenPartDatabase }: Props) {
   // i18n translations
   const { t } = useTranslation('installation');
+
+  // Translated weekday names for date formatting
+  const weekdayNamesList = t('weekdaysList', { returnObjects: true }) as string[];
+  const weekdaysShortList = t('weekdaysShortList', { returnObjects: true }) as string[];
+  const formatDateEstonian = (dateStr: string) => formatDateEstonianWithNames(dateStr, weekdayNamesList);
+  const formatDateShort = (dateStr: string) => formatDateShortWithNames(dateStr, weekdaysShortList);
 
   // Property mappings for reading Tekla properties
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
@@ -360,30 +364,30 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportLanguage, setExportLanguage] = useState<'et' | 'en'>('et');
   const [exportColumns, setExportColumns] = useState([
-    { id: 'nr', label: 'Nr', labelEn: 'No', enabled: true },
-    { id: 'date', label: 'Kuupäev', labelEn: 'Date', enabled: true },
-    { id: 'day', label: 'Päev', labelEn: 'Day', enabled: true },
-    { id: 'mark', label: 'Assembly Mark', labelEn: 'Assembly Mark', enabled: true },
-    { id: 'position', label: 'Position Code', labelEn: 'Position Code', enabled: true },
-    { id: 'product', label: 'Toode', labelEn: 'Product', enabled: true },
-    { id: 'weight', label: 'Kaal (kg)', labelEn: 'Weight (kg)', enabled: true },
-    { id: 'truck_nr', label: 'Veoki nr', labelEn: 'Truck No', enabled: true },
-    { id: 'delivery_date', label: 'Tarnekuupäev', labelEn: 'Delivery Date', enabled: true },
+    { id: 'nr', enabled: true },
+    { id: 'date', enabled: true },
+    { id: 'day', enabled: true },
+    { id: 'mark', enabled: true },
+    { id: 'position', enabled: true },
+    { id: 'product', enabled: true },
+    { id: 'weight', enabled: true },
+    { id: 'truck_nr', enabled: true },
+    { id: 'delivery_date', enabled: true },
     // Individual method columns
-    { id: 'crane', label: 'Kraana', labelEn: 'Crane', enabled: true },
-    { id: 'forklift', label: 'Telesk.', labelEn: 'Telehandler', enabled: true },
-    { id: 'poomtostuk', label: 'Korvtõstuk', labelEn: 'Boom Lift', enabled: true },
-    { id: 'kaartostuk', label: 'Käärtõstuk', labelEn: 'Scissor Lift', enabled: true },
-    { id: 'troppija', label: 'Troppija', labelEn: 'Rigger', enabled: true },
-    { id: 'monteerija', label: 'Monteerija', labelEn: 'Installer', enabled: true },
-    { id: 'keevitaja', label: 'Keevitaja', labelEn: 'Welder', enabled: true },
-    { id: 'manual', label: 'Käsitsi', labelEn: 'Manual', enabled: true },
-    { id: 'guid_ms', label: 'GUID (MS)', labelEn: 'GUID (MS)', enabled: true },
-    { id: 'guid_ifc', label: 'GUID (IFC)', labelEn: 'GUID (IFC)', enabled: true },
-    { id: 'created_by', label: 'Andmed sisestas', labelEn: 'Created By', enabled: false },
-    { id: 'created_at', label: 'Sisestatud', labelEn: 'Created At', enabled: false },
-    { id: 'percentage', label: 'Kumulatiivne %', labelEn: 'Cumulative %', enabled: true },
-    { id: 'comments', label: 'Kommentaarid', labelEn: 'Comments', enabled: true }
+    { id: 'crane', enabled: true },
+    { id: 'forklift', enabled: true },
+    { id: 'poomtostuk', enabled: true },
+    { id: 'kaartostuk', enabled: true },
+    { id: 'troppija', enabled: true },
+    { id: 'monteerija', enabled: true },
+    { id: 'keevitaja', enabled: true },
+    { id: 'manual', enabled: true },
+    { id: 'guid_ms', enabled: true },
+    { id: 'guid_ifc', enabled: true },
+    { id: 'created_by', enabled: false },
+    { id: 'created_at', enabled: false },
+    { id: 'percentage', enabled: true },
+    { id: 'comments', enabled: true }
   ]);
 
   // Import state
@@ -1604,11 +1608,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       const methodLabels = Object.entries(batchInstallMethods)
         .map(([key, val]) => {
           const cfg = INSTALL_METHODS.find(m => m.key === key);
-          return cfg ? `${cfg.label} (${val})` : key;
+          return cfg ? `${t('resources.' + cfg.key)} (${val})` : key;
         })
-        .join(', ') || 'tühjendatud';
+        .join(', ') || t('messages.cleared');
 
-      setMessage(`${count} detaili ressursid: ${methodLabels}`);
+      setMessage(t('messages.resourcesUpdated', { count, methods: methodLabels }));
       loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error updating batch methods:', e);
@@ -1683,7 +1687,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       // Remove from stack and update local state
       setUndoStack(prev => prev.slice(0, -1));
       setScheduleItems(lastState.items);
-      setMessage(`Tagasi võetud: ${lastState.description}`);
+      setMessage(t('messages.undoneDescription', { description: lastState.description }));
     } catch (e) {
       console.error('Undo error:', e);
       setMessage(t('messages.undoError'));
@@ -1878,7 +1882,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         }
       }
 
-      setMessage(`${newItems.length} detaili lisatud kuupäevale ${formatDateEstonian(date)}`);
+      setMessage(t('messages.itemsAddedToDate', { count: newItems.length, date: formatDateEstonian(date) }));
       loadSchedule(activeVersionId);
 
       // Clear selection
@@ -1923,7 +1927,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     const item = scheduleItems.find(i => i.id === itemId);
     if (!item) return;
 
-    saveUndoState('Järjekorra muutmine');
+    saveUndoState(t('messages.reorderUndo'));
     const dateItems = itemsByDate[item.scheduled_date];
     const currentIndex = dateItems.findIndex(i => i.id === itemId);
 
@@ -2157,7 +2161,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
         if (error) throw error;
 
-        setMessage(`Päev ${formatDateShort(dateStr)} avatud`);
+        setMessage(t('messages.dayOpened', { day: formatDateShort(dateStr) }));
       } else {
         // Lock - insert lock record
         const { error } = await supabase
@@ -2172,7 +2176,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
         if (error) throw error;
 
-        setMessage(`Päev ${formatDateShort(dateStr)} lukustatud`);
+        setMessage(t('messages.dayLockedMsg', { day: formatDateShort(dateStr) }));
       }
 
       await loadScheduleLocks();
@@ -2212,7 +2216,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
         if (dayError) throw dayError;
 
-        setMessage(`Kuu ${yearMonth} avatud (kõik päevade lukud eemaldatud)`);
+        setMessage(t('messages.monthOpened', { month: yearMonth }));
       } else {
         // Lock month - insert month lock
         const lockDate = `${yearMonth}-01`;
@@ -2332,10 +2336,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     const dateItems = itemsByDate[date] || [];
     if (dateItems.length === 0) return;
 
-    const confirmed = window.confirm(`Kustuta kõik ${dateItems.length} detaili kuupäevalt ${formatDateShort(date)}?`);
+    const confirmed = window.confirm(t('messages.deleteAllItemsConfirm', { count: dateItems.length, date: formatDateShort(date) }));
     if (!confirmed) return;
 
-    saveUndoState(`Kõik detailid kuupäevalt ${date} kustutamine`);
+    saveUndoState(t('messages.deleteAllItemsUndoDesc', { date }));
     const itemIds = dateItems.map(i => i.id);
 
     // Collect GUIDs for coloring white after deletion
@@ -2377,7 +2381,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       setDateMenuId(null);
-      setMessage(`${dateItems.length} detaili kustutatud kuupäevalt ${formatDateShort(date)}`);
+      setMessage(t('messages.itemsDeletedFromDate', { count: dateItems.length, date: formatDateShort(date) }));
       await loadComments();
       loadSchedule(activeVersionId);
     } catch (e) {
@@ -2415,7 +2419,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       return;
     }
 
-    saveUndoState(`${itemsToRemove.length} detaili eemaldamine kuupäevalt ${date}`);
+    saveUndoState(t('messages.removeItemsUndoDesc', { count: itemsToRemove.length, date }));
 
     try {
       const itemIds = itemsToRemove.map(i => i.id);
@@ -2463,7 +2467,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
       setSelectedObjects([]);
 
-      setMessage(`${itemsToRemove.length} detaili eemaldatud kuupäevalt`);
+      setMessage(t('messages.itemsRemovedFromDate', { count: itemsToRemove.length }));
       setDateMenuId(null);
       await loadComments();
       loadSchedule(activeVersionId);
@@ -2547,7 +2551,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       if (updates.length === 0) {
-        setMessage(`Leiti ${objectMap.size} objekti, aga ükski ei sisaldanud õiget assembly marki`);
+        setMessage(t('messages.foundObjectsNoCorrectMark', { count: objectMap.size }));
         return;
       }
 
@@ -2570,7 +2574,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         setMessage(`Uuendan... ${updatedCount}/${updates.length}`);
       }
 
-      setMessage(`✓ ${updatedCount} assembly marki uuendatud`);
+      setMessage(t('schedule.assemblyMarksUpdated', { count: updatedCount }));
       await loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error refreshing assembly marks:', e);
@@ -2882,7 +2886,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       // Create markups (in batches)
-      const createdIds = await batchCreateMarkups(markupsToCreate, 'Loon markupe...');
+      const createdIds = await batchCreateMarkups(markupsToCreate, t('messages.creatingMarkups'));
 
       // Set color - use contrasting color based on day color
       let markupColor = '#FF0000'; // Default red
@@ -2915,7 +2919,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       // Set colors (in batches)
-      await batchEditMarkupColors(createdIds, markupColor, 'Värvin markupe...');
+      await batchEditMarkupColors(createdIds, markupColor, t('messages.coloringMarkups'));
 
       setMessage(`${createdIds.length} markupit loodud`);
       setDateMenuId(null);
@@ -3039,7 +3043,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           }
         }
 
-        setMessage(`Loon markupe... ${dayIndex + 1}/${allDates.length} päeva`);
+        setMessage(t('messages.creatingMarkupsProgress', { current: dayIndex + 1, total: allDates.length }));
       }
 
       if (markupsToCreate.length === 0) {
@@ -3048,7 +3052,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       // Create markups (in batches)
-      const createdIds = await batchCreateMarkups(markupsToCreate, 'Loon markupe...');
+      const createdIds = await batchCreateMarkups(markupsToCreate, t('messages.creatingMarkups'));
 
       // Group IDs by color for batch color editing
       const idsByColor = new Map<string, number[]>();
@@ -3068,10 +3072,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       for (const [color, ids] of idsByColor) {
         await batchEditMarkupColors(ids, color);
         coloredCount += ids.length;
-        setMessage(`Värvin markupe... ${coloredCount}/${createdIds.length}`);
+        setMessage(t('messages.coloringMarkupsProgress', { colored: coloredCount, total: createdIds.length }));
       }
 
-      setMessage(`${createdIds.length} markupit loodud (${allDates.length} päeva)`);
+      setMessage(t('messages.markupsCreatedDays', { count: createdIds.length, days: allDates.length }));
     } catch (e) {
       console.error('Error creating markups for all days:', e);
       setMessage(t('messages.markupsError'));
@@ -3331,7 +3335,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       // 6. Create markups (in batches)
-      const createdIds = await batchCreateMarkups(markupsToCreate, 'Loon markupe...');
+      const createdIds = await batchCreateMarkups(markupsToCreate, t('messages.creatingMarkups'));
 
       // Build map of guid_ifc -> markup_id for later removal
       const newMarkupMap = new Map<string, number>();
@@ -3343,9 +3347,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setDeliveryMarkupMap(newMarkupMap);
 
       // 7. Set color - orange for delivery dates (in batches)
-      await batchEditMarkupColors(createdIds, '#FF6600', 'Värvin markupe...');
+      await batchEditMarkupColors(createdIds, '#FF6600', t('messages.coloringMarkups'));
 
-      setMessage(`${createdIds.length} tarnekuupäeva markupit loodud`);
+      setMessage(t('messages.deliveryDateMarkupsCreated', { count: createdIds.length }));
     } catch (e) {
       console.error('Error creating delivery date markups:', e);
       setMessage(t('messages.markupsError'));
@@ -3505,7 +3509,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       // 6. Create markups (in batches)
-      const createdIds = await batchCreateMarkups(markupsToCreate, 'Loon markupe...');
+      const createdIds = await batchCreateMarkups(markupsToCreate, t('messages.creatingMarkups'));
 
       // Build map of guid_ifc -> markup_id for later removal
       const newMarkupMap = new Map<string, number>();
@@ -3517,7 +3521,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setDeliveryMarkupMap(newMarkupMap);
 
       // 7. Set color - green for non-ERP items (in batches)
-      await batchEditMarkupColors(createdIds, '#22C55E', 'Värvin markupe...');
+      await batchEditMarkupColors(createdIds, '#22C55E', t('messages.coloringMarkups'));
 
       setMessage(`${createdIds.length} markupit loodud (ilma ERP)`);
     } catch (e) {
@@ -3721,7 +3725,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       // 7. Create markups (in batches)
-      const createdIds = await batchCreateMarkups(markupsToCreate, 'Loon markupe...');
+      const createdIds = await batchCreateMarkups(markupsToCreate, t('messages.creatingMarkups'));
 
       // Build map
       const newMarkupMap = new Map<string, number>();
@@ -3733,7 +3737,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setDeliveryMarkupMap(newMarkupMap);
 
       // 8. Set color - blue for vehicle info (in batches)
-      await batchEditMarkupColors(createdIds, '#3B82F6', 'Värvin markupe...');
+      await batchEditMarkupColors(createdIds, '#3B82F6', t('messages.coloringMarkups'));
 
       setMessage(`${createdIds.length} veoki markupit loodud`);
     } catch (e) {
@@ -3851,7 +3855,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
           }
           offset += data.length;
-          setMessage(`Värvin... Loetud ${allGuids.length} objekti`);
+          setMessage(t('messages.coloringReadCount', { count: allGuids.length }));
           if (data.length < PAGE_SIZE) break;
         }
 
@@ -3889,7 +3893,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
               { color: { r: 255, g: 255, b: 255, a: 255 } }
             );
             whiteCount += batch.length;
-            setMessage(`Värvin valged... ${whiteCount}/${totalWhite}`);
+            setMessage(t('messages.coloringWhiteProgress', { current: whiteCount, total: totalWhite }));
           }
         }
 
@@ -3927,11 +3931,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
               { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
             );
             coloredCount += runtimeIds.length;
-            setMessage(`Värvin kuupäevad... ${coloredCount}/${scheduleGuids.size}`);
+            setMessage(t('messages.coloringDatesProgress', { current: coloredCount, total: scheduleGuids.size }));
           }
         }
 
-        setMessage(`✓ Värvitud! Valged=${whiteCount}, Graafikudetaile=${coloredCount}`);
+        setMessage(t('messages.coloringDone', { white: whiteCount, colored: coloredCount }));
         setTimeout(() => setMessage(null), 3000);
       } catch (e) {
         console.error('Error coloring by date:', e);
@@ -4137,7 +4141,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       await Promise.all(redPromises);
 
-      setMessage(`${scheduledObjects.length} detaili värvitud punaseks`);
+      setMessage(t('messages.itemsColoredRed', { count: scheduledObjects.length }));
     } catch (e) {
       console.error('Error highlighting scheduled items:', e);
     }
@@ -4251,7 +4255,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           .filter((g): g is string => !!g);
 
         // Show progress
-        setMessage(`Värvin mudelit... ${d + 1}/${targetDayIndex + 1} päeva`);
+        setMessage(t('messages.coloringModelProgress', { current: d + 1, total: targetDayIndex + 1 }));
 
         if (guids.length > 0) {
           if (playbackSettings.colorEachDayDifferent && playbackDateColors[date]) {
@@ -4303,7 +4307,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       let coloredDates = 0;
       for (const [date, items] of dateEntries) {
         coloredDates++;
-        setMessage(`Värvin mudelit... ${coloredDates}/${dateEntries.length} päeva`);
+        setMessage(t('messages.coloringModelDaysProgress', { current: coloredDates, total: dateEntries.length }));
 
         const guids = items
           .map(item => item.guid_ifc || item.guid)
@@ -4882,7 +4886,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       return;
     }
 
-    saveUndoState(`${itemsOnDate.length} detaili liigutamine kuupäevale ${formatDateShort(targetDate)}`);
+    saveUndoState(t('messages.moveItemsUndoDesc', { count: itemsOnDate.length, date: formatDateShort(targetDate) }));
 
     try {
       const { error } = await supabase
@@ -4894,7 +4898,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       if (error) throw error;
 
       setDateContextMenu(null);
-      setMessage(`${itemsOnDate.length} detaili liigutatud kuupäevale ${formatDateShort(targetDate)}`);
+      setMessage(t('messages.itemsMovedToDate', { count: itemsOnDate.length, date: formatDateShort(targetDate) }));
       loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error moving items:', e);
@@ -5105,9 +5109,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
   };
 
-  const monthNames = ['Jaanuar', 'Veebruar', 'Märts', 'Aprill', 'Mai', 'Juuni',
-    'Juuli', 'August', 'September', 'Oktoober', 'November', 'Detsember'];
-  const dayNames = ['E', 'T', 'K', 'N', 'R', 'L', 'P'];
+  const monthNames = t('monthsList', { returnObjects: true }) as string[];
+  const dayNames = t('weekdaysMinMon', { returnObjects: true }) as string[];
 
   const today = formatDateKey(new Date());
 
@@ -5215,7 +5218,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     };
 
     // Main data sheet - header row from enabled columns (use correct language)
-    const mainData: any[][] = [enabledCols.map(c => isEnglish ? (c as any).labelEn || c.label : c.label)];
+    const mainData: any[][] = [enabledCols.map(c => t(`exportColumns.${c.id}`))];
 
     // Find date column index for coloring
     const dateColIndex = enabledCols.findIndex(c => c.id === 'date');
@@ -5226,7 +5229,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       const percentage = Math.round((cumulative / totalItems) * 100);
       const date = new Date(item.scheduled_date);
       const dateFormatted = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getFullYear()).slice(-2)}`;
-      const weekday = isEnglish ? WEEKDAY_NAMES_EN[date.getDay()] : WEEKDAY_NAMES[date.getDay()];
+      const weekday = isEnglish ? WEEKDAY_NAMES_EN[date.getDay()] : weekdayNamesList[date.getDay()];
 
       // Build row based on enabled columns
       const row = enabledCols.map(col => {
@@ -5291,10 +5294,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
     // Summary sheet headers based on language
     const summaryData: any[][] = [[
-      isEnglish ? 'Date' : 'Kuupäev',
-      isEnglish ? 'Day' : 'Päev',
-      isEnglish ? 'Items' : 'Detaile',
-      isEnglish ? 'Cumulative' : 'Kumulatiivne',
+      t('columns.date'),
+      t('columns.day'),
+      t('columns.items'),
+      t('columns.cumulative'),
       '%'
     ]];
 
@@ -5306,7 +5309,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       const pct = Math.round((cumulativeSum / totalItems) * 100);
       const date = new Date(dateStr);
       const dateFormatted = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getFullYear()).slice(-2)}`;
-      const weekday = isEnglish ? WEEKDAY_NAMES_EN[date.getDay()] : WEEKDAY_NAMES[date.getDay()];
+      const weekday = isEnglish ? WEEKDAY_NAMES_EN[date.getDay()] : weekdayNamesList[date.getDay()];
       summaryData.push([dateFormatted, weekday, count, cumulativeSum, `${pct}%`]);
     }
 
@@ -5415,38 +5418,22 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
 
     // Resource Statistics Sheet
-    const resourceLabels = isEnglish ? {
-      title: 'Resource Statistics',
-      resource: 'Resource',
-      count: 'Count',
-      days: 'Days',
-      totalDays: 'Total Days',
-      crane: 'Crane',
-      forklift: 'Telehandler',
-      poomtostuk: 'Boom Lift',
-      kaartostuk: 'Scissor Lift',
-      troppija: 'Rigger',
-      monteerija: 'Installer',
-      keevitaja: 'Welder',
-      manual: 'Manual',
-      machines: 'Machines',
-      labor: 'Labor'
-    } : {
-      title: 'Ressursside statistika',
-      resource: 'Ressurss',
-      count: 'Kogus',
-      days: 'Päevi',
-      totalDays: 'Kokku päevi',
-      crane: 'Kraana',
-      forklift: 'Teleskooplaadur',
-      poomtostuk: 'Korvtõstuk',
-      kaartostuk: 'Käärtõstuk',
-      troppija: 'Troppija',
-      monteerija: 'Monteerija',
-      keevitaja: 'Keevitaja',
-      manual: 'Käsitsi',
-      machines: 'Tehnika',
-      labor: 'Tööjõud'
+    const resourceLabels = {
+      title: t('menu.resourceStats'),
+      resource: t('resources.resource'),
+      count: t('resources.count'),
+      days: t('excel.daysLabel'),
+      totalDays: t('excel.totalDaysLabel'),
+      crane: t('resources.crane'),
+      forklift: t('resources.forklift'),
+      poomtostuk: t('resources.poomtostuk'),
+      kaartostuk: t('resources.kaartostuk'),
+      troppija: t('resources.troppija'),
+      monteerija: t('resources.monteerija'),
+      keevitaja: t('resources.keevitaja'),
+      manual: t('resources.manual'),
+      machines: t('excel.machines'),
+      labor: t('excel.labor')
     };
 
     const resourceData: any[][] = [
@@ -5535,7 +5522,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
     });
 
-    XLSX.utils.book_append_sheet(wb, ws3, isEnglish ? 'Resources' : 'Ressursid');
+    XLSX.utils.book_append_sheet(wb, ws3, t('menu.resourceStats'));
 
     // Add simple equipment statistics to summary (backwards compatibility)
     const daysWithMethod: Record<InstallMethodType, Set<string>> = {
@@ -5560,15 +5547,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
     // Add equipment statistics to summary
     summaryData.push([]); // Empty row
-    summaryData.push([isEnglish ? 'Equipment Statistics' : 'Tehnika statistika', '', '', '', '']);
-    summaryData.push([isEnglish ? 'Crane days' : 'Kraana päevi', '', daysWithMethod.crane.size, '', '']);
-    summaryData.push([isEnglish ? 'Telehandler days' : 'Teleskooplaaduri päevi', '', daysWithMethod.forklift.size, '', '']);
-    summaryData.push([isEnglish ? 'Boom lift days' : 'Korvtõstuki päevi', '', daysWithMethod.poomtostuk.size, '', '']);
-    summaryData.push([isEnglish ? 'Scissor lift days' : 'Käärtõstuki päevi', '', daysWithMethod.kaartostuk.size, '', '']);
-    summaryData.push([isEnglish ? 'Rigger days' : 'Troppijaid päevi', '', daysWithMethod.troppija.size, '', '']);
-    summaryData.push([isEnglish ? 'Installer days' : 'Monteerijaid päevi', '', daysWithMethod.monteerija.size, '', '']);
-    summaryData.push([isEnglish ? 'Welder days' : 'Keevitajaid päevi', '', daysWithMethod.keevitaja.size, '', '']);
-    summaryData.push([isEnglish ? 'Manual days' : 'Käsitsi päevi', '', daysWithMethod.manual.size, '', '']);
+    summaryData.push([t('menu.resourceStats'), '', '', '', '']);
+    summaryData.push([t('excel.craneDays'), '', daysWithMethod.crane.size, '', '']);
+    summaryData.push([t('excel.telehandlerDays'), '', daysWithMethod.forklift.size, '', '']);
+    summaryData.push([t('excel.boomLiftDays'), '', daysWithMethod.poomtostuk.size, '', '']);
+    summaryData.push([t('excel.scissorLiftDays'), '', daysWithMethod.kaartostuk.size, '', '']);
+    summaryData.push([t('excel.riggerDays'), '', daysWithMethod.troppija.size, '', '']);
+    summaryData.push([t('excel.installerDays'), '', daysWithMethod.monteerija.size, '', '']);
+    summaryData.push([t('excel.welderDays'), '', daysWithMethod.keevitaja.size, '', '']);
+    summaryData.push([t('excel.manualDays'), '', daysWithMethod.manual.size, '', '']);
 
     // Summary sheet
     const ws2 = XLSX.utils.aoa_to_sheet(summaryData);
@@ -5626,7 +5613,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
     });
 
-    XLSX.utils.book_append_sheet(wb, ws2, isEnglish ? 'Summary' : 'Kokkuvõte');
+    XLSX.utils.book_append_sheet(wb, ws2, t('excel.summary'));
 
     // ========== TIMELINE SHEET ==========
     // Structure:
@@ -5638,32 +5625,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     // Rows 12+: Details (each under its date)
     // Last row: Totals per date
 
-    const timelineLabels = isEnglish ? {
-      resources: 'Resources',
-      details: 'Details',
-      total: 'Total',
-      week: 'W',
-      crane: 'Crane',
-      forklift: 'Telehandler',
-      poomtostuk: 'Boom Lift',
-      kaartostuk: 'Scissor Lift',
-      troppija: 'Rigger',
-      monteerija: 'Installer',
-      keevitaja: 'Welder',
-      manual: 'Manual',
-    } : {
-      resources: 'Ressursid',
-      details: 'Detailid',
-      total: 'Kokku',
-      week: 'N',
-      crane: 'Kraana',
-      forklift: 'Teleskooplaadur',
-      poomtostuk: 'Korvtõstuk',
-      kaartostuk: 'Käärtõstuk',
-      troppija: 'Troppija',
-      monteerija: 'Monteerija',
-      keevitaja: 'Keevitaja',
-      manual: 'Käsitsi',
+    const timelineLabels = {
+      resources: t('excel.resources'),
+      details: t('excel.details'),
+      total: t('excel.total'),
+      week: t('excel.weekShort'),
+      crane: t('resources.crane'),
+      forklift: t('resources.forklift'),
+      poomtostuk: t('resources.poomtostuk'),
+      kaartostuk: t('resources.kaartostuk'),
+      troppija: t('resources.troppija'),
+      monteerija: t('resources.monteerija'),
+      keevitaja: t('resources.keevitaja'),
+      manual: t('resources.manual'),
     };
 
     const resourceOrder: { key: InstallMethodType; label: string }[] = [
@@ -5837,12 +5811,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         monthStartCol = col;
 
         // Set month label
-        const monthNames = isEnglish
-          ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-          : ['Jaan', 'Veebr', 'Märts', 'Apr', 'Mai', 'Juuni', 'Juuli', 'Aug', 'Sept', 'Okt', 'Nov', 'Dets'];
+        const excelMonthNames = t('monthsShortList', { returnObjects: true }) as string[];
         const cellRef = XLSX.utils.encode_cell({ r: MONTH_ROW, c: col });
         if (!ws4[cellRef]) ws4[cellRef] = { t: 's', v: '' };
-        ws4[cellRef].v = `${monthNames[month]} ${date.getFullYear()}`;
+        ws4[cellRef].v = `${excelMonthNames[month]} ${date.getFullYear()}`;
       }
     });
     // Close last month merge
@@ -6061,7 +6033,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       const data = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
 
       if (data.length < 2) {
-        setImportResult({ success: 0, errors: ['Excel fail on tühi või puuduvad andmed'], warnings: [] });
+        setImportResult({ success: 0, errors: [t('messages.excelFileEmptyOrMissing')], warnings: [] });
         return;
       }
 
@@ -6093,10 +6065,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       const warnings: string[] = [];
 
       if (colMap.guid_ms === undefined && colMap.guid_ifc === undefined) {
-        errors.push('Puudub GUID veerg (GUID (MS) või GUID (IFC)) - seda on vaja elementide tuvastamiseks');
+        errors.push(t('messages.missingGuidColumn'));
       }
       if (colMap.date === undefined) {
-        errors.push('Puudub kuupäeva veerg');
+        errors.push(t('messages.missingDateColumn'));
       }
 
       if (errors.length > 0) {
@@ -6115,7 +6087,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         const dateVal = colMap.date !== undefined ? row[colMap.date] : null;
 
         if (!guidMs && !guidIfc) {
-          warnings.push(`Rida ${i + 1}: Puudub GUID, jäetakse vahele`);
+          warnings.push(t('messages.rowMissingGuid', { row: i + 1 }));
           continue;
         }
 
@@ -6143,7 +6115,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         }
 
         if (!scheduledDate) {
-          warnings.push(`Rida ${i + 1}: Vigane kuupäev "${dateVal}", jäetakse vahele`);
+          warnings.push(t('messages.rowInvalidDate', { row: i + 1, date: dateVal }));
           continue;
         }
 
@@ -6172,7 +6144,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       if (parsedRows.length === 0) {
-        errors.push('Ühtegi kehtivat rida ei leitud');
+        errors.push(t('messages.noValidRowsFound'));
         setImportResult({ success: 0, errors, warnings });
         return;
       }
@@ -6182,7 +6154,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setShowImportModal(true);
     } catch (err) {
       console.error('Error parsing Excel:', err);
-      setImportResult({ success: 0, errors: ['Exceli faili töötlemisel tekkis viga'], warnings: [] });
+      setImportResult({ success: 0, errors: [t('messages.excelProcessingError')], warnings: [] });
     }
 
     // Reset file input
@@ -6206,7 +6178,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           .eq('project_id', projectId);
 
         if (deleteError) {
-          errors.push(`Olemasolevate kirjete kustutamine ebaõnnestus: ${deleteError.message}`);
+          errors.push(t('messages.deleteExistingFailed', { error: deleteError.message }));
           setImportResult(prev => ({ ...prev!, errors: [...(prev?.errors || []), ...errors] }));
           setImporting(false);
           return;
@@ -6238,19 +6210,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
               .eq('id', existing.id);
 
             if (updateError) {
-              errors.push(`Rida ${row.rowNum}: Uuendamine ebaõnnestus (${guidIdentifier})`);
+              errors.push(t('messages.rowUpdateFailed', { row: row.rowNum, guid: guidIdentifier }));
             } else {
               successCount++;
             }
           } else {
             // Insert new - need model info from existing schedule or skip
-            errors.push(`Rida ${row.rowNum}: Elementi ei leitud graafikus (${guidIdentifier}) - lisa enne mudelist`);
+            errors.push(t('messages.rowUpdateFailed', { row: row.rowNum, guid: guidIdentifier }));
           }
         } else {
           // Replace mode - insert all as new (need to have model info)
           // For replace mode, we can only insert if we have all required info
           // Since we deleted all, we need model_id which we don't have from Excel
-          errors.push(`Rida ${row.rowNum}: Elemendi ${guidIdentifier} lisamine vajab mudeli infot - kasuta "Kirjuta üle" režiimi`);
+          errors.push(t('messages.rowAddNeedsModel', { row: row.rowNum, guid: guidIdentifier }));
         }
       }
 
@@ -6264,11 +6236,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       });
 
       if (successCount > 0) {
-        setMessage(`Import õnnestus: ${successCount} kirjet uuendatud`);
+        setMessage(t('messages.importSuccess', { count: successCount }));
       }
     } catch (err) {
       console.error('Import error:', err);
-      errors.push('Impordi käigus tekkis viga');
+      errors.push(t('messages.importError'));
       setImportResult(prev => ({ ...prev!, errors: [...(prev?.errors || []), ...errors] }));
     } finally {
       setImporting(false);
@@ -6409,7 +6381,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           >
             <FiLayers size={14} />
             <span className="version-name">
-              {versions.find(v => v.id === activeVersionId)?.name || 'Põhigraafik'}
+              {versions.find(v => v.id === activeVersionId)?.name || t('schedule.mainSchedule')}
             </span>
             <FiChevronDown size={14} className={showVersionDropdown ? 'rotated' : ''} />
           </button>
@@ -6608,13 +6580,13 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       {/* Calendar Statistics */}
       <div className="calendar-stats">
-        <span>Kokku: <strong>{scheduleItems.length}</strong> detaili</span>
+        <span>{t('ui.calendarTotal')} <strong>{scheduleItems.length}</strong> {t('ui.detaili')}</span>
         <span className="stat-divider">|</span>
-        <span>Päevi: <strong>{Object.keys(itemsByDate).length}</strong></span>
+        <span>{t('schedule.daysCount')} <strong>{Object.keys(itemsByDate).length}</strong></span>
         {Object.keys(itemsByDate).length > 0 && (
           <>
             <span className="stat-divider">|</span>
-            <span>Keskm: <strong>{Math.round(scheduleItems.length / Object.keys(itemsByDate).length)}</strong> tk/päev</span>
+            <span>{t('schedule.avgPerDay', { avg: Math.round(scheduleItems.length / Object.keys(itemsByDate).length) })}</span>
           </>
         )}
         <div className="color-buttons">
@@ -6622,14 +6594,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             className={`color-by-date-btn${playbackSettings.colorEachDayDifferent ? ' active' : ''}`}
             onClick={toggleColorByDate}
             disabled={scheduleItems.length === 0}
-            title={playbackSettings.colorEachDayDifferent ? "Lülita värvimine välja" : "Värvi päevade kaupa"}
+            title={playbackSettings.colorEachDayDifferent ? t('schedule.toggleColorOff') : t('schedule.colorByDays')}
           >
             <FiDroplet size={14} />
           </button>
           <button
             className="reset-colors-btn"
             onClick={() => api.viewer.setObjectState(undefined, { color: 'reset' })}
-            title="Lähtesta värvid"
+            title={t('schedule.resetColors')}
           >
             <FiRefreshCw size={14} />
           </button>
@@ -6816,7 +6788,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     className={`${allScheduled ? 'already-scheduled-info' : 'partially-scheduled-info'} clickable`}
                     onClick={() => setShowScheduledDropdown(!showScheduledDropdown)}
                   >
-                    {allScheduled ? '✓' : '⚠'} {scheduledInfo.length} juba planeeritud
+                    {allScheduled ? '✓' : '⚠'} {t('schedule.alreadyScheduled', { count: scheduledInfo.length })}
                   </span>
                   {showScheduledDropdown && (
                     <div className="scheduled-dropdown">
@@ -6828,7 +6800,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                             setShowScheduledDropdown(false);
                           }}
                         >
-                          Värvi punaseks
+                          {t('schedule.colorRed')}
                         </button>
                         <button
                           className="btn-small btn-secondary"
@@ -6938,7 +6910,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
                   setSelectedObjects([]);
                 }}
-                title="Tühista valik mudelis"
+                title={t('schedule.cancelModelSelection')}
               >
                 <FiX size={14} />
               </button>
@@ -7083,7 +7055,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             {!allScheduled && !selectedDate && (
               <span className="select-date-hint">
                 <FiCalendar size={12} />
-                Vali kuupäev lisamiseks
+                {t('schedule.selectDateToAdd')}
               </span>
             )}
           </div>
@@ -7099,11 +7071,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         ) : (
           <>
             {isPaused ? (
-              <button className="play-btn" onClick={resumePlayback} title="Jätka">
+              <button className="play-btn" onClick={resumePlayback} title={t('schedule.continuePlayback')}>
                 <FiPlay size={16} />
               </button>
             ) : (
-              <button className="pause-btn" onClick={pausePlayback} title="Paus">
+              <button className="pause-btn" onClick={pausePlayback} title={t('ui.pause')}>
                 <FiPause size={16} />
               </button>
             )}
@@ -7116,7 +7088,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         <button
           className="settings-btn"
           onClick={() => setShowSettingsModal(true)}
-          title="Mängimise seaded"
+          title={t('schedule.playbackSettings')}
         >
           <FiSettings size={16} />
         </button>
@@ -7217,7 +7189,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                             checked={!copyFromCurrent}
                             onChange={() => setCopyFromCurrent(false)}
                           />
-                          <span>Loo tühi versioon</span>
+                          <span>{t('schedule.createEmptyVersion')}</span>
                         </label>
                       </div>
                     </div>
@@ -7228,7 +7200,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   <div className="delete-warning">
                     <FiAlertTriangle size={24} />
                     <p>Oled kustutamas versiooni <strong>"{editingVersion?.name}"</strong></p>
-                    <p>See kustutab ka kõik selle versiooni detailid ({scheduleItems.length} tk). Seda tegevust ei saa tagasi võtta!</p>
+                    <p>{t('schedule.deleteVersionWarning', { count: scheduleItems.length })}</p>
                   </div>
                   <div className="form-group">
                     <label>Kinnitamiseks tipi versiooni nimi:</label>
@@ -7252,12 +7224,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                       onClick={() => setShowDeleteConfirm(true)}
                     >
                       <FiTrash2 size={14} />
-                      Kustuta
+                      {t('common:buttons.delete')}
                     </button>
                   )}
                   <div style={{ flex: 1 }} />
                   <button className="btn-secondary" onClick={() => setShowVersionModal(false)}>
-                    Tühista
+                    {t('ui.cancel')}
                   </button>
                   <button
                     className="btn-primary"
@@ -7301,7 +7273,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
               // Calculate stats same as export
               const sortedItems = getAllItemsSorted();
               if (sortedItems.length === 0) {
-                return <div className="stats-empty">Graafik on tühi</div>;
+                return <div className="stats-empty">{t('schedule.scheduleIsEmpty')}</div>;
               }
 
               // Calculate method stats per date
@@ -7358,13 +7330,13 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     <div className="stats-method-name">
                       {icon && <img src={icon} alt="" />}
                       <span>{label}</span>
-                      <span className="stats-total">{totalDays} päeva</span>
+                      <span className="stats-total">{totalDays} {t('schedule.daysLabel')}</span>
                     </div>
                     <div className="stats-method-breakdown">
                       {counts.map(count => (
                         <div key={count} className="stats-count-row">
                           <span className="count-label">{count}×</span>
-                          <span className="count-value">{stats[count].size} päeva</span>
+                          <span className="count-value">{stats[count].size} {t('schedule.daysLabel')}</span>
                         </div>
                       ))}
                     </div>
@@ -7375,18 +7347,18 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
               return (
                 <>
                   <div className="stats-section">
-                    <div className="stats-section-title">Tehnika</div>
-                    {renderMethodStats('crane', 'Kraana', '/crane.svg')}
-                    {renderMethodStats('forklift', 'Teleskooplaadur', '/forklift.svg')}
-                    {renderMethodStats('poomtostuk', 'Korvtõstuk', '/poomtostuk.svg')}
-                    {renderMethodStats('kaartostuk', 'Käärtõstuk', '/kaartostuk.svg')}
-                    {renderMethodStats('manual', 'Käsitsi', '/manual.svg')}
+                    <div className="stats-section-title">{t('excel.machines')}</div>
+                    {renderMethodStats('crane', t('resources.crane'), '/crane.svg')}
+                    {renderMethodStats('forklift', t('resources.forklift'), '/forklift.svg')}
+                    {renderMethodStats('poomtostuk', t('resources.poomtostuk'), '/poomtostuk.svg')}
+                    {renderMethodStats('kaartostuk', t('resources.kaartostuk'), '/kaartostuk.svg')}
+                    {renderMethodStats('manual', t('resources.manual'), '/manual.svg')}
                   </div>
                   <div className="stats-section">
-                    <div className="stats-section-title">Tööjõud</div>
-                    {renderMethodStats('troppija', 'Troppija', '/troppija.svg')}
-                    {renderMethodStats('monteerija', 'Monteerija', '/monteerija.svg')}
-                    {renderMethodStats('keevitaja', 'Keevitaja', '/keevitaja.svg')}
+                    <div className="stats-section-title">{t('schedule.laborSection')}</div>
+                    {renderMethodStats('troppija', t('resources.troppija'), '/troppija.svg')}
+                    {renderMethodStats('monteerija', t('resources.monteerija'), '/monteerija.svg')}
+                    {renderMethodStats('keevitaja', t('resources.keevitaja'), '/keevitaja.svg')}
                   </div>
                 </>
               );
@@ -7421,7 +7393,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 </button>
               </div>
               <div className="export-columns-header">
-                <span>Ekspordi veerud ({exportColumns.filter(c => c.enabled).length}/{exportColumns.length})</span>
+                <span>{t('schedule.exportColumnsLabel', { enabled: exportColumns.filter(c => c.enabled).length, total: exportColumns.length })}</span>
               </div>
               <div className="export-columns-list">
                 {exportColumns.map((col, idx) => (
@@ -7431,19 +7403,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                       checked={col.enabled}
                       onChange={() => toggleExportColumn(col.id)}
                     />
-                    <span className={col.enabled ? '' : 'disabled'}>{col.label}</span>
+                    <span className={col.enabled ? '' : 'disabled'}>{t(`exportColumns.${col.id}`)}</span>
                     <div className="column-order-btns">
                       <button
                         onClick={() => moveExportColumn(col.id, 'up')}
                         disabled={idx === 0}
-                        title="Liiguta üles"
+                        title={t('schedule.moveUp')}
                       >
                         <FiArrowUp size={12} />
                       </button>
                       <button
                         onClick={() => moveExportColumn(col.id, 'down')}
                         disabled={idx === exportColumns.length - 1}
-                        title="Liiguta alla"
+                        title={t('schedule.moveDown')}
                       >
                         <FiArrowDown size={12} />
                       </button>
@@ -7453,16 +7425,16 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
               </div>
               <button className="export-download-btn" onClick={exportToExcel}>
                 <FiDownload size={14} />
-                {exportLanguage === 'en' ? 'Export' : 'Ekspordi'} ({filteredItems.length} {exportLanguage === 'en' ? 'rows' : 'rida'})
+                {t('actions.exportExcel')} ({filteredItems.length})
               </button>
 
               <div className="import-section">
                 <div className="import-divider">
-                  <span>või</span>
+                  <span>{t('schedule.or')}</span>
                 </div>
                 <label className="import-file-btn">
                   <FiUpload size={14} />
-                  Impordi Excelist
+                  {t('actions.importExcel')}
                   <input
                     type="file"
                     accept=".xlsx,.xls"
@@ -7471,7 +7443,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   />
                 </label>
                 <p className="import-hint">
-                  Impordi võimaldab uuendada kuupäevi ja ressursse GUID põhjal
+                  {t('schedule.importAllowsUpdate')}
                 </p>
               </div>
             </div>
@@ -7522,8 +7494,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onChange={() => setImportMode('overwrite')}
                   />
                   <div>
-                    <strong>Kirjuta olemasolevad üle</strong>
-                    <span>Uuendab graafikus olevate elementide kuupäevi ja ressursse</span>
+                    <strong>{t('schedule.overwriteExisting')}</strong>
+                    <span>{t('schedule.overwriteExistingDesc')}</span>
                   </div>
                 </label>
                 <label className="import-mode-option">
@@ -7534,8 +7506,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onChange={() => setImportMode('replace')}
                   />
                   <div>
-                    <strong>Kustuta kõik ja asenda</strong>
-                    <span>Kustutab kõik olemasolevad kirjed ja impordib uued</span>
+                    <strong>{t('schedule.deleteAllAndReplace')}</strong>
+                    <span>{t('schedule.deleteAllAndReplaceDesc')}</span>
                   </div>
                 </label>
               </div>
@@ -7544,25 +7516,25 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
               {importing ? (
                 <div className="import-progress">
                   <FiRefreshCw size={16} className="spinning" />
-                  <span>Impordin...</span>
+                  <span>{t('schedule.importing')}</span>
                 </div>
               ) : importResult && importResult.errors.length > 0 && importResult.success > 0 ? (
                 <div className="import-result">
                   <div className="import-success">
                     <FiCheckCircle size={14} />
-                    <span>{importResult.success} kirjet uuendatud</span>
+                    <span>{t('messages.importSuccess', { count: importResult.success })}</span>
                   </div>
                   <div className="import-errors">
                     <div className="error-header">
                       <FiAlertCircle size={14} />
-                      <span>Vead ({importResult.errors.length})</span>
+                      <span>{t('messages.error')} ({importResult.errors.length})</span>
                     </div>
                     <div className="error-list">
                       {importResult.errors.slice(0, 5).map((e, i) => (
                         <div key={i} className="error-item">{e}</div>
                       ))}
                       {importResult.errors.length > 5 && (
-                        <div className="error-item">...ja {importResult.errors.length - 5} veel</div>
+                        <div className="error-item">...+{importResult.errors.length - 5}</div>
                       )}
                     </div>
                   </div>
@@ -7572,14 +7544,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
               {/* Action buttons */}
               <div className="import-actions">
                 <button className="btn-secondary" onClick={closeImportModal}>
-                  Tühista
+                  {t('ui.cancel')}
                 </button>
                 <button
                   className="btn-primary"
                   onClick={executeImport}
                   disabled={importing || (importResult?.success === 0 && importResult?.errors.length > 0)}
                 >
-                  {importing ? 'Impordin...' : 'Impordi'}
+                  {importing ? t('schedule.importing') : t('actions.importExcel')}
                 </button>
               </div>
             </div>
@@ -7592,7 +7564,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
           <div className="settings-modal compact" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Mängimise seaded</h3>
+              <h3>{t('playback.title')}</h3>
               <button onClick={() => setShowSettingsModal(false)}><FiX size={18} /></button>
             </div>
             <div className="modal-body">
@@ -7603,8 +7575,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   onChange={e => setPlaybackSettings(prev => ({ ...prev, colorAllWhiteAtStart: e.target.checked }))}
                 />
                 <div className="setting-text">
-                  <span>Värvi valgeks</span>
-                  <small>Kõik detailid valgeks enne mängimist</small>
+                  <span>{t('playback.colorWhite')}</span>
+                  <small>{t('playback.colorWhiteDesc')}</small>
                 </div>
               </label>
 
@@ -7616,8 +7588,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   onChange={e => setPlaybackSettings(prev => ({ ...prev, colorPreviousDayBlack: e.target.checked }))}
                 />
                 <div className="setting-text">
-                  <span>Eelmine päev mustaks</span>
-                  <small>Uue päeva alguses</small>
+                  <span>{t('playback.previousDayBlack')}</span>
+                  <small>{t('playback.previousDayBlackDesc')}</small>
                 </div>
               </label>
 
@@ -7632,8 +7604,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   }))}
                 />
                 <div className="setting-text">
-                  <span>Iga päev erinev värv</span>
-                  <small>Tühistab eelmise päeva mustaks</small>
+                  <span>{t('playback.eachDayDifferentColor')}</span>
+                  <small>{t('playback.eachDayDifferentColorDesc')}</small>
                 </div>
               </label>
 
@@ -7646,8 +7618,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   onChange={e => setPlaybackSettings(prev => ({ ...prev, progressiveReveal: e.target.checked }))}
                 />
                 <div className="setting-text">
-                  <span>Järk-järguline ehitus</span>
-                  <small>Peida detailid, kuva järjest graafiku järgi</small>
+                  <span>{t('playback.progressiveConstruction')}</span>
+                  <small>{t('playback.progressiveConstructionDesc')}</small>
                 </div>
               </label>
 
@@ -7663,8 +7635,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   }))}
                 />
                 <div className="setting-text">
-                  <span>Päevade kaupa</span>
-                  <small>Mängi päev korraga, mitte detail haaval</small>
+                  <span>{t('playback.dayByDay')}</span>
+                  <small>{t('playback.dayByDayDesc')}</small>
                 </div>
               </label>
 
@@ -7675,8 +7647,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   onChange={e => setPlaybackSettings(prev => ({ ...prev, disableZoom: e.target.checked }))}
                 />
                 <div className="setting-text">
-                  <span>Ilma zoomita</span>
-                  <small>Ära zoomi detailide juurde, ainult märgi ja värvi</small>
+                  <span>{t('playback.noZoom')}</span>
+                  <small>{t('playback.noZoomDesc')}</small>
                 </div>
               </label>
 
@@ -7694,14 +7666,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   }))}
                 />
                 <div className="setting-text">
-                  <span>Päeva ülevaade</span>
-                  <small>Päeva lõpus näita kõiki detaile korraga</small>
+                  <span>{t('playback.dayOverview')}</span>
+                  <small>{t('playback.dayOverviewDesc')}</small>
                 </div>
               </label>
 
               {playbackSettings.showDayOverview && (
                 <div className="setting-duration">
-                  <span>Ülevaate kestus:</span>
+                  <span>{t('playback.overviewDuration')}</span>
                   <select
                     value={playbackSettings.dayOverviewDuration}
                     onChange={e => setPlaybackSettings(prev => ({ ...prev, dayOverviewDuration: Number(e.target.value) }))}
@@ -7726,7 +7698,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         <button
           className="collapse-all-btn"
           onClick={toggleAllCollapsed}
-          title={allDatesCollapsed ? "Ava kõik" : "Sulge kõik"}
+          title={allDatesCollapsed ? t('ui.open') : t('ui.hide')}
         >
           {allDatesCollapsed ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
         </button>
@@ -7759,7 +7731,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           <button
             className={`filter-btn ${activeFilters.size > 0 || isWeightFilterActive ? 'active' : ''}`}
             onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-            title="Filtreeri ressursside järgi"
+            title={t('schedule.filterByResources')}
           >
             <FiFilter size={14} />
             {(activeFilters.size > 0 || isWeightFilterActive) && (
@@ -7769,15 +7741,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           {showFilterDropdown && (
             <div className="filter-dropdown">
               <div className="filter-header">
-                <span>Filtreeri</span>
+                <span>{t('common:buttons.filter')}</span>
                 {(activeFilters.size > 0 || isWeightFilterActive) && (
                   <button className="filter-clear-all" onClick={clearFilters}>
-                    Tühista
+                    {t('filter.cancel')}
                   </button>
                 )}
               </div>
               <div className="filter-section">
-                <div className="filter-section-title">Hoiatused</div>
+                <div className="filter-section-title">{t('filter.warnings')}</div>
                 <label className={`filter-option ${activeFilters.has('warning') ? 'active' : ''}`}>
                   <input
                     type="checkbox"
@@ -7785,7 +7757,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onChange={() => toggleFilter('warning')}
                   />
                   <FiAlertTriangle size={12} className="filter-icon warning" />
-                  <span>Tarnehoiatusega</span>
+                  <span>{t('filter.deliveryWarning')}</span>
                 </label>
                 <label className={`filter-option ${activeFilters.has('no_method') ? 'active' : ''}`}>
                   <input
@@ -7793,11 +7765,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     checked={activeFilters.has('no_method')}
                     onChange={() => toggleFilter('no_method')}
                   />
-                  <span>Ressursid määramata</span>
+                  <span>{t('schedule.resourcesUnassigned')}</span>
                 </label>
               </div>
               <div className="filter-section">
-                <div className="filter-section-title">Masinad</div>
+                <div className="filter-section-title">{t('filter.machines')}</div>
                 <label className={`filter-option ${activeFilters.has('crane_1') ? 'active' : ''}`}>
                   <input
                     type="checkbox"
@@ -7805,7 +7777,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onChange={() => toggleFilter('crane_1')}
                   />
                   <img src="/icons/crane.png" alt="" className="filter-method-icon" />
-                  <span>1 Kraana</span>
+                  <span>{t('filter.oneCrane')}</span>
                 </label>
                 <label className={`filter-option ${activeFilters.has('crane_2plus') ? 'active' : ''}`}>
                   <input
@@ -7814,7 +7786,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onChange={() => toggleFilter('crane_2plus')}
                   />
                   <img src="/icons/crane.png" alt="" className="filter-method-icon" />
-                  <span>2+ Kraanat</span>
+                  <span>{t('filter.twoPlusCranes')}</span>
                 </label>
                 <label className={`filter-option ${activeFilters.has('forklift') ? 'active' : ''}`}>
                   <input
@@ -7823,7 +7795,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onChange={() => toggleFilter('forklift')}
                   />
                   <img src="/icons/forklift.png" alt="" className="filter-method-icon" />
-                  <span>Teleskooplaadur</span>
+                  <span>{t('resources.forklift')}</span>
                 </label>
                 <label className={`filter-option ${activeFilters.has('poomtostuk') ? 'active' : ''}`}>
                   <input
@@ -7832,7 +7804,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onChange={() => toggleFilter('poomtostuk')}
                   />
                   <img src="/icons/poomtostuk.png" alt="" className="filter-method-icon" />
-                  <span>Korvtõstuk</span>
+                  <span>{t('resources.poomtostuk')}</span>
                 </label>
                 <label className={`filter-option ${activeFilters.has('kaartostuk') ? 'active' : ''}`}>
                   <input
@@ -7841,7 +7813,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onChange={() => toggleFilter('kaartostuk')}
                   />
                   <img src="/icons/kaartostuk.png" alt="" className="filter-method-icon" />
-                  <span>Käärtõstuk</span>
+                  <span>{t('resources.kaartostuk')}</span>
                 </label>
                 <label className={`filter-option ${activeFilters.has('manual') ? 'active' : ''}`}>
                   <input
@@ -7850,11 +7822,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onChange={() => toggleFilter('manual')}
                   />
                   <img src="/icons/manual.png" alt="" className="filter-method-icon" />
-                  <span>Käsitsi</span>
+                  <span>{t('resources.manual')}</span>
                 </label>
               </div>
               <div className="filter-section">
-                <div className="filter-section-title">Tööjõud</div>
+                <div className="filter-section-title">{t('filter.labor')}</div>
                 <label className={`filter-option ${activeFilters.has('troppija') ? 'active' : ''}`}>
                   <input
                     type="checkbox"
@@ -7862,7 +7834,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onChange={() => toggleFilter('troppija')}
                   />
                   <img src="/icons/troppija.png" alt="" className="filter-method-icon" />
-                  <span>Troppija</span>
+                  <span>{t('resources.troppija')}</span>
                 </label>
                 <label className={`filter-option ${activeFilters.has('monteerija') ? 'active' : ''}`}>
                   <input
@@ -7871,7 +7843,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onChange={() => toggleFilter('monteerija')}
                   />
                   <img src="/icons/monteerija.png" alt="" className="filter-method-icon" />
-                  <span>Monteerija</span>
+                  <span>{t('resources.monteerija')}</span>
                 </label>
                 <label className={`filter-option ${activeFilters.has('keevitaja') ? 'active' : ''}`}>
                   <input
@@ -7880,13 +7852,13 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onChange={() => toggleFilter('keevitaja')}
                   />
                   <img src="/icons/keevitaja.png" alt="" className="filter-method-icon" />
-                  <span>Keevitaja</span>
+                  <span>{t('resources.keevitaja')}</span>
                 </label>
               </div>
               {weightBounds.hasWeights && (
                 <div className="filter-section">
                   <div className="filter-section-title">
-                    Kaal (kg)
+                    {t('schedule.weightKg')}
                     {isWeightFilterActive && (
                       <button
                         className="weight-filter-clear"
@@ -7895,7 +7867,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                           setWeightFilterMax(null);
                         }}
                       >
-                        Tühista
+                        {t('filter.cancel')}
                       </button>
                     )}
                   </div>
@@ -7962,13 +7934,13 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             <FiCalendar size={48} />
             {searchQuery ? (
               <>
-                <p>Otsingu tulemused puuduvad</p>
-                <p className="hint">Proovi teistsugust otsingut</p>
+                <p>{t('schedule.searchNoResults')}</p>
+                <p className="hint">{t('schedule.searchNoResultsHint')}</p>
               </>
             ) : (
               <>
-                <p>Graafik on tühi</p>
-                <p className="hint">Vali mudelilt detailid ja kliki kalendris kuupäevale</p>
+                <p>{t('schedule.emptySchedule')}</p>
+                <p className="hint">{t('schedule.emptyScheduleHint')}</p>
               </>
             )}
           </div>
@@ -8022,22 +7994,22 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         setContextMenuMonth(new Date(y, m - 1, 1));
                         setDateContextMenu({ x: e.clientX, y: e.clientY, sourceDate: date });
                       }}
-                      title="Paremklõps: muuda kuupäeva"
+                      title={t('schedule.rightClickChangeDate')}
                     >{formatDateShort(date)}</span>
                     {isDateLocked(date) && (
-                      <span className="lock-indicator" title="Lukustatud">
+                      <span className="lock-indicator" title={t('schedule.locked')}>
                         <FiLock size={10} />
-                        Lukus
+                        {t('schedule.lockedShort')}
                       </span>
                     )}
                     <span className="date-header-spacer" />
-                    <span className="date-count">{items.length} tk</span>
+                    <span className="date-count">{items.length} {t('schedule.pcs')}</span>
                     {/* Quick-add button - shows when unscheduled items are selected */}
                     {unscheduledCount > 0 && (
                       <button
                         className="date-quick-add-btn"
                         onClick={(e) => { e.stopPropagation(); addUnscheduledToDate(date); }}
-                        title={`Lisa ${unscheduledCount} valitud detaili sellele kuupäevale`}
+                        title={t('schedule.addSelectedToDate', { count: unscheduledCount })}
                       >
                         <FiPlus size={12} />
                         <span className="quick-add-count">{unscheduledCount}</span>
@@ -8049,7 +8021,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         <button
                           className="date-screenshot-btn"
                           onClick={(e) => { e.stopPropagation(); screenshotDate(date); }}
-                          title="Tee pilt kõigist päeva detailidest"
+                          title={t('schedule.screenshotAllDayDetails')}
                         >
                           <FiCamera size={12} />
                         </button>
@@ -8065,7 +8037,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     <button
                       className="date-comment-btn"
                       onClick={(e) => { e.stopPropagation(); openCommentModal('date', date); }}
-                      title="Päeva kommentaarid"
+                      title={t('schedule.dayComments')}
                     >
                       <FiMessageSquare size={13} />
                       {getCommentCount('date', date) > 0 && (
@@ -8081,19 +8053,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         setDateMenuOpenUpward(spaceBelow < 250);
                         setDateMenuId(dateMenuId === date ? null : date);
                       }}
-                      title="Rohkem valikuid"
+                      title={t('schedule.moreOptions')}
                     >
                       <FiMoreVertical size={14} />
                     </button>
                     {/* Date menu dropdown */}
                     {dateMenuId === date && (
                       <div className={`date-menu-dropdown ${dateMenuOpenUpward ? 'open-upward' : ''}`} onClick={(e) => e.stopPropagation()}>
-                        <div className="date-menu-section-title">Markupid</div>
+                        <div className="date-menu-section-title">{t('schedule.markupsSection')}</div>
                         <button
                           className="date-menu-option"
                           onClick={() => createMarkupsForDate(date, 'position')}
                         >
-                          <span className="menu-icon">📍</span> Positsioon
+                          <span className="menu-icon">📍</span> {t('schedule.positionMarkup')}
                         </button>
                         <button
                           className="date-menu-option"
@@ -8105,20 +8077,20 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                           className="date-menu-option"
                           onClick={() => createMarkupsForDate(date, 'both')}
                         >
-                          <span className="menu-icon">📋</span> Positsioon + Mark
+                          <span className="menu-icon">📋</span> {t('schedule.positionAndMark')}
                         </button>
                         <button
                           className="date-menu-option"
                           onClick={() => createMarkupsForDate(date, 'delivery')}
                         >
-                          <span className="menu-icon">🚚</span> Kuupäev + Veok
+                          <span className="menu-icon">🚚</span> {t('schedule.dateVehicle')}
                         </button>
                         <div className="date-menu-divider" />
                         <button
                           className="date-menu-option delete"
                           onClick={() => removeAllMarkups()}
                         >
-                          <span className="menu-icon">🗑️</span> Eemalda markupid
+                          <span className="menu-icon">🗑️</span> {t('schedule.removeMarkups')}
                         </button>
                         {/* Add selected unscheduled items section */}
                         {(() => {
@@ -8142,7 +8114,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                     setDateMenuId(null);
                                   }}
                                 >
-                                  <span className="menu-icon">➕</span> Lisa valitud detailid ({unscheduledCount})
+                                  <span className="menu-icon">➕</span> {t('schedule.addSelectedItems', { count: unscheduledCount })}
                                 </button>
                               </>
                             );
@@ -8177,7 +8149,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                   className="date-menu-option delete"
                                   onClick={() => removeSelectedFromDate(date)}
                                 >
-                                  <span className="menu-icon">➖</span> Eemalda valitud ({removeCount})
+                                  <span className="menu-icon">➖</span> {t('schedule.removeSelectedItems', { count: removeCount })}
                                 </button>
                               </>
                             );
@@ -8196,7 +8168,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                           disabled={isDateLocked(date)}
                         >
                           <FiEdit3 size={12} style={{ marginRight: '6px' }} />
-                          Muuda päeva ({items.length})
+                          {t('schedule.editDay', { count: items.length })}
                         </button>
                         {/* Lock/Unlock day */}
                         {(() => {
@@ -8212,10 +8184,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                 <button
                                   className="date-menu-option"
                                   disabled={true}
-                                  title="Kuu on lukustatud"
+                                  title={t('schedule.monthLocked')}
                                 >
                                   <FiLock size={12} style={{ marginRight: '6px' }} />
-                                  Päev lukustatud (kuu lukus)
+                                  {t('schedule.dayLockedByMonth')}
                                 </button>
                               </>
                             );
@@ -8234,12 +8206,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                 {isDayLocked ? (
                                   <>
                                     <FiUnlock size={12} style={{ marginRight: '6px' }} />
-                                    Ava päev
+                                    {t('schedule.openDay')}
                                   </>
                                 ) : (
                                   <>
                                     <FiLock size={12} style={{ marginRight: '6px' }} />
-                                    Lukusta päev
+                                    {t('schedule.lockDay')}
                                   </>
                                 )}
                               </button>
@@ -8254,7 +8226,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                           disabled={isDateLocked(date)}
                         >
                           <FiTrash2 size={12} style={{ marginRight: '6px' }} />
-                          Kustuta päev ({items.length})
+                          {t('schedule.deleteDay', { count: items.length })}
                         </button>
                       </div>
                     )}
@@ -8386,7 +8358,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                 setItemMenuId(itemMenuId === item.id ? null : item.id);
                                 setDatePickerItemId(null);
                               }}
-                              title="Menüü"
+                              title={t('schedule.menu')}
                             >
                               <FiMoreVertical size={14} />
                             </button>
@@ -8405,7 +8377,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                   disabled={idx === 0}
                                 >
                                   <FiArrowUp size={12} />
-                                  <span>Liiguta üles</span>
+                                  <span>{t('schedule.moveItemUp')}</span>
                                 </button>
                                 <button
                                   className={`item-menu-option ${idx === items.length - 1 ? 'disabled' : ''}`}
@@ -8418,7 +8390,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                   disabled={idx === items.length - 1}
                                 >
                                   <FiArrowDown size={12} />
-                                  <span>Liiguta alla</span>
+                                  <span>{t('schedule.moveItemDown')}</span>
                                 </button>
                                 <button
                                   className="item-menu-option"
@@ -8428,7 +8400,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                   }}
                                 >
                                   <FiCalendar size={12} />
-                                  <span>Muuda kuupäeva</span>
+                                  <span>{t('schedule.changeDateItem')}</span>
                                 </button>
                                 <button
                                   className="item-menu-option delete"
@@ -8438,7 +8410,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                   }}
                                 >
                                   <FiTrash2 size={12} />
-                                  <span>Kustuta</span>
+                                  <span>{t('schedule.deleteItem')}</span>
                                 </button>
                               </div>
                             )}
@@ -8447,7 +8419,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                             {datePickerItemId === item.id && (
                               <div className="date-picker-dropdown" onClick={(e) => e.stopPropagation()}>
                                 <div className="date-picker-header">
-                                  {selectedItemIds.size > 1 ? `Liiguta ${selectedItemIds.size} detaili` : 'Vali uus kuupäev'}
+                                  {selectedItemIds.size > 1 ? t('schedule.moveSelectedItems', { count: selectedItemIds.size }) : t('schedule.selectNewDate')}
                                 </div>
                                 <div className="date-picker-list">
                                   {getDatePickerDates().map(d => (
@@ -8486,13 +8458,13 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             className="context-menu-item"
             onClick={() => updateItemInstallMethodCount(listItemContextMenu.itemId, 1)}
           >
-            x1 (üks)
+            {t('schedule.timesOne')}
           </div>
           <div
             className="context-menu-item"
             onClick={() => updateItemInstallMethodCount(listItemContextMenu.itemId, 2)}
           >
-            x2 (kaks)
+            {t('schedule.timesTwo')}
           </div>
         </div>
       )}
@@ -8645,13 +8617,13 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         <div className="modal-overlay" onClick={() => setShowScheduledEditModal(false)}>
           <div className="scheduled-edit-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Muuda {scheduledEditItems.length} detaili</h3>
+              <h3>{t('schedule.editItemsCount', { count: scheduledEditItems.length })}</h3>
               <button onClick={() => setShowScheduledEditModal(false)}><FiX size={18} /></button>
             </div>
             <div className="modal-body">
               {/* Date picker */}
               <div className="edit-section">
-                <label>Kuupäev:</label>
+                <label>{t('schedule.dateLabel')}</label>
                 <input
                   type="date"
                   value={scheduledEditDate}
@@ -8662,7 +8634,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
               {/* Resources */}
               <div className="edit-section">
-                <label>Ressursid:</label>
+                <label>{t('schedule.resourcesLabel')}</label>
                 <div className="resource-grid">
                   {INSTALL_METHODS.map(method => (
                     <div key={method.key} className="resource-item">
@@ -8714,7 +8686,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   className="btn-secondary"
                   onClick={() => setShowScheduledEditModal(false)}
                 >
-                  Tühista
+                  {t('common:buttons.cancel')}
                 </button>
                 <button
                   className="btn-primary"
@@ -8724,7 +8696,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                       return;
                     }
 
-                    saveUndoState(`${scheduledEditItems.length} detaili muutmine`);
+                    saveUndoState(t('schedule.editItemsUndo', { count: scheduledEditItems.length }));
 
                     // Check if date is changing - need to calculate new sort_order
                     const originalDate = scheduledEditItems[0]?.scheduled_date;
@@ -8790,7 +8762,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         });
                       }
 
-                      setMessage(`${scheduledEditItems.length} detaili uuendatud`);
+                      setMessage(t('schedule.itemsUpdated', { count: scheduledEditItems.length }));
                       setShowScheduledEditModal(false);
                       // Clear selection after edit
                       setSelectedItemIds(new Set());
@@ -8800,7 +8772,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     }
                   }}
                 >
-                  Salvesta
+                  {t('actions.save')}
                 </button>
               </div>
             </div>
@@ -8814,13 +8786,13 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         <div className="modal-overlay" onClick={() => setEditDayModalDate(null)}>
           <div className="comment-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Muuda päeva: {formatDateShort(editDayModalDate)} ({editDayModalItemCount} detaili)</h3>
+              <h3>{t('schedule.editDayTitle', { date: formatDateShort(editDayModalDate), count: editDayModalItemCount })}</h3>
               <button onClick={() => setEditDayModalDate(null)}><FiX size={18} /></button>
             </div>
             <div className="comment-modal-body">
               <div className="edit-day-form">
                 <div className="form-group">
-                  <label>Uus kuupäev (valikuline):</label>
+                  <label>{t('schedule.newDateOptional')}</label>
                   <input
                     type="date"
                     value={editDayNewDate}
@@ -8829,28 +8801,28 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   />
                 </div>
                 <div className="form-group">
-                  <label>Ressurss (valikuline):</label>
+                  <label>{t('schedule.resourceOptional')}</label>
                   <input
                     type="text"
                     value={editDayResource}
                     onChange={e => setEditDayResource(e.target.value)}
-                    placeholder="Nt: Kraana 1, Meeskond A"
+                    placeholder={t('schedule.resourcePlaceholder')}
                     className="form-input"
                   />
                 </div>
                 <div className="form-group">
-                  <label>Märkmed (valikuline):</label>
+                  <label>{t('schedule.notesOptional')}</label>
                   <textarea
                     value={editDayNotes}
                     onChange={e => setEditDayNotes(e.target.value)}
-                    placeholder="Lisainfo või märkmed..."
+                    placeholder={t('schedule.additionalInfoPlaceholder')}
                     rows={3}
                     className="form-input"
                   />
                 </div>
                 <div className="edit-day-info">
                   <FiAlertCircle size={14} />
-                  <span>Muudatused rakenduvad kõigile {editDayModalItemCount} detailile sel päeval</span>
+                  <span>{t('schedule.changesApplyToAll', { count: editDayModalItemCount })}</span>
                 </div>
                 <div className="modal-actions">
                   <button
@@ -8858,7 +8830,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onClick={() => setEditDayModalDate(null)}
                     disabled={savingEditDay}
                   >
-                    Tühista
+                    {t('common:buttons.cancel')}
                   </button>
                   <button
                     className="save-btn"
@@ -8883,9 +8855,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   ? (() => {
                       const item = scheduleItems.find(i => i.id === commentModalTarget.id);
                       const itemDate = item ? new Date(item.scheduled_date).toLocaleDateString('et-EE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
-                      return `Kommentaarid: ${item?.assembly_mark || ''} (${itemDate})`;
+                      return t('schedule.commentsTitle', { name: item?.assembly_mark || '', date: itemDate });
                     })()
-                  : `Kommentaarid: ${new Date(commentModalTarget.id).toLocaleDateString('et-EE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+                  : t('schedule.commentsDateTitle', { date: new Date(commentModalTarget.id).toLocaleDateString('et-EE', { day: '2-digit', month: '2-digit', year: 'numeric' }) })
                 }
               </h3>
               <button onClick={() => setShowCommentModal(false)}><FiX size={18} /></button>
@@ -8894,7 +8866,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
               {/* Existing comments */}
               <div className="comments-list">
                 {getCommentsFor(commentModalTarget.type, commentModalTarget.id).length === 0 ? (
-                  <div className="no-comments">Kommentaare pole</div>
+                  <div className="no-comments">{t('schedule.noComments')}</div>
                 ) : (
                   getCommentsFor(commentModalTarget.type, commentModalTarget.id).map(comment => {
                     const isAdmin = checkIsAdmin(user);
@@ -8902,9 +8874,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     const canDelete = isAdmin || isOwner;
 
                     const roleLabels: Record<string, string> = {
-                      admin: 'Admin',
-                      inspector: 'Inspektor',
-                      viewer: 'Vaatleja'
+                      admin: t('schedule.roleAdmin'),
+                      inspector: t('schedule.roleInspector'),
+                      viewer: t('schedule.roleViewer')
                     };
 
                     return (
@@ -8943,7 +8915,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 <textarea
                   value={newCommentText}
                   onChange={e => setNewCommentText(e.target.value)}
-                  placeholder="Lisa kommentaar..."
+                  placeholder={t('schedule.addCommentPlaceholder')}
                   rows={3}
                   className="comment-textarea"
                 />
@@ -8966,16 +8938,16 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           <div className="settings-modal compact assembly-modal">
             <div className="modal-body" style={{ textAlign: 'center', padding: '24px' }}>
               <p style={{ marginBottom: '16px', color: '#374151' }}>
-                Jätkamine pole võimalik, kuna lülitasid Assembly valiku välja.
+                {t('schedule.cannotContinueAssemblyOff')}
               </p>
               <p style={{ marginBottom: '20px', color: '#6b7280', fontSize: '13px' }}>
-                Paigaldusgraafiku kasutamiseks peab Assembly Selection olema sisse lülitatud.
+                {t('schedule.assemblySelectionRequired')}
               </p>
               <button
                 className="assembly-enable-btn"
                 onClick={enableAssemblySelection}
               >
-                Lülita Assembly Selection sisse
+                {t('schedule.enableAssemblySelection')}
               </button>
             </div>
           </div>

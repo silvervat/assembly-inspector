@@ -547,11 +547,11 @@ export default function AdminScreen({
       try {
         await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
         await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
-        const result = { status: 'success' as const, message: 'Mudel lähtestatud!' };
+        const result = { status: 'success' as const, message: t('viewer.modelReset') };
         setGuidControllerResult(result);
         return result;
       } catch (e: any) {
-        const result = { status: 'error' as const, message: e.message || 'Viga lähtestamisel' };
+        const result = { status: 'error' as const, message: e.message || t('resetError') };
         setGuidControllerResult(result);
         return result;
       }
@@ -565,7 +565,7 @@ export default function AdminScreen({
       .filter(g => g.length > 0);
 
     if (guids.length === 0) {
-      const result = { status: 'error' as const, message: 'Sisesta vähemalt üks GUID!' };
+      const result = { status: 'error' as const, message: t('guid.enterAtLeastOne') };
       setGuidControllerResult(result);
       return result;
     }
@@ -577,7 +577,7 @@ export default function AdminScreen({
       // Get all loaded models
       const models = await api.viewer.getModels();
       if (!models || models.length === 0) {
-        const result = { status: 'error' as const, message: 'Mudeleid pole laaditud!' };
+        const result = { status: 'error' as const, message: t('viewer.noModelsLoaded') };
         setGuidControllerResult(result);
         setGuidControllerLoading(false);
         return result;
@@ -607,7 +607,7 @@ export default function AdminScreen({
       }
 
       if (foundObjects.length === 0) {
-        const result = { status: 'error' as const, message: `GUID-e ei leitud! (${guids.length} otsitud)` };
+        const result = { status: 'error' as const, message: `${t('viewer.guidsNotFound', { count: guids.length })}` };
         setGuidControllerResult(result);
         setGuidControllerLoading(false);
         return result;
@@ -633,17 +633,17 @@ export default function AdminScreen({
         case 'zoom':
           await api.viewer.setSelection({ modelObjectIds }, 'set');
           await (api.viewer as any).zoomToObjects?.(modelObjectIds);
-          result = { status: 'success', message: `Zoomitud! (${totalFound} objekti)` };
+          result = { status: 'success', message: `${t('viewer.zoomed')} (${totalFound})` };
           break;
 
         case 'select':
           await api.viewer.setSelection({ modelObjectIds }, 'set');
-          result = { status: 'success', message: `Valitud! (${totalFound} objekti)` };
+          result = { status: 'success', message: `${t('viewer.selected')} (${totalFound})` };
           break;
 
         case 'isolate':
           await api.viewer.isolateEntities(isolateEntities);
-          result = { status: 'success', message: `Isoleeritud! (${totalFound} objekti)` };
+          result = { status: 'success', message: `${t('viewer.isolated')} (${totalFound})` };
           break;
 
         case 'highlight':
@@ -654,11 +654,11 @@ export default function AdminScreen({
             { color: '#FF0000' }
           );
           await (api.viewer as any).zoomToObjects?.(modelObjectIds);
-          result = { status: 'success', message: `Esile tõstetud punasena! (${totalFound} objekti)` };
+          result = { status: 'success', message: `${t('viewer.highlightedRed')} (${totalFound})` };
           break;
 
         default:
-          result = { status: 'error', message: 'Tundmatu toiming' };
+          result = { status: 'error', message: t('error') };
       }
 
       setGuidControllerResult(result);
@@ -666,7 +666,7 @@ export default function AdminScreen({
 
     } catch (e: any) {
       console.error('GUID action error:', e);
-      const result = { status: 'error' as const, message: e.message || 'Viga toimingu tegemisel' };
+      const result = { status: 'error' as const, message: e.message || t('operationError') };
       setGuidControllerResult(result);
       return result;
     } finally {
@@ -1031,7 +1031,7 @@ export default function AdminScreen({
       guidControllerWindowRef.current = popup;
       console.log('🎯 GUID Controller window opened');
     } else {
-      alert('Popup blocker võib blokeerida akna avamist. Luba popupid selle lehe jaoks.');
+      alert(t('popupBlocked'));
     }
   };
 
@@ -1058,7 +1058,7 @@ export default function AdminScreen({
             guidControllerWindowRef.current.postMessage({
               type: 'GUID_CONTROLLER_RESULT',
               status: 'error',
-              message: e.message || 'Viga toimingu tegemisel'
+              message: e.message || t('operationError')
             }, '*');
           }
         }
@@ -1130,7 +1130,7 @@ export default function AdminScreen({
       selectionMonitorWindowRef.current = popup;
       console.log('🔍 Selection Monitor window opened');
     } else {
-      alert('Popup blocker võib blokeerida akna avamist. Luba popupid selle lehe jaoks.');
+      alert(t('popupBlocked'));
     }
   };
 
@@ -1287,13 +1287,13 @@ export default function AdminScreen({
   // Process GUID import - find objects by MS GUID and select them
   const processGuidImport = useCallback(async () => {
     if (!guidImportText.trim()) {
-      setMessage('Sisesta vähemalt üks GUID (MS)');
+      setMessage(t('guid.enterAtLeastOneMs'));
       return;
     }
 
     setGuidImportLoading(true);
     setGuidImportResults(null);
-    setMessage('Otsin objekte...');
+    setMessage(t('searchingObjects'));
 
     try {
       // Parse input - split by newlines, semicolons, or commas
@@ -1316,7 +1316,7 @@ export default function AdminScreen({
       const uniqueMsGuids = [...new Set(allMatches.map(g => g.toLowerCase()))];
 
       if (uniqueMsGuids.length === 0) {
-        setMessage('Ühtegi kehtivat GUID (MS) ei leitud');
+        setMessage(t('guid.noValidMsFound'));
         setGuidImportLoading(false);
         return;
       }
@@ -1334,7 +1334,7 @@ export default function AdminScreen({
       // Get all models
       const models = await api.viewer.getModels();
       if (!models || models.length === 0) {
-        setMessage('Mudeleid ei leitud');
+        setMessage(t('viewer.noModelsLoaded'));
         setGuidImportLoading(false);
         return;
       }
@@ -1401,14 +1401,14 @@ export default function AdminScreen({
           total: uniqueMsGuids.length
         });
 
-        setMessage(`Leitud ja valitud ${totalFound} objekti ${uniqueMsGuids.length}-st`);
+        setMessage(`${t('foundAndSelected', { found: totalFound, total: uniqueMsGuids.length })}`);
       } else {
         setGuidImportResults({
           found: 0,
           notFound,
           total: uniqueMsGuids.length
         });
-        setMessage('Ühtegi objekti ei leitud');
+        setMessage(t('viewer.noObjectsFound'));
       }
 
     } catch (error) {
@@ -1426,11 +1426,11 @@ export default function AdminScreen({
   // Export all schedule data to Excel
   const exportAllScheduleData = async () => {
     setDataExportLoading(true);
-    setDataExportStatus('Laadin andmeid...');
+    setDataExportStatus(t('viewer.loadingData'));
 
     try {
       // 1. Load all model objects from database
-      setDataExportStatus('Laadin mudeli objekte...');
+      setDataExportStatus(t('viewer.loadingModelObjects'));
       const PAGE_SIZE = 5000;
       const allModelObjects: Array<{
         guid_ifc: string;
@@ -1455,7 +1455,7 @@ export default function AdminScreen({
         if (data.length < PAGE_SIZE) break;
       }
 
-      setDataExportStatus(`Leitud ${allModelObjects.length} mudeli objekti. Laadin graafikuid...`);
+      setDataExportStatus(`${t('database.foundModelObjects', { count: allModelObjects.length })}`);
 
       // 2. Load delivery schedule items
       const { data: deliveryItems, error: delError } = await supabase
@@ -1481,7 +1481,7 @@ export default function AdminScreen({
 
       if (instError) throw instError;
 
-      setDataExportStatus('Koostan ekspordi faili...');
+      setDataExportStatus(t('database.buildingExportFile'));
 
       // Create lookup maps for faster matching
       const deliveryByGuid = new Map<string, typeof deliveryItems[0]>();
@@ -1583,7 +1583,7 @@ export default function AdminScreen({
       // Sort by assembly mark
       exportData.sort((a, b) => a.assemblyMark.localeCompare(b.assemblyMark));
 
-      setDataExportStatus(`Ekspordin ${exportData.length} rida...`);
+      setDataExportStatus(`${t('database.exporting', { count: exportData.length })}`);
 
       // Create Excel workbook
       const wb = XLSX.utils.book_new();
@@ -1592,20 +1592,20 @@ export default function AdminScreen({
       const headers = [
         'Cast Unit Mark',
         'Product Name',
-        'Kaal (kg)',
+        t('database.exportHeaders.weight'),
         'GUID IFC',
         'GUID MS',
-        'Planeeritud tarne',
-        'Tegelik saabumine',
-        'Tarne staatus',
-        'Tarne märkused',
-        'Preassembly kuupäev',
-        'Preassembly märkused',
-        'Preassembly meeskond',
-        'Paigalduse kuupäev',
-        'Paigalduse märkused',
-        'Paigalduse meeskond',
-        'Paigaldusviisid'
+        t('database.exportHeaders.plannedDelivery'),
+        t('database.exportHeaders.actualArrival'),
+        t('database.exportHeaders.deliveryStatus'),
+        t('database.exportHeaders.deliveryNotes'),
+        t('database.exportHeaders.preassemblyDate'),
+        t('database.exportHeaders.preassemblyNotes'),
+        t('database.exportHeaders.preassemblyTeam'),
+        t('database.exportHeaders.installationDate'),
+        t('database.exportHeaders.installationNotes'),
+        t('database.exportHeaders.installationTeam'),
+        t('database.exportHeaders.installMethods')
       ];
 
       // Convert data to rows
@@ -1666,7 +1666,7 @@ export default function AdminScreen({
         { wch: 30 }  // Paigaldusviisid
       ];
 
-      XLSX.utils.book_append_sheet(wb, ws, 'Kõik andmed');
+      XLSX.utils.book_append_sheet(wb, ws, t('database.allData'));
 
       // Generate filename with date
       const now = new Date();
@@ -1676,8 +1676,8 @@ export default function AdminScreen({
       // Download
       XLSX.writeFile(wb, fileName);
 
-      setDataExportStatus(`Ekspordi edukalt! ${exportData.length} rida.`);
-      setMessage(`Eksport õnnestus: ${fileName}`);
+      setDataExportStatus(`${t('database.exportedSuccessfully', { count: exportData.length })}`);
+      setMessage(`${t('database.exportSuccess')}: ${fileName}`);
 
     } catch (error) {
       console.error('Export error:', error);
@@ -1746,14 +1746,14 @@ export default function AdminScreen({
   // Save MODEL-SELECTED objects to Supabase with full info
   const saveModelSelectionToSupabase = useCallback(async () => {
     setModelObjectsLoading(true);
-    setModelObjectsStatus('Kontrollin valikut...');
+    setModelObjectsStatus(t('database.checkingSelection'));
 
     try {
       // Get current selection
       const selection = await api.viewer.getSelection();
 
       if (!selection || selection.length === 0) {
-        setModelObjectsStatus('Vali esmalt mudelis mõni detail!');
+        setModelObjectsStatus(t('database.selectDetailFirst'));
         setModelObjectsLoading(false);
         return;
       }
@@ -1764,7 +1764,7 @@ export default function AdminScreen({
         totalCount += sel.objectRuntimeIds?.length || 0;
       }
 
-      setModelObjectsStatus(`Laadin ${totalCount} objekti propertiseid...`);
+      setModelObjectsStatus(`${t('database.loadingPropertiesCount', { count: totalCount })}`);
 
       // Collect all objects with their properties
       const allRecords: {
@@ -1894,7 +1894,7 @@ export default function AdminScreen({
       }
 
       if (allRecords.length === 0) {
-        setModelObjectsStatus('Ühtegi objekti ei leitud');
+        setModelObjectsStatus(t('viewer.noObjectsFound'));
         setModelObjectsLoading(false);
         return;
       }
@@ -1943,7 +1943,7 @@ export default function AdminScreen({
         .filter((g): g is string => !!g);
 
       if (guidsToSave.length > 0) {
-        setModelObjectsStatus('Eemaldan vanad kirjed samade GUIDide jaoks...');
+        setModelObjectsStatus(t('database.removingOldRecords'));
         // Delete in batches of 100 GUIDs
         for (let i = 0; i < guidsToSave.length; i += 100) {
           const guidBatch = guidsToSave.slice(i, i + 100);
@@ -1965,7 +1965,7 @@ export default function AdminScreen({
         const batchNum = Math.floor(i / BATCH_SIZE) + 1;
         const totalBatches = Math.ceil(uniqueRecords.length / BATCH_SIZE);
 
-        setModelObjectsStatus(`Salvestan partii ${batchNum}/${totalBatches} (${savedCount}/${uniqueRecords.length})...`);
+        setModelObjectsStatus(`${t('batchProgress')} ${batchNum}/${totalBatches} (${savedCount}/${uniqueRecords.length})...`);
 
         // Insert new records (old ones with same GUID were deleted above)
         const { error } = await supabase
@@ -1976,7 +1976,7 @@ export default function AdminScreen({
           console.error(`Batch ${batchNum} error:`, error);
           errorCount += batch.length;
           // Show error details immediately
-          setModelObjectsStatus(`Viga partii ${batchNum} salvestamisel: ${error.message}`);
+          setModelObjectsStatus(`${t('error')}: ${error.message}`);
         } else {
           savedCount += batch.length;
         }
@@ -2006,17 +2006,17 @@ export default function AdminScreen({
   // Uses Assembly Selection mode: enables it, selects all, gets parent assemblies
   const saveAllAssembliesToSupabase = useCallback(async () => {
     setModelObjectsLoading(true);
-    setModelObjectsStatus('Lülitan Assembly Selection sisse...');
+    setModelObjectsStatus(t('database.enablingAssemblySelection'));
 
     try {
       // Step 1: Enable Assembly Selection mode
       await (api.viewer as any).setSettings?.({ assemblySelection: true });
 
       // Step 2: Get all objects from all models
-      setModelObjectsStatus('Laadin mudeli objekte...');
+      setModelObjectsStatus(t('viewer.loadingModelObjects'));
       const allModelObjects = await api.viewer.getObjects();
       if (!allModelObjects || allModelObjects.length === 0) {
-        setModelObjectsStatus('Ühtegi mudelit pole laetud!');
+        setModelObjectsStatus(t('viewer.noModelsLoaded'));
         setModelObjectsLoading(false);
         return;
       }
@@ -2036,7 +2036,7 @@ export default function AdminScreen({
         }
       }
 
-      setModelObjectsStatus(`Valin ${totalObjects} objekti (Assembly Selection sees)...`);
+      setModelObjectsStatus(`${t('database.selectingObjects', { count: totalObjects })}`);
 
       // Step 4: Select all objects - with Assembly Selection ON, this consolidates to parent assemblies
       await api.viewer.setSelection({ modelObjectIds }, 'set');
@@ -2048,7 +2048,7 @@ export default function AdminScreen({
       const selection = await api.viewer.getSelection();
 
       if (!selection || selection.length === 0) {
-        setModelObjectsStatus('Valik on tühi! Kontrolli, kas mudel on laetud.');
+        setModelObjectsStatus(t('database.selectionEmpty'));
         setModelObjectsLoading(false);
         return;
       }
@@ -2059,7 +2059,7 @@ export default function AdminScreen({
         assemblyCount += sel.objectRuntimeIds?.length || 0;
       }
 
-      setModelObjectsStatus(`Leitud ${assemblyCount} assembly-t. Laadin propertiseid...`);
+      setModelObjectsStatus(`${t('database.foundAssemblies', { count: assemblyCount })} ${t('viewer.loadingProperties')}`);
 
       // Helper to normalize property names
       const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
@@ -2098,7 +2098,7 @@ export default function AdminScreen({
           const parallelBatches = batches.slice(i, i + PARALLEL_BATCHES);
           const batchCount = parallelBatches.reduce((sum, b) => sum + b.length, 0);
 
-          setModelObjectsStatus(`Laadin propertiseid... ${processed}/${assemblyCount} (${PARALLEL_BATCHES}x paralleelselt)`);
+          setModelObjectsStatus(`${t('viewer.loadingProperties')} ${processed}/${assemblyCount} (${PARALLEL_BATCHES}x)`);
 
           // Process multiple batches in parallel
           const batchResults = await Promise.all(
@@ -2191,13 +2191,13 @@ export default function AdminScreen({
       }
 
       if (allRecords.length === 0) {
-        setModelObjectsStatus('Ühtegi assembly-t ei leitud! Kontrolli, kas Assembly Selection on sees.');
+        setModelObjectsStatus(t('viewer.noAssembliesFound'));
         setModelObjectsLoading(false);
         return;
       }
 
       // Deduplicate by GUID - keep record with assembly_mark if available
-      setModelObjectsStatus('Deduplitseerin GUID alusel...');
+      setModelObjectsStatus(t('database.deduplicatingGuids'));
       const guidMap = new Map<string, typeof allRecords[0]>();
       for (const record of allRecords) {
         if (!record.guid_ifc) continue;
@@ -2217,7 +2217,7 @@ export default function AdminScreen({
       console.log(`Deduplicated: ${allRecords.length} → ${uniqueRecords.length} records`);
 
       // Get existing records from database to compare
-      setModelObjectsStatus('Võrdlen andmebaasiga...');
+      setModelObjectsStatus(t('database.comparingWithDb'));
       const guidsToCheck = uniqueRecords.map(r => r.guid_ifc).filter((g): g is string => !!g);
 
       let existingGuids = new Set<string>();
@@ -2241,7 +2241,7 @@ export default function AdminScreen({
 
       // Delete existing records with same guid_ifc (to update them)
       if (guidsToCheck.length > 0) {
-        setModelObjectsStatus('Uuendan olemasolevaid kirjeid...');
+        setModelObjectsStatus(t('database.updatingExisting'));
         for (let i = 0; i < guidsToCheck.length; i += 100) {
           const guidBatch = guidsToCheck.slice(i, i + 100);
           await supabase
@@ -2258,7 +2258,7 @@ export default function AdminScreen({
 
       for (let i = 0; i < uniqueRecords.length; i += INSERT_BATCH_SIZE) {
         const batch = uniqueRecords.slice(i, i + INSERT_BATCH_SIZE);
-        setModelObjectsStatus(`Salvestan... ${savedCount}/${uniqueRecords.length}`);
+        setModelObjectsStatus(`${t('sendingToDatabase')} ${savedCount}/${uniqueRecords.length}`);
 
         const { error } = await supabase
           .from('trimble_model_objects')
@@ -2266,7 +2266,7 @@ export default function AdminScreen({
 
         if (error) {
           console.error(`KÕIK assemblyd batch error:`, error);
-          setModelObjectsStatus(`Viga salvesamisel: ${error.message}`);
+          setModelObjectsStatus(`${t('error')}: ${error.message}`);
         } else {
           savedCount += batch.length;
         }
@@ -2298,12 +2298,12 @@ export default function AdminScreen({
 
   // Delete all model objects for this project
   const deleteAllModelObjects = useCallback(async () => {
-    if (!confirm('Kas oled kindel, et soovid KÕIK kirjed kustutada?')) {
+    if (!confirm(t('database.confirmDeleteAll'))) {
       return;
     }
 
     setModelObjectsLoading(true);
-    setModelObjectsStatus('Kustutan kirjeid...');
+    setModelObjectsStatus(t('database.deletingRecords'));
 
     try {
       const { error } = await supabase
@@ -2314,7 +2314,7 @@ export default function AdminScreen({
       if (error) {
         setModelObjectsStatus(`Viga: ${error.message}`);
       } else {
-        setModelObjectsStatus('✓ Kõik kirjed kustutatud!');
+        setModelObjectsStatus(t('database.allRecordsDeleted'));
         setModelObjectsCount(0);
         setModelObjectsLastUpdated(null);
       }
@@ -2347,7 +2347,7 @@ export default function AdminScreen({
       if (error) throw error;
       setOrphanedItems(data || []);
     } catch (e: any) {
-      setMessage(`Viga orvude laadimisel: ${e.message}`);
+      setMessage(`${t('error')}: ${e.message}`);
     } finally {
       setOrphanedLoading(false);
     }
@@ -2357,7 +2357,7 @@ export default function AdminScreen({
   const deleteOrphanedItems = useCallback(async () => {
     if (!projectId) return;
     if (orphanedItems.length === 0) return;
-    if (!confirm(`Kas kustutada ${orphanedItems.length} orvuks jäänud detaili?`)) return;
+    if (!confirm(t('database.confirmDeleteOrphaned', { count: orphanedItems.length }))) return;
 
     setOrphanedLoading(true);
     try {
@@ -2369,9 +2369,9 @@ export default function AdminScreen({
 
       if (error) throw error;
       setOrphanedItems([]);
-      setMessage(`${orphanedItems.length} orvuks jäänud detaili kustutatud`);
+      setMessage(`${t('database.orphanedDeleted', { count: orphanedItems.length })}`);
     } catch (e: any) {
-      setMessage(`Viga kustutamisel: ${e.message}`);
+      setMessage(`${t('error')}: ${e.message}`);
     } finally {
       setOrphanedLoading(false);
     }
@@ -2492,7 +2492,7 @@ export default function AdminScreen({
         .eq('trimble_project_id', projectId);
       if (sheetsLogsError) console.warn('Sheets logs delete error:', sheetsLogsError);
 
-      setMessage('✓ Kõik tarnegraafiku andmed kustutatud!');
+      setMessage(t('database.allDeliveryDataDeleted'));
       setShowDeliveryDeleteConfirm(false);
       setDeliveryAdminStats({
         vehicles: 0,
@@ -2502,7 +2502,7 @@ export default function AdminScreen({
       });
     } catch (e: any) {
       console.error('Error deleting delivery data:', e);
-      setMessage(`Viga kustutamisel: ${e.message}`);
+      setMessage(`${t('error')}: ${e.message}`);
     } finally {
       setDeliveryAdminLoading(false);
     }
@@ -2581,7 +2581,7 @@ export default function AdminScreen({
           .eq('id', editingUser.id);
 
         if (error) throw error;
-        setMessage('Kasutaja uuendatud');
+        setMessage(t('users.userUpdated'));
       } else {
         // Create new user
         const { error } = await supabase
@@ -2593,7 +2593,7 @@ export default function AdminScreen({
           });
 
         if (error) throw error;
-        setMessage('Kasutaja lisatud');
+        setMessage(t('users.userAdded'));
       }
 
       setShowUserForm(false);
@@ -2649,11 +2649,11 @@ export default function AdminScreen({
         .eq('id', userId);
 
       if (error) throw error;
-      setMessage('Kasutaja kustutatud');
+      setMessage(t('users.userDeleted'));
       await loadProjectUsers();
     } catch (e: any) {
       console.error('Error deleting user:', e);
-      setMessage(`Viga kustutamisel: ${e.message}`);
+      setMessage(`${t('error')}: ${e.message}`);
     } finally {
       setUsersLoading(false);
     }
@@ -2668,7 +2668,7 @@ export default function AdminScreen({
       // Load team members from Trimble API
       const members = await (api.project as any).getMembers?.();
       if (!members || !Array.isArray(members)) {
-        setMessage('Meeskonna laadimine ebaõnnestus');
+        setMessage(t('users.teamLoadError'));
         return;
       }
 
@@ -2686,7 +2686,7 @@ export default function AdminScreen({
       );
 
       if (newMembers.length === 0) {
-        setMessage('Kõik meeskonna liikmed on juba andmebaasis');
+        setMessage(t('users.allTeamMembersInDb'));
         await loadProjectUsers();
         return;
       }
@@ -2713,7 +2713,7 @@ export default function AdminScreen({
       await loadProjectUsers();
     } catch (e: any) {
       console.error('Error syncing team members:', e);
-      setMessage(`Viga meeskonna sünkroonimisel: ${e.message}`);
+      setMessage(`${t('users.teamSyncError')}: ${e.message}`);
     } finally {
       setUsersLoading(false);
     }
@@ -2915,7 +2915,7 @@ export default function AdminScreen({
         }
         throw error;
       }
-      setMessage('Ressurss imporditud');
+      setMessage(t('resources.resourceImported'));
       await loadProjectResources();
     } catch (e: any) {
       console.error('Error importing resource:', e);
@@ -2951,7 +2951,7 @@ export default function AdminScreen({
               setMessage(`✅ ${updateCount} paigaldust uuendatud (${oldName} → ${newName})`);
               await loadInstallationResources(); // Reload to see changes
             } else {
-              setMessage('Muudatusi ei tehtud');
+              setMessage(t('resources.noChanges'));
             }
           } catch (e: any) {
             console.error('Error updating installations:', e);
@@ -2996,14 +2996,14 @@ export default function AdminScreen({
             if (updateCount > 0) {
               setMessage(`Ressurss uuendatud, ${updateCount} paigaldust uuendatud`);
             } else {
-              setMessage('Ressurss uuendatud');
+              setMessage(t('users.resourceUpdated'));
             }
           } catch (e: any) {
             console.error('Error updating installations:', e);
-            setMessage('Ressurss uuendatud (paigalduste uuendamine ebaõnnestus)');
+            setMessage(t('users.resourceUpdateFailed'));
           }
         } else {
-          setMessage('Ressurss uuendatud');
+          setMessage(t('users.resourceUpdated'));
         }
       } else {
         // Create new resource
@@ -3024,7 +3024,7 @@ export default function AdminScreen({
           }
           throw error;
         }
-        setMessage('Ressurss lisatud');
+        setMessage(t('resources.resourceAdded'));
       }
 
       setShowResourceForm(false);
@@ -3220,7 +3220,7 @@ export default function AdminScreen({
     try {
       const selection = await api.viewer.getSelection();
       if (!selection || selection.length === 0) {
-        setMessage('Vali mudelist detail');
+        setMessage(t('viewer.selectDetail'));
         setQrGenerating(false);
         return;
       }
@@ -3228,7 +3228,7 @@ export default function AdminScreen({
       const modelId = selection[0].modelId;
       const runtimeId = selection[0].objectRuntimeIds?.[0];
       if (!modelId || !runtimeId) {
-        setMessage('Vali üks detail');
+        setMessage(t('viewer.selectOneDetail'));
         setQrGenerating(false);
         return;
       }
@@ -3304,7 +3304,7 @@ export default function AdminScreen({
       }
 
       if (!guid) {
-        setMessage('Objektil puudub GUID');
+        setMessage(t('database.objectMissingGuid'));
         setQrGenerating(false);
         return;
       }
@@ -3424,10 +3424,10 @@ export default function AdminScreen({
             { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
             { animationTime: 300 }
           );
-          setMessage('Detail valitud mudelis');
+          setMessage(t('viewer.detailSelectedInModel'));
         }
       } else {
-        setMessage('Detaili ei leitud mudelis');
+        setMessage(t('viewer.detailNotFoundInModel'));
       }
     } catch (e) {
       console.error('Error selecting object:', e);
@@ -3483,7 +3483,7 @@ export default function AdminScreen({
           ? { ...q, status: 'pending', activated_by_name: null, activated_at: null, qr_data_url: qrDataUrl }
           : q
       ));
-      setMessage('Leidmine lähtestatud - saab uuesti skännida');
+      setMessage(t('qrScanner.findingReset'));
     } catch (e) {
       console.error('Error resetting QR:', e);
       setMessage(t('errors.resetError'));
@@ -3584,7 +3584,7 @@ export default function AdminScreen({
       // Check if BarcodeDetector is available
       if (!('BarcodeDetector' in window)) {
         addDebugLog('ERROR: BarcodeDetector not supported');
-        setMessage('QR skänner pole selles brauseris toetatud. Kasuta Chrome\'i.');
+        setMessage(t('qrScanner.notSupported'));
         return;
       }
       addDebugLog('BarcodeDetector OK');
@@ -3592,7 +3592,7 @@ export default function AdminScreen({
       // Check if getUserMedia is available
       if (!navigator.mediaDevices?.getUserMedia) {
         addDebugLog('ERROR: getUserMedia not supported');
-        setMessage('Kaamera API pole toetatud.');
+        setMessage(t('qrScanner.cameraApiNotSupported'));
         return;
       }
       addDebugLog('getUserMedia OK');
@@ -3675,7 +3675,7 @@ export default function AdminScreen({
               addDebugLog('Scan loop started');
             }).catch(e => {
               addDebugLog(`ERROR: Video play failed: ${e.message}`);
-              setMessage('Video ei käivitu. Kontrolli kaamera õigusi.');
+              setMessage(t('qrScanner.videoError'));
             });
           }
         };
@@ -3689,9 +3689,9 @@ export default function AdminScreen({
     } catch (e: any) {
       addDebugLog(`ERROR: ${e.name}: ${e.message}`);
       if (e.name === 'NotAllowedError') {
-        setMessage('Kaamera ligipääs keelatud. Luba kaamera kasutamine brauseri seadetes.');
+        setMessage(t('qrScanner.cameraAccessDenied'));
       } else if (e.name === 'NotFoundError') {
-        setMessage('Kaamerat ei leitud. Kontrolli, et seadmel on kaamera.');
+        setMessage(t('qrScanner.cameraNotFound'));
       } else {
         setMessage(`Kaamera viga: ${e.message}`);
       }
@@ -3806,7 +3806,7 @@ export default function AdminScreen({
             setPendingQrCode(qrCode);
             setManualLat('');
             setManualLng('');
-            setMessage('Popup blokeeritud. Sisesta koordinaadid käsitsi.');
+            setMessage(t('qrScanner.popupBlocked'));
           }
 
           setPositionCapturing(false);
@@ -3837,7 +3837,7 @@ export default function AdminScreen({
     }
 
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-      setMessage('Koordinaadid vahemikust väljas');
+      setMessage(t('qrScanner.coordinatesOutOfRange'));
       return;
     }
 
@@ -3882,7 +3882,7 @@ export default function AdminScreen({
   // Draw position circle on model (10m radius red circle)
   const drawPositionCircle = useCallback(async (position: DetailPosition) => {
     if (!position.latitude || !position.longitude) {
-      setMessage('Positsioonil puuduvad koordinaadid');
+      setMessage(t('positioner.positionMissingCoords'));
       return;
     }
 
@@ -3932,7 +3932,7 @@ export default function AdminScreen({
       // Draw a 10m radius red circle using markup API
       const markupApi = (api as any).markup;
       if (!markupApi?.addFreelineMarkups) {
-        setMessage('Markup API pole saadaval');
+        setMessage(t('positioner.markupApiNotAvailable'));
         return;
       }
 
@@ -4000,14 +4000,14 @@ export default function AdminScreen({
 
     } catch (e: any) {
       console.error('Error drawing position:', e);
-      setMessage('Viga asukoha joonistamisel: ' + e.message);
+      setMessage(t('positioner.locationDrawError') + ': ' + e.message);
     }
   }, [api, projectId]);
 
   // Remove position markup circle
   const removePositionMarkup = useCallback(async (position: DetailPosition) => {
     if (!position.markup_id) {
-      setMessage('Markup puudub');
+      setMessage(t('positioner.markupMissing'));
       return;
     }
 
@@ -4028,7 +4028,7 @@ export default function AdminScreen({
         p.id === position.id ? { ...p, markup_id: null } : p
       ));
 
-      setMessage('Markup eemaldatud');
+      setMessage(t('positioner.markupRemoved'));
     } catch (e: any) {
       console.error('Error removing markup:', e);
       setMessage(t('errors.markupRemoveError'));
@@ -4043,7 +4043,7 @@ export default function AdminScreen({
     }
 
     try {
-      setMessage('Lisan markeri...');
+      setMessage(t('positioner.addingMarker'));
 
       // Convert GPS to model coordinates
       const modelCoords = wgs84ToBelgianLambert72(position.latitude, position.longitude);
@@ -4098,12 +4098,12 @@ export default function AdminScreen({
       if (result && result.length > 0) {
         setMessage(`✅ Marker lisatud: ${position.assembly_mark || position.guid.slice(0, 8)}`);
       } else {
-        setMessage('Marker loodud');
+        setMessage(t('positioner.markerCreated'));
       }
 
     } catch (e: any) {
       console.error('Error adding GPS marker:', e);
-      setMessage('Viga markeri lisamisel: ' + e.message);
+      setMessage(t('positioner.markerAddError') + ': ' + e.message);
     }
   }, [api, projectId]);
 
@@ -4135,10 +4135,10 @@ export default function AdminScreen({
             { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
             { animationTime: 300 }
           );
-          setMessage('Detail valitud mudelis');
+          setMessage(t('viewer.detailSelectedInModel'));
         }
       } else {
-        setMessage('Detaili ei leitud mudelis');
+        setMessage(t('viewer.detailNotFoundInModel'));
       }
     } catch (e) {
       console.error('Error selecting detail:', e);
@@ -4158,7 +4158,7 @@ export default function AdminScreen({
 
       if (error) throw error;
       setPositions(prev => prev.filter(p => p.id !== position.id));
-      setMessage('Positsioon kustutatud');
+      setMessage(t('positioner.positionDeleted'));
     } catch (e) {
       console.error('Error deleting position:', e);
       setMessage(t('errors.deleteError'));
@@ -4223,7 +4223,7 @@ export default function AdminScreen({
           .eq('id', editingCameraPosition.id);
 
         if (error) throw error;
-        setMessage('Kaamera positsioon uuendatud');
+        setMessage(t('settings.cameraPositionUpdated'));
       } else {
         // Create new position with current camera state + color settings
         const cameraStateWithColors = {
@@ -4243,7 +4243,7 @@ export default function AdminScreen({
           });
 
         if (error) throw error;
-        setMessage('Kaamera positsioon salvestatud');
+        setMessage(t('settings.cameraPositionSaved'));
       }
 
       setShowCameraForm(false);
@@ -4281,11 +4281,11 @@ export default function AdminScreen({
         .eq('id', positionId);
 
       if (error) throw error;
-      setMessage('Kaamera positsioon kustutatud');
+      setMessage(t('settings.cameraPositionDeleted'));
       await loadCameraPositions();
     } catch (e: any) {
       console.error('Error deleting camera position:', e);
-      setMessage(`Viga kustutamisel: ${e.message}`);
+      setMessage(`${t('error')}: ${e.message}`);
     } finally {
       setCameraPositionsLoading(false);
     }
@@ -4320,7 +4320,7 @@ export default function AdminScreen({
         .eq('id', position.id);
 
       if (error) throw error;
-      setMessage('Kaamera positsioon uuendatud praeguse vaatega');
+      setMessage(t('settings.cameraPositionUpdatedWithView'));
       await loadCameraPositions();
     } catch (e: any) {
       console.error('Error updating camera state:', e);
@@ -4408,7 +4408,7 @@ export default function AdminScreen({
           guid_set: data.guid_set || 'Tekla Common',
           guid_prop: data.guid_prop || 'GUID',
         });
-        setMessage('Seaded laetud andmebaasist');
+        setMessage(t('settings.settingsLoadedFromDb'));
       } else {
         setMessage(t('settings.usingDefaultSettings'));
       }
@@ -4482,7 +4482,7 @@ export default function AdminScreen({
       const selection = await api.viewer.getSelection();
 
       if (!selection || selection.length === 0) {
-        setMessage('Vali mudelist vähemalt üks detail ja proovi uuesti!');
+        setMessage(t('viewer.selectAtLeastOneDetail'));
         setPropertiesScanning(false);
         return;
       }
@@ -4557,7 +4557,7 @@ export default function AdminScreen({
 
       setAvailableProperties(propertiesList);
       if (propertiesList.length === 0) {
-        setMessage('Valitud objektidel pole propertiseid. Proovi valida teisi objekte.');
+        setMessage(t('viewer.noPropertiesFound'));
       } else {
         setMessage(`Leitud ${propertiesList.length} property't valitud objektidest`);
       }
@@ -4572,7 +4572,7 @@ export default function AdminScreen({
   // Discover properties for selected objects
   const discoverProperties = useCallback(async () => {
     setIsLoading(true);
-    setMessage('Otsin propertiseid...');
+    setMessage(t('viewer.scanningProperties'));
     setSelectedObjects([]);
 
     try {
@@ -4580,7 +4580,7 @@ export default function AdminScreen({
       const selection = await api.viewer.getSelection();
 
       if (!selection || selection.length === 0) {
-        setMessage('Vali mudelist vähemalt üks detail!');
+        setMessage(t('viewer.selectAtLeastOneDetailShort'));
         setIsLoading(false);
         return;
       }
@@ -4878,7 +4878,7 @@ export default function AdminScreen({
 
     } catch (error) {
       console.error('Property discovery failed:', error);
-      setMessage('Viga propertiste laadimisel: ' + (error as Error).message);
+      setMessage(t('viewer.propertyLoadError') + ': ' + (error as Error).message);
     } finally {
       setIsLoading(false);
     }
@@ -4925,7 +4925,7 @@ export default function AdminScreen({
   const copyToClipboard = () => {
     const text = safeStringify(selectedObjects, 2);
     navigator.clipboard.writeText(text).then(() => {
-      setMessage('Kopeeritud lõikelauale!');
+      setMessage(t('viewer.copiedToClipboard'));
       setTimeout(() => setMessage(''), 2000);
     });
   };
@@ -4952,7 +4952,7 @@ export default function AdminScreen({
       const selection = await api.viewer.getSelection();
 
       if (!selection || selection.length === 0) {
-        setMessage('Vali mudelist vähemalt üks detail!');
+        setMessage(t('viewer.selectAtLeastOneDetailShort'));
         setAssemblyListLoading(false);
         return;
       }
@@ -5166,7 +5166,7 @@ export default function AdminScreen({
       setMessage(`Leitud ${assemblies.length} detaili ja ${boltMap.size} erinevat polti`);
     } catch (error) {
       console.error('Assembly collection failed:', error);
-      setMessage('Viga andmete kogumisel: ' + (error as Error).message);
+      setMessage(t('viewer.dataCollectError') + ': ' + (error as Error).message);
     } finally {
       setAssemblyListLoading(false);
     }
@@ -5178,7 +5178,7 @@ export default function AdminScreen({
     const rows = assemblyList.map(a => `${a.castUnitMark}\t${a.productName}\t${a.weight}`);
     const text = [header, ...rows].join('\n');
     navigator.clipboard.writeText(text).then(() => {
-      setMessage('Detailide list kopeeritud!');
+      setMessage(t('viewer.assemblyListCopied'));
       setTimeout(() => setMessage(''), 2000);
     });
   };
@@ -5191,7 +5191,7 @@ export default function AdminScreen({
     );
     const text = [header, ...rows].join('\n');
     navigator.clipboard.writeText(text).then(() => {
-      setMessage('Poltide kokkuvõte kopeeritud!');
+      setMessage(t('viewer.boltSummaryCopied'));
       setTimeout(() => setMessage(''), 2000);
     });
   };
@@ -5413,44 +5413,43 @@ export default function AdminScreen({
       {showOrphanedPanel && (
         <div className="function-explorer">
           <div className="function-explorer-header">
-            <h3>Orvuks jäänud detailid</h3>
+            <h3>{t('database.orphanedItems')}</h3>
             <button className="close-btn" onClick={() => setShowOrphanedPanel(false)}>✕</button>
           </div>
           <div className="function-explorer-content">
             <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
-              Detailid mis on graafikus aga pole üheski veokis (vehicle_id = NULL).
-              Need tekivad kui detail eemaldatakse veokist aga mitte graafikust.
+              {t('database.orphanedDescription')}
             </p>
             {orphanedLoading ? (
               <div style={{ textAlign: 'center', padding: '20px' }}>
                 <FiRefreshCw className="spin" size={24} />
-                <p>Laadin...</p>
+                <p>{t('loading')}</p>
               </div>
             ) : orphanedItems.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '20px', color: '#059669' }}>
                 <FiCheck size={32} />
-                <p>Orvusid ei leitud! ✓</p>
+                <p>{t('database.noOrphanedItems')} ✓</p>
               </div>
             ) : (
               <>
                 <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 500 }}>Leitud: {orphanedItems.length} detaili</span>
+                  <span style={{ fontWeight: 500 }}>{t('database.foundCount', { count: orphanedItems.length })}</span>
                   <button
                     className="admin-tool-btn"
                     onClick={deleteOrphanedItems}
                     style={{ background: '#dc2626', color: 'white', padding: '6px 12px' }}
                   >
                     <FiTrash2 size={14} />
-                    <span>Kustuta kõik</span>
+                    <span>{t('database.deleteAll')}</span>
                   </button>
                 </div>
                 <div style={{ maxHeight: '300px', overflow: 'auto', fontSize: '12px' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: '#f3f4f6', position: 'sticky', top: 0 }}>
-                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Märk</th>
-                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Kuupäev</th>
-                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Lisatud</th>
+                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>{t('database.mark')}</th>
+                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>{t('database.date')}</th>
+                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>{t('database.added')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -5473,7 +5472,7 @@ export default function AdminScreen({
               disabled={orphanedLoading}
             >
               <FiRefreshCw size={14} className={orphanedLoading ? 'spin' : ''} />
-              <span>Värskenda</span>
+              <span>{t('common:buttons.refresh')}</span>
             </button>
           </div>
         </div>
@@ -5497,7 +5496,7 @@ export default function AdminScreen({
             }}>
               <h4>🎯 GUID Controller</h4>
               <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
-                Sisesta GUID(id) ja kontrolli mudelit. Toetab mitut GUID-i (eralda komaga, semikooloniga või reavahetusega).
+                {t('guid.controllerDescription')}
               </p>
 
               {/* Input area */}
@@ -5607,7 +5606,7 @@ export default function AdminScreen({
                     try {
                       await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
                       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
-                      setGuidControllerResult({ status: 'success', message: 'Mudel lähtestatud!' });
+                      setGuidControllerResult({ status: 'success', message: t('viewer.modelReset') });
                     } catch (e: any) {
                       setGuidControllerResult({ status: 'error', message: e.message });
                     }
@@ -5739,7 +5738,7 @@ export default function AdminScreen({
                           if (!selected || selected.length === 0) {
                             updateFunctionResult(buttonConfig.key, {
                               status: 'error',
-                              error: 'Vali mudelist detail(id)!'
+                              error: t('selectFirstDetailFromModel')
                             });
                             return;
                           }
@@ -5757,7 +5756,7 @@ export default function AdminScreen({
                           if (!modelId || allRuntimeIds.length === 0) {
                             updateFunctionResult(buttonConfig.key, {
                               status: 'error',
-                              error: 'Valitud objektidel puudub modelId või runtimeId'
+                              error: t('viewer.missingModelIdOrRuntimeId')
                             });
                             return;
                           }
@@ -5863,7 +5862,7 @@ export default function AdminScreen({
                       if (!selected || selected.length === 0) {
                         updateFunctionResult("exportSelectedWithBolts", {
                           status: 'error',
-                          error: 'Vali mudelist detailid!'
+                          error: t('viewer.selectDetailsFromModel')
                         });
                         return;
                       }
@@ -5881,7 +5880,7 @@ export default function AdminScreen({
                       if (!modelId || allRuntimeIds.length === 0) {
                         updateFunctionResult("exportSelectedWithBolts", {
                           status: 'error',
-                          error: 'Valitud objektidel puudub info'
+                          error: t('viewer.selectedObjectsMissingInfo')
                         });
                         return;
                       }
@@ -6080,7 +6079,7 @@ export default function AdminScreen({
                       // Create Excel workbook with language-aware headers
                       const headers = exportLanguage === 'en'
                         ? ['Cast Unit Mark', 'Weight (kg)', 'Position Code', 'Product Name', 'Bolt Name', 'Standard', 'Size', 'Length', 'Bolts', 'Nut Name', 'Nut Type', 'Nuts', 'Washer Name', 'Washer Type', 'Washer ⌀', 'Washers']
-                        : ['Cast Unit Mark', 'Kaal (kg)', 'Asukoha kood', 'Toote nimi', 'Poldi nimi', 'Standard', 'Suurus', 'Pikkus', 'Polte', 'Mutri nimi', 'Mutri tüüp', 'Mutreid', 'Seib nimi', 'Seibi tüüp', 'Seibi ⌀', 'Seibe'];
+                        : ['Cast Unit Mark', t('database.exportHeaders.weight'), 'Asukoha kood', 'Toote nimi', 'Poldi nimi', 'Standard', 'Suurus', 'Pikkus', 'Polte', 'Mutri nimi', t('viewer.boltHeaders.nutType'), t('viewer.boltHeaders.nutCount'), t('viewer.boltHeaders.washerName'), t('viewer.boltHeaders.washerType'), t('viewer.boltHeaders.washerDiameter'), t('viewer.boltHeaders.washerCount')];
                       const wsData = [
                         headers,
                         ...exportRows.map(r => [
@@ -6216,7 +6215,7 @@ export default function AdminScreen({
                       }
 
                       const wb = XLSX.utils.book_new();
-                      const mainSheetName = exportLanguage === 'en' ? 'Details+Bolts' : 'Detailid+Poldid';
+                      const mainSheetName = exportLanguage === 'en' ? 'Details+Bolts' : t('viewer.sheetName');
                       XLSX.utils.book_append_sheet(wb, ws, mainSheetName);
 
                       // Create Bolt Summary sheet - aggregate all bolts and washers for ordering
@@ -6321,16 +6320,16 @@ export default function AdminScreen({
                             ...sortedBolts.map(b => [b.name, b.standard, b.size, b.length, b.count]),
                             [],
                             ['MUTRID', '', ''],
-                            ['Nimi', 'Tüüp', 'Kogus'],
+                            [t('viewer.boltHeaders.name'), t('viewer.boltHeaders.type'), t('viewer.boltHeaders.count')],
                             ...sortedNuts.map(n => [n.name, n.type, n.count]),
                             [],
                             ['SEIBID', '', '', ''],
-                            ['Nimi', 'Tüüp', 'Diameeter', 'Kogus'],
+                            [t('viewer.boltHeaders.name'), t('viewer.boltHeaders.type'), t('viewer.boltHeaders.diameter'), t('viewer.boltHeaders.count')],
                             ...sortedWashers.map(w => [w.name, w.type, w.diameter, w.count])
                           ];
 
                       const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-                      const summarySheetName = exportLanguage === 'en' ? 'Summary' : 'Kokkuvõte';
+                      const summarySheetName = exportLanguage === 'en' ? 'Summary' : t('viewer.boltHeaders.summary');
                       XLSX.utils.book_append_sheet(wb, wsSummary, summarySheetName);
 
                       // Download with language-aware filename
@@ -6365,7 +6364,7 @@ export default function AdminScreen({
                       if (!selected || selected.length === 0) {
                         updateFunctionResult("copyBoltsToClipboard", {
                           status: 'error',
-                          error: 'Vali mudelist detailid!'
+                          error: t('viewer.selectDetailsFromModel')
                         });
                         return;
                       }
@@ -6383,7 +6382,7 @@ export default function AdminScreen({
                       if (!modelId || allRuntimeIds.length === 0) {
                         updateFunctionResult("copyBoltsToClipboard", {
                           status: 'error',
-                          error: 'Valitud objektidel puudub info'
+                          error: t('viewer.selectedObjectsMissingInfo')
                         });
                         return;
                       }
@@ -6496,11 +6495,11 @@ export default function AdminScreen({
                       for (const b of sortedBolts) {
                         clipText += `${b.name}\t${b.standard}\t${b.count}\n`;
                       }
-                      clipText += '\nMUTRID\nNimi\tTüüp\tKogus\n';
+                      clipText += t('viewer.boltHeaders.nutSection');
                       for (const n of sortedNuts) {
                         clipText += `${n.name}\t${n.type}\t${n.count}\n`;
                       }
-                      clipText += '\nSEIBID\nNimi\tTüüp\tKogus\n';
+                      clipText += t('viewer.boltHeaders.washerSection');
                       for (const w of sortedWashers) {
                         clipText += `${w.name}\t${w.type}\t${w.count}\n`;
                       }
@@ -6542,7 +6541,7 @@ export default function AdminScreen({
                       if (!selected || selected.length === 0) {
                         updateFunctionResult("addBoltMarkups", {
                           status: 'error',
-                          error: 'Vali mudelist detailid!'
+                          error: t('viewer.selectDetailsFromModel')
                         });
                         return;
                       }
@@ -6560,7 +6559,7 @@ export default function AdminScreen({
                       if (!modelId || allRuntimeIds.length === 0) {
                         updateFunctionResult("addBoltMarkups", {
                           status: 'error',
-                          error: 'Valitud objektidel puudub info'
+                          error: t('viewer.selectedObjectsMissingInfo')
                         });
                         return;
                       }
@@ -6687,7 +6686,7 @@ export default function AdminScreen({
                       if (markupsToCreate.length === 0) {
                         updateFunctionResult("addBoltMarkups", {
                           status: 'error',
-                          error: 'Polte ei leitud (või washer count = 0)'
+                          error: t('viewer.noBoltsFound')
                         });
                         return;
                       }
@@ -6735,7 +6734,7 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="🗑️ Eemalda markupid"
+                  name={t('viewer.fn.removeMarkups')}
                   result={functionResults["removeBoltMarkups"]}
                   onClick={async () => {
                     updateFunctionResult("removeBoltMarkups", { status: 'pending' });
@@ -6744,7 +6743,7 @@ export default function AdminScreen({
                       if (!allMarkups || allMarkups.length === 0) {
                         updateFunctionResult("removeBoltMarkups", {
                           status: 'success',
-                          result: 'Markupe pole'
+                          result: t('viewer.noMarkups')
                         });
                         return;
                       }
@@ -6752,7 +6751,7 @@ export default function AdminScreen({
                       if (allIds.length === 0) {
                         updateFunctionResult("removeBoltMarkups", {
                           status: 'success',
-                          result: 'Markupe pole'
+                          result: t('viewer.noMarkups')
                         });
                         return;
                       }
@@ -6775,7 +6774,7 @@ export default function AdminScreen({
 
             {/* LEADER MARKUPS section - markups with vertical line */}
             <div className="function-section">
-              <h4>📍 Detailide markupid (joonega)</h4>
+              <h4>{t('viewer.sections.detailMarkups')}</h4>
               <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
                 Vali mudelist detailid ja lisa markupid vertikaalse joonega. Joon algab detaili keskelt, teksti saab lohistada.
               </p>
@@ -6784,7 +6783,7 @@ export default function AdminScreen({
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px', padding: '10px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                 {/* Color picker */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#374151' }}>🎨 Värv</label>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#374151' }}>{t('viewer.sections.markupColor')}</label>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     <input
                       type="color"
@@ -6814,7 +6813,7 @@ export default function AdminScreen({
 
                 {/* Leader height */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#374151' }}>📏 Joone kõrgus (cm)</label>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#374151' }}>{t('viewer.sections.lineHeight')}</label>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     <input
                       type="number"
@@ -6859,7 +6858,7 @@ export default function AdminScreen({
                       if (!selected || selected.length === 0) {
                         updateFunctionResult("addLeaderMarkups", {
                           status: 'error',
-                          error: 'Vali mudelist detailid!'
+                          error: t('viewer.selectDetailsFromModel')
                         });
                         return;
                       }
@@ -6877,7 +6876,7 @@ export default function AdminScreen({
                       if (!modelId || allRuntimeIds.length === 0) {
                         updateFunctionResult("addLeaderMarkups", {
                           status: 'error',
-                          error: 'Valitud objektidel puudub info'
+                          error: t('viewer.selectedObjectsMissingInfo')
                         });
                         return;
                       }
@@ -6962,7 +6961,7 @@ export default function AdminScreen({
                       if (markupsToCreate.length === 0) {
                         updateFunctionResult("addLeaderMarkups", {
                           status: 'error',
-                          error: 'Detaile assembly markiga ei leitud'
+                          error: t('viewer.noAssemblyMarksFound')
                         });
                         return;
                       }
@@ -7012,7 +7011,7 @@ export default function AdminScreen({
                 />
 
                 <FunctionButton
-                  name="🎨 Muuda kõigi markupite värvi"
+                  name={t('viewer.fn.changeMarkupColor')}
                   result={functionResults["changeAllMarkupColors"]}
                   onClick={async () => {
                     updateFunctionResult("changeAllMarkupColors", { status: 'pending' });
@@ -7033,7 +7032,7 @@ export default function AdminScreen({
                       if (!allMarkups || allMarkups.length === 0) {
                         updateFunctionResult("changeAllMarkupColors", {
                           status: 'error',
-                          error: 'Markupeid ei leitud'
+                          error: t('viewer.markupsNotFound')
                         });
                         return;
                       }
@@ -7069,7 +7068,7 @@ export default function AdminScreen({
                 />
 
                 <FunctionButton
-                  name="📋 Näita kõiki markupeid"
+                  name={t('viewer.fn.showAllMarkups')}
                   result={functionResults["listAllMarkups"]}
                   onClick={async () => {
                     updateFunctionResult("listAllMarkups", { status: 'pending' });
@@ -7078,13 +7077,13 @@ export default function AdminScreen({
                       if (!allMarkups || allMarkups.length === 0) {
                         updateFunctionResult("listAllMarkups", {
                           status: 'success',
-                          result: 'Markupeid ei ole'
+                          result: t('viewer.noMarkups')
                         });
                         return;
                       }
 
                       const summary = allMarkups.slice(0, 10).map((m: any, i: number) =>
-                        `${i + 1}. ID:${m.id} "${m.text || '(tühi)'}" ${m.color || ''}`
+                        `${i + 1}. ID:${m.id} "${m.text || t('viewer.empty')}" ${m.color || ''}`
                       ).join('\n');
 
                       updateFunctionResult("listAllMarkups", {
@@ -7101,7 +7100,7 @@ export default function AdminScreen({
                 />
 
                 <FunctionButton
-                  name="🗑️ Eemalda kõik markupid"
+                  name={t('viewer.fn.removeAllMarkups')}
                   result={functionResults["removeAllLeaderMarkups"]}
                   onClick={async () => {
                     updateFunctionResult("removeAllLeaderMarkups", { status: 'pending' });
@@ -7110,7 +7109,7 @@ export default function AdminScreen({
                       if (!allMarkups || allMarkups.length === 0) {
                         updateFunctionResult("removeAllLeaderMarkups", {
                           status: 'success',
-                          result: 'Markupeid polnud'
+                          result: t('viewer.noMarkups')
                         });
                         return;
                       }
@@ -7149,7 +7148,7 @@ export default function AdminScreen({
 
             {/* CAMERA / VIEW section */}
             <div className="function-section">
-              <h4>📷 Kaamera / Vaated</h4>
+              <h4>{t('viewer.sections.camera')}</h4>
               <div className="function-grid">
                 <FunctionButton
                   name="setCamera('top')"
@@ -7206,7 +7205,7 @@ export default function AdminScreen({
 
             {/* PROJECTION section */}
             <div className="function-section">
-              <h4>🔲 Projektsiooni tüüp</h4>
+              <h4>{t('viewer.sections.projectionType')}</h4>
               <div className="function-grid">
                 <FunctionButton
                   name="Perspective"
@@ -7304,7 +7303,7 @@ export default function AdminScreen({
               </p>
               <div className="function-grid">
                 <FunctionButton
-                  name="📏 Mõõda laius"
+                  name={t('viewer.fn.measureWidth')}
                   result={functionResults["measureWidth"]}
                   onClick={() => testFunction("measureWidth", async () => {
                     const width = window.innerWidth;
@@ -7383,7 +7382,7 @@ export default function AdminScreen({
 
             {/* CAST UNIT MARK SEARCH section */}
             <div className="function-section">
-              <h4>🔍 Cast Unit Mark otsing</h4>
+              <h4>{t('viewer.sections.castUnitMarkSearch')}</h4>
               <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
                 Otsi andmebaasist detaile Cast Unit Mark järgi. <strong>NB:</strong> Kasuta enne "Saada andmebaasi" funktsiooni!
               </p>
@@ -7401,7 +7400,7 @@ export default function AdminScreen({
                       searchBtn?.click();
                     }
                   }}
-                  placeholder="Sisesta mark (nt: S-101, B-22...)"
+                  placeholder={t('viewer.enterMark')}
                   style={{
                     flex: 1,
                     padding: '8px 12px',
@@ -7441,7 +7440,7 @@ export default function AdminScreen({
                           .filter(r => r.assembly_mark && r.guid_ifc)
                           .map(r => ({ mark: r.assembly_mark!, guid_ifc: r.guid_ifc! }));
                         if (marks.length === 0) {
-                          throw new Error('Andmebaasis on objekte, aga assembly_mark on tühi kõigil!');
+                          throw new Error(t('database.assemblyMarksEmpty'));
                         }
                         setAllMarksCache(marks);
                       }
@@ -7586,7 +7585,7 @@ export default function AdminScreen({
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                     <thead>
                       <tr style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
-                        <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Mark</th>
+                        <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>{t('viewer.mark')}</th>
                         <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', width: '60px' }}>Match</th>
                         <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', width: '80px' }}>Tegevus</th>
                       </tr>
@@ -7661,7 +7660,7 @@ export default function AdminScreen({
 
             {/* CAST UNIT MARK SEARCH FROM MODEL section */}
             <div className="function-section">
-              <h4>🔎 Cast Unit Mark otsing (MUDELIST)</h4>
+              <h4>{t('viewer.sections.castUnitMarkSearchModel')}</h4>
               <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
                 Otsi otse mudeli propertidest. <strong>Aeglasem</strong>, aga ei vaja andmebaasi!
               </p>
@@ -7678,7 +7677,7 @@ export default function AdminScreen({
                       searchBtn?.click();
                     }
                   }}
-                  placeholder="Sisesta mark (nt: S-101, B-22...)"
+                  placeholder={t('viewer.enterMark')}
                   style={{
                     flex: 1,
                     padding: '8px 12px',
@@ -7705,7 +7704,7 @@ export default function AdminScreen({
                       if (marks.length === 0) {
                         // Load from model - SLOW!
                         const allObjs = await api.viewer.getObjects();
-                        if (!allObjs || allObjs.length === 0) throw new Error('Mudeleid pole laetud!');
+                        if (!allObjs || allObjs.length === 0) throw new Error(t('viewer.noModelsLoaded'));
 
                         const collectedMarks: typeof marks = [];
 
@@ -7770,7 +7769,7 @@ export default function AdminScreen({
                         }
 
                         if (collectedMarks.length === 0) {
-                          throw new Error('Mudelist ei leitud ühtegi Cast Unit Mark väärtust!');
+                          throw new Error(t('viewer.noCastUnitMarks'));
                         }
                         marks = collectedMarks;
                         setModelMarksCache(marks);
@@ -7835,7 +7834,7 @@ export default function AdminScreen({
                     setModelMarksCache([]);
                     try {
                       const allObjs = await api.viewer.getObjects();
-                      if (!allObjs || allObjs.length === 0) throw new Error('Mudeleid pole laetud!');
+                      if (!allObjs || allObjs.length === 0) throw new Error(t('viewer.noModelsLoaded'));
 
                       const collectedMarks: typeof modelMarksCache = [];
 
@@ -7916,7 +7915,7 @@ export default function AdminScreen({
                     cursor: 'pointer'
                   }}
                 >
-                  {modelSearchLoading ? '⏳ Laen...' : '📋 Laadi kõik (aeglane)'}
+                  {modelSearchLoading ? '⏳ Laen...' : t('viewer.loadAllSlow')}
                 </button>
                 <button
                   onClick={async () => {
@@ -7951,7 +7950,7 @@ export default function AdminScreen({
 
                       // Get all objects
                       const allObjs = await api.viewer.getObjects();
-                      if (!allObjs || allObjs.length === 0) throw new Error('Mudeleid pole laetud!');
+                      if (!allObjs || allObjs.length === 0) throw new Error(t('viewer.noModelsLoaded'));
 
                       // Select ALL objects - with Assembly Selection ON, this consolidates to parents
                       const modelObjectIds: { modelId: string; objectRuntimeIds: number[] }[] = [];
@@ -7968,7 +7967,7 @@ export default function AdminScreen({
 
                       // Get selection back - now only parent assemblies
                       const selection = await api.viewer.getSelection();
-                      if (!selection || selection.length === 0) throw new Error('Valik tühi!');
+                      if (!selection || selection.length === 0) throw new Error(t('database.selectionEmptyShort'));
 
                       const collectedMarks: typeof modelMarksCache = [];
 
@@ -8045,7 +8044,7 @@ export default function AdminScreen({
                       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
 
                       if (collectedMarks.length === 0) {
-                        throw new Error('Ühtegi Cast Unit Mark väärtust ei leitud!');
+                        throw new Error(t('viewer.noCastUnitMarks'));
                       }
 
                       // Save to localStorage
@@ -8133,7 +8132,7 @@ export default function AdminScreen({
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                     <thead>
                       <tr style={{ background: '#fef3c7', position: 'sticky', top: 0 }}>
-                        <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #fbbf24' }}>Mark</th>
+                        <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #fbbf24' }}>{t('viewer.mark')}</th>
                         <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #fbbf24', width: '60px' }}>Match</th>
                         <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #fbbf24', width: '80px' }}>Tegevus</th>
                       </tr>
@@ -8275,15 +8274,15 @@ export default function AdminScreen({
                       const language = navigator.language || 'Unknown';
 
                       const result = {
-                        '🖥️ Operatsioonisüsteem': os,
+                        [t('viewer.sections.operatingSystem')]: os,
                         '🌐 Brauser': browser,
-                        '📱 Seadme tüüp': deviceType,
+                        [t('viewer.sections.deviceType')]: deviceType,
                         '📐 Ekraani suurus': `${screenWidth} × ${screenHeight} px`,
                         '📏 Viewport suurus': `${viewportWidth} × ${viewportHeight} px`,
                         '🔍 Pixel ratio': `${pixelRatio}x`,
                         '👆 Touch support': touchSupport ? 'Jah' : 'Ei',
                         '🧠 RAM (hinnang)': memory ? `${memory} GB` : 'N/A',
-                        '📶 Ühendus': connectionType,
+                        [t('viewer.sections.connection')]: connectionType,
                         '🌍 Keel': language,
                         '📋 Platform': platform,
                       };
@@ -8315,7 +8314,7 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="📊 Võimekuse test"
+                  name={t('viewer.sections.capabilityTest')}
                   result={functionResults["performanceTest"]}
                   onClick={async () => {
                     updateFunctionResult("performanceTest", { status: 'pending' });
@@ -8470,13 +8469,13 @@ export default function AdminScreen({
               {calibrationPoint1 && calibrationPoint2 && (
                 <div className="function-grid">
                   <FunctionButton
-                    name="📐 Kalibreeritud mõõdud"
+                    name={t('viewer.fn.calibratedMeasurements')}
                     result={functionResults["calibratedMeasurement"]}
                     onClick={async () => {
                       updateFunctionResult("calibratedMeasurement", { status: 'pending' });
                       try {
                         const sel = await api.viewer.getSelection();
-                        if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                        if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                         const modelId = sel[0].modelId;
                         const runtimeIds = sel.flatMap(s => s.objectRuntimeIds || []);
@@ -8533,7 +8532,7 @@ export default function AdminScreen({
                           const dims = [
                             { label: 'Hoone-X (pikkus)', value: localWidth },
                             { label: 'Hoone-Y (laius)', value: localDepth },
-                            { label: 'Z (kõrgus)', value: height }
+                            { label: t('viewer.zHeight'), value: height }
                           ].sort((a, b) => b.value - a.value);
 
                           return {
@@ -8586,13 +8585,13 @@ export default function AdminScreen({
                     }}
                   />
                   <FunctionButton
-                    name="📏 Kalibreeritud mõõtjooned"
+                    name={t('viewer.fn.calibratedMeasurementLines')}
                     result={functionResults["calibratedMarkups"]}
                     onClick={async () => {
                       updateFunctionResult("calibratedMarkups", { status: 'pending' });
                       try {
                         const sel = await api.viewer.getSelection();
-                        if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                        if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                         const modelId = sel[0].modelId;
                         const runtimeIds = sel.flatMap(s => s.objectRuntimeIds || []);
@@ -8762,7 +8761,7 @@ export default function AdminScreen({
 
             {/* MEASUREMENT section */}
             <div className="function-section">
-              <h4>📏 Mõõtmine (Measurement)</h4>
+              <h4>{t('viewer.sections.measurement')}</h4>
               <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
                 Mõõda valitud detailide mõõtmeid ja arvuta orientatsioon.
               </p>
@@ -8774,7 +8773,7 @@ export default function AdminScreen({
                     updateFunctionResult("boundingBoxSelected", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeIds = sel.flatMap(s => s.objectRuntimeIds || []);
@@ -8816,13 +8815,13 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="📏 Alamdetailide mõõdud"
+                  name={t('viewer.fn.subDetailMeasurements')}
                   result={functionResults["childDimensions"]}
                   onClick={async () => {
                     updateFunctionResult("childDimensions", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeId = sel[0].objectRuntimeIds?.[0];
@@ -8949,7 +8948,7 @@ export default function AdminScreen({
                     updateFunctionResult("orientationCalc", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeId = sel[0].objectRuntimeIds?.[0];
@@ -9024,7 +9023,7 @@ export default function AdminScreen({
                           rotatedEstimate: {
                             xyDiagonal_mm: Math.round(xyDiagonal * 1000),
                             possibleActualLength_mm: Math.round(possibleLength * 1000),
-                            note: 'Kui objekt on pööratud, võib tegelik pikkus olla ~70% diagonaalist'
+                            note: t('viewer.rotatedObjectNote')
                           },
                           childCount: children?.length || 0
                         }, null, 2)
@@ -9035,13 +9034,13 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="📊 Kõigi mõõtude võrdlus"
+                  name={t('viewer.fn.allMeasurementsComparison')}
                   result={functionResults["allDimensionsCompare"]}
                   onClick={async () => {
                     updateFunctionResult("allDimensionsCompare", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objektid!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectsFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeIds = sel.flatMap(s => s.objectRuntimeIds || []);
@@ -9105,13 +9104,13 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="🔄 Pööratud detaili mõõdud"
+                  name={t('viewer.fn.rotatedDetailMeasurements')}
                   result={functionResults["rotatedDimensions"]}
                   onClick={async () => {
                     updateFunctionResult("rotatedDimensions", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeId = sel[0].objectRuntimeIds?.[0];
@@ -9174,8 +9173,8 @@ export default function AdminScreen({
                         };
                       } else {
                         estimates.rotationEstimates = {
-                          note: 'Objekt ei paista olevat pööratud XY tasandil',
-                          actualDimensions: 'Tõenäoliselt sama kui bbox'
+                          note: t('viewer.objectNotRotatedXY'),
+                          actualDimensions: t('viewer.probablySameAsBbox')
                         };
                       }
 
@@ -9189,13 +9188,13 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="🎯 Positsiooni arvutus"
+                  name={t('viewer.fn.positionCalculation')}
                   result={functionResults["positionCalc"]}
                   onClick={async () => {
                     updateFunctionResult("positionCalc", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeIds = sel.flatMap(s => s.objectRuntimeIds || []);
@@ -9282,13 +9281,13 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="📍 Lisa mõõtjooned (XYZ)"
+                  name={t('viewer.fn.addMeasurementLinesXYZ')}
                   result={functionResults["addMeasurementXYZ"]}
                   onClick={async () => {
                     updateFunctionResult("addMeasurementXYZ", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       for (const modelSel of sel) {
                         const modelId = modelSel.modelId;
@@ -9355,7 +9354,7 @@ export default function AdminScreen({
                     updateFunctionResult("measureAlongLength", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       for (const modelSel of sel) {
                         const modelId = modelSel.modelId;
@@ -9443,7 +9442,7 @@ export default function AdminScreen({
                     updateFunctionResult("twoObjectDistance", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali kaks objekti!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectTwoObjects'));
 
                       const allBoxes: { modelId: string; id: number; box: any }[] = [];
 
@@ -9458,7 +9457,7 @@ export default function AdminScreen({
                         }
                       }
 
-                      if (allBoxes.length < 2) throw new Error('Vali vähemalt 2 objekti!');
+                      if (allBoxes.length < 2) throw new Error(t('selectAtLeastTwoObjects'));
 
                       const box1 = allBoxes[0].box;
                       const box2 = allBoxes[1].box;
@@ -9498,13 +9497,13 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="🔲 Kõik 12 serva"
+                  name={t('viewer.fn.all12Edges')}
                   result={functionResults["all12Edges"]}
                   onClick={async () => {
                     updateFunctionResult("all12Edges", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       for (const modelSel of sel) {
                         const modelId = modelSel.modelId;
@@ -9557,20 +9556,20 @@ export default function AdminScreen({
                           return;
                         }
                       }
-                      throw new Error('Ei õnnestunud');
+                      throw new Error(t('viewer.failed'));
                     } catch (e: any) {
                       updateFunctionResult("all12Edges", { status: 'error', error: e.message });
                     }
                   }}
                 />
                 <FunctionButton
-                  name="✖️ Diagonaalid"
+                  name={t('viewer.fn.diagonals')}
                   result={functionResults["diagonals"]}
                   onClick={async () => {
                     updateFunctionResult("diagonals", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       for (const modelSel of sel) {
                         const modelId = modelSel.modelId;
@@ -9622,20 +9621,20 @@ export default function AdminScreen({
                           return;
                         }
                       }
-                      throw new Error('Ei õnnestunud');
+                      throw new Error(t('viewer.failed'));
                     } catch (e: any) {
                       updateFunctionResult("diagonals", { status: 'error', error: e.message });
                     }
                   }}
                 />
                 <FunctionButton
-                  name="📏 Pikk mõõt V2"
+                  name={t('viewer.fn.longMeasurementV2')}
                   result={functionResults["measurementV2"]}
                   onClick={async () => {
                     updateFunctionResult("measurementV2", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const results: string[] = [];
                       let objectCount = 0;
@@ -9666,11 +9665,11 @@ export default function AdminScreen({
                           // Find the longest measurement
                           const measurements = [
                             { name: 'Laius (X)', value: width },
-                            { name: 'Sügavus (Y)', value: depth },
-                            { name: 'Kõrgus (Z)', value: height },
-                            { name: 'Diag XY (põrand)', value: diagXY },
+                            { name: t('viewer.depthY'), value: depth },
+                            { name: t('viewer.heightZ'), value: height },
+                            { name: t('viewer.diagXYFloor'), value: diagXY },
                             { name: 'Diag XZ (ees)', value: diagXZ },
-                            { name: 'Diag YZ (külg)', value: diagYZ },
+                            { name: t('viewer.diagYZSide'), value: diagYZ },
                             { name: 'Ruumidiagonaal', value: diagSpace }
                           ];
 
@@ -9690,15 +9689,15 @@ export default function AdminScreen({
                             start = { positionX: minMm.x, positionY: (minMm.y + maxMm.y) / 2, positionZ: (minMm.z + maxMm.z) / 2 };
                             end = { positionX: maxMm.x, positionY: (minMm.y + maxMm.y) / 2, positionZ: (minMm.z + maxMm.z) / 2 };
                             color = { r: 255, g: 0, b: 0, a: 255 }; // Red
-                          } else if (longest.name === 'Sügavus (Y)') {
+                          } else if (longest.name === t('viewer.depthY')) {
                             start = { positionX: (minMm.x + maxMm.x) / 2, positionY: minMm.y, positionZ: (minMm.z + maxMm.z) / 2 };
                             end = { positionX: (minMm.x + maxMm.x) / 2, positionY: maxMm.y, positionZ: (minMm.z + maxMm.z) / 2 };
                             color = { r: 0, g: 255, b: 0, a: 255 }; // Green
-                          } else if (longest.name === 'Kõrgus (Z)') {
+                          } else if (longest.name === t('viewer.heightZ')) {
                             start = { positionX: (minMm.x + maxMm.x) / 2, positionY: (minMm.y + maxMm.y) / 2, positionZ: minMm.z };
                             end = { positionX: (minMm.x + maxMm.x) / 2, positionY: (minMm.y + maxMm.y) / 2, positionZ: maxMm.z };
                             color = { r: 0, g: 0, b: 255, a: 255 }; // Blue
-                          } else if (longest.name === 'Diag XY (põrand)') {
+                          } else if (longest.name === t('viewer.diagXYFloor')) {
                             start = { positionX: minMm.x, positionY: minMm.y, positionZ: (minMm.z + maxMm.z) / 2 };
                             end = { positionX: maxMm.x, positionY: maxMm.y, positionZ: (minMm.z + maxMm.z) / 2 };
                             color = { r: 0, g: 200, b: 200, a: 255 }; // Cyan
@@ -9706,7 +9705,7 @@ export default function AdminScreen({
                             start = { positionX: minMm.x, positionY: (minMm.y + maxMm.y) / 2, positionZ: minMm.z };
                             end = { positionX: maxMm.x, positionY: (minMm.y + maxMm.y) / 2, positionZ: maxMm.z };
                             color = { r: 255, g: 200, b: 0, a: 255 }; // Yellow
-                          } else if (longest.name === 'Diag YZ (külg)') {
+                          } else if (longest.name === t('viewer.diagYZSide')) {
                             start = { positionX: (minMm.x + maxMm.x) / 2, positionY: minMm.y, positionZ: minMm.z };
                             end = { positionX: (minMm.x + maxMm.x) / 2, positionY: maxMm.y, positionZ: maxMm.z };
                             color = { r: 255, g: 100, b: 150, a: 255 }; // Pink
@@ -9756,7 +9755,7 @@ export default function AdminScreen({
                     updateFunctionResult("childMeasureV2", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeId = sel[0].objectRuntimeIds?.[0];
@@ -9860,7 +9859,7 @@ export default function AdminScreen({
                     updateFunctionResult("childCorners", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeId = sel[0].objectRuntimeIds?.[0];
@@ -9978,7 +9977,7 @@ export default function AdminScreen({
                     updateFunctionResult("childDistances", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeId = sel[0].objectRuntimeIds?.[0];
@@ -9986,7 +9985,7 @@ export default function AdminScreen({
 
                       const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
                       if (!children || children.length < 2) {
-                        throw new Error('Vaja vähemalt 2 alamdetaili');
+                        throw new Error(t('viewer.needAtLeast2SubDetails'));
                       }
 
                       const childIds = children.map((c: any) => c.id);
@@ -10075,7 +10074,7 @@ export default function AdminScreen({
                     updateFunctionResult("childGaps", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeId = sel[0].objectRuntimeIds?.[0];
@@ -10083,7 +10082,7 @@ export default function AdminScreen({
 
                       const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
                       if (!children || children.length < 2) {
-                        throw new Error('Vaja vähemalt 2 alamdetaili');
+                        throw new Error(t('viewer.needAtLeast2SubDetails'));
                       }
 
                       const childIds = children.map((c: any) => c.id);
@@ -10173,13 +10172,13 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="📊 Kogu assembly mõõdud"
+                  name={t('viewer.fn.totalAssemblyMeasurements')}
                   result={functionResults["fullAssemblyMeasure"]}
                   onClick={async () => {
                     updateFunctionResult("fullAssemblyMeasure", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeId = sel[0].objectRuntimeIds?.[0];
@@ -10236,8 +10235,8 @@ export default function AdminScreen({
 
                         const dims = [
                           { name: 'X (laius)', value: width },
-                          { name: 'Y (sügavus)', value: depth },
-                          { name: 'Z (kõrgus)', value: height },
+                          { name: t('viewer.yDepth'), value: depth },
+                          { name: t('viewer.zHeight'), value: height },
                           { name: 'Ruumidiag', value: diag }
                         ].sort((a, b) => b.value - a.value);
 
@@ -10308,13 +10307,13 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="🎯 Tõstepunkt (COG)"
+                  name={t('viewer.fn.liftPoint')}
                   result={functionResults["liftingPoint"]}
                   onClick={async () => {
                     updateFunctionResult("liftingPoint", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeIds = sel.flatMap(s => s.objectRuntimeIds || []);
@@ -10359,7 +10358,7 @@ export default function AdminScreen({
                         results.push(`#${i + 1}: X=${(centerX/1000).toFixed(2)}m, Y=${(centerY/1000).toFixed(2)}m, Z=${(topZ/1000).toFixed(2)}m`);
                       }
 
-                      if (markupsToCreate.length === 0) throw new Error('Ei leidnud ühtegi objekti');
+                      if (markupsToCreate.length === 0) throw new Error(t('viewer.noObjectsFound'));
 
                       // Create freeline markups for all lifting points
                       const markupApi = api.markup as any;
@@ -10381,7 +10380,7 @@ export default function AdminScreen({
                     updateFunctionResult("geometryEdges", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeId = sel[0].objectRuntimeIds?.[0];
@@ -10398,11 +10397,11 @@ export default function AdminScreen({
                         const b = bboxes[0].boundingBox;
                         const edges = {
                           'Serv X (alumine ees)': Math.abs(b.max.x - b.min.x) * 1000,
-                          'Serv Y (alumine külg)': Math.abs(b.max.y - b.min.y) * 1000,
-                          'Serv Z (püstine)': Math.abs(b.max.z - b.min.z) * 1000,
+                          [t('viewer.edgeYBottom')]: Math.abs(b.max.y - b.min.y) * 1000,
+                          [t('viewer.edgeZVertical')]: Math.abs(b.max.z - b.min.z) * 1000,
                           'Diag alumine': Math.sqrt(Math.pow((b.max.x - b.min.x)*1000, 2) + Math.pow((b.max.y - b.min.y)*1000, 2)),
                           'Diag ees': Math.sqrt(Math.pow((b.max.x - b.min.x)*1000, 2) + Math.pow((b.max.z - b.min.z)*1000, 2)),
-                          'Diag külg': Math.sqrt(Math.pow((b.max.y - b.min.y)*1000, 2) + Math.pow((b.max.z - b.min.z)*1000, 2)),
+                          [t('viewer.diagSide')]: Math.sqrt(Math.pow((b.max.y - b.min.y)*1000, 2) + Math.pow((b.max.z - b.min.z)*1000, 2)),
                           'Ruumi diagonaal': Math.sqrt(Math.pow((b.max.x - b.min.x)*1000, 2) + Math.pow((b.max.y - b.min.y)*1000, 2) + Math.pow((b.max.z - b.min.z)*1000, 2))
                         };
 
@@ -10595,13 +10594,13 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="📐 Nurkade mõõtja"
+                  name={t('viewer.fn.angleMeasurer')}
                   result={functionResults["cornerMeasurer"]}
                   onClick={async () => {
                     updateFunctionResult("cornerMeasurer", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeId = sel[0].objectRuntimeIds?.[0];
@@ -10654,7 +10653,7 @@ export default function AdminScreen({
                       }
 
                       if (!extrusion) throw new Error('Extrusion andmed puuduvad - objekt ei ole ekstrudeeritud profiil');
-                      if (!profile) throw new Error('IfcRectangleProfile andmed puuduvad - objekt ei ole ristkülikprofiil');
+                      if (!profile) throw new Error(t('viewer.ifcRectangleProfileMissing'));
 
                       // Extract values
                       const origin = {
@@ -10675,7 +10674,7 @@ export default function AdminScreen({
                       const xDim = parseFloat(profile.XDim) || 0;
                       const yDim = parseFloat(profile.YDim) || 0;
 
-                      if (xDim === 0 || yDim === 0) throw new Error('Profiili mõõtmed on 0');
+                      if (xDim === 0 || yDim === 0) throw new Error(t('viewer.profileDimensionsZero'));
 
                       // Calculate extrusion length
                       const extLen = Math.sqrt(extrusionVec.x**2 + extrusionVec.y**2 + extrusionVec.z**2);
@@ -10789,13 +10788,13 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="📐 Nurkade mõõtja V2"
+                  name={t('viewer.fn.angleMeasurerV2')}
                   result={functionResults["cornerMeasurerV2"]}
                   onClick={async () => {
                     updateFunctionResult("cornerMeasurerV2", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeId = sel[0].objectRuntimeIds?.[0];
@@ -11048,13 +11047,13 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="📏 Mõõtmed V3 (L×W×H)"
+                  name={t('viewer.fn.dimensionsV3')}
                   result={functionResults["dimensionsV3"]}
                   onClick={async () => {
                     updateFunctionResult("dimensionsV3", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeId = sel[0].objectRuntimeIds?.[0];
@@ -11292,17 +11291,17 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="⭕ Joonista ring (r=20m)"
+                  name={t('viewer.fn.drawCircle')}
                   result={functionResults["drawCircle20m"]}
                   onClick={async () => {
                     updateFunctionResult("drawCircle20m", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeIds = sel[0].objectRuntimeIds || [];
-                      if (runtimeIds.length === 0) throw new Error('Valitud objektil puudub info');
+                      if (runtimeIds.length === 0) throw new Error(t('viewer.selectedObjectMissingInfo'));
 
                       const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeIds[0]]);
                       if (!boundingBoxes || boundingBoxes.length === 0 || !boundingBoxes[0]?.boundingBox) {
@@ -11359,17 +11358,17 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="⭕ Ring (FreelineMarkup)"
+                  name={t('viewer.fn.circleFreelineMarkup')}
                   result={functionResults["drawCircleFreeline"]}
                   onClick={async () => {
                     updateFunctionResult("drawCircleFreeline", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeIds = sel[0].objectRuntimeIds || [];
-                      if (runtimeIds.length === 0) throw new Error('Valitud objektil puudub info');
+                      if (runtimeIds.length === 0) throw new Error(t('viewer.selectedObjectMissingInfo'));
 
                       const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeIds[0]]);
                       if (!boundingBoxes || boundingBoxes.length === 0 || !boundingBoxes[0]?.boundingBox) {
@@ -11428,17 +11427,17 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="⭕ Ring 500mm joontega"
+                  name={t('viewer.fn.circleLines')}
                   result={functionResults["drawCircle500mmLines"]}
                   onClick={async () => {
                     updateFunctionResult("drawCircle500mmLines", { status: 'pending' });
                     try {
                       const sel = await api.viewer.getSelection();
-                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                      if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                       const modelId = sel[0].modelId;
                       const runtimeIds = sel[0].objectRuntimeIds || [];
-                      if (runtimeIds.length === 0) throw new Error('Valitud objektil puudub info');
+                      if (runtimeIds.length === 0) throw new Error(t('viewer.selectedObjectMissingInfo'));
 
                       const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeIds[0]]);
                       if (!boundingBoxes || boundingBoxes.length === 0 || !boundingBoxes[0]?.boundingBox) {
@@ -11495,7 +11494,7 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="🗑️ Eemalda mõõtjooned"
+                  name={t('viewer.fn.removeMeasurementLines')}
                   result={functionResults["removeMeasurements"]}
                   onClick={async () => {
                     updateFunctionResult("removeMeasurements", { status: 'pending' });
@@ -11503,7 +11502,7 @@ export default function AdminScreen({
                       await api.markup.removeMarkups(undefined);
                       updateFunctionResult("removeMeasurements", {
                         status: 'success',
-                        result: 'Kõik mõõtjooned eemaldatud'
+                        result: t('viewer.allMeasurementLinesRemoved')
                       });
                     } catch (e: any) {
                       updateFunctionResult("removeMeasurements", { status: 'error', error: e.message });
@@ -11512,19 +11511,19 @@ export default function AdminScreen({
                 />
               </div>
               <div style={{ marginTop: '12px', padding: '10px', background: '#fefce8', borderRadius: '6px', fontSize: '11px', color: '#854d0e' }}>
-                <strong>⚠️ Pööratud objektide mõõtmine:</strong>
+                <strong>{t('viewer.rotatedObjectsWarning')}</strong>
                 <ul style={{ marginTop: '4px', paddingLeft: '16px' }}>
                   <li>Bounding box on alati telgedega joondatud (axis-aligned)</li>
-                  <li>Pööratud objekti tegelik pikkus ≈ diagonaal × cos(nurk)</li>
-                  <li>45° pööratud objektil: tegelik pikkus ≈ diagonaal × 0.707</li>
-                  <li>Kasuta "Alamdetailide mõõdud" täpsemaks arvutuseks</li>
+                  <li>{t('viewer.rotatedObjectLength')}</li>
+                  <li>{t('viewer.rotated45Length')}</li>
+                  <li>{t('viewer.useSubDetailMeasurements')}</li>
                 </ul>
               </div>
             </div>
 
             {/* SELECTION section */}
             <div className="function-section">
-              <h4>🎯 Valik (Selection)</h4>
+              <h4>{t('viewer.sections.selection')}</h4>
               <div className="function-grid">
                 <FunctionButton
                   name="getSelection()"
@@ -11537,7 +11536,7 @@ export default function AdminScreen({
                   onClick={() => testFunction("clearSelection()", () => api.viewer.setSelection({ modelObjectIds: [] }, 'set'))}
                 />
                 <FunctionButton
-                  name="🔲 Vali KÕIK mudelist (Assembly)"
+                  name={t('viewer.fn.selectAllFromModel')}
                   result={functionResults["selectAllFromModel"]}
                   onClick={async () => {
                     updateFunctionResult("selectAllFromModel", { status: 'pending' });
@@ -11548,7 +11547,7 @@ export default function AdminScreen({
                       // Step 2: Get all objects from all models
                       const allModelObjects = await api.viewer.getObjects();
                       if (!allModelObjects || allModelObjects.length === 0) {
-                        updateFunctionResult("selectAllFromModel", { status: 'error', error: 'Mudeleid pole laetud' });
+                        updateFunctionResult("selectAllFromModel", { status: 'error', error: t('viewer.noModelsLoaded') });
                         return;
                       }
 
@@ -11567,7 +11566,7 @@ export default function AdminScreen({
                       }
 
                       if (totalCount === 0) {
-                        updateFunctionResult("selectAllFromModel", { status: 'error', error: 'Objekte ei leitud' });
+                        updateFunctionResult("selectAllFromModel", { status: 'error', error: t('viewer.noObjectsFound') });
                         return;
                       }
 
@@ -11595,14 +11594,14 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="🔍 Kontrolli hierarhiat"
+                  name={t('viewer.fn.checkHierarchy')}
                   result={functionResults["checkHierarchy"]}
                   onClick={async () => {
                     updateFunctionResult("checkHierarchy", { status: 'pending' });
                     try {
                       const allModelObjects = await api.viewer.getObjects();
                       if (!allModelObjects || allModelObjects.length === 0) {
-                        updateFunctionResult("checkHierarchy", { status: 'error', error: 'Mudeleid pole' });
+                        updateFunctionResult("checkHierarchy", { status: 'error', error: t('viewer.noModelsLoaded') });
                         return;
                       }
 
@@ -11650,7 +11649,7 @@ export default function AdminScreen({
                     try {
                       const allModelObjects = await api.viewer.getObjects();
                       if (!allModelObjects || allModelObjects.length === 0) {
-                        updateFunctionResult("countAssembliesVsStandalone", { status: 'error', error: 'Mudeleid pole' });
+                        updateFunctionResult("countAssembliesVsStandalone", { status: 'error', error: t('viewer.noModelsLoaded') });
                         return;
                       }
 
@@ -11716,7 +11715,7 @@ export default function AdminScreen({
                     try {
                       const allModelObjects = await api.viewer.getObjects();
                       if (!allModelObjects || allModelObjects.length === 0) {
-                        updateFunctionResult("countRootAssemblies", { status: 'error', error: 'Mudeleid pole' });
+                        updateFunctionResult("countRootAssemblies", { status: 'error', error: t('viewer.noModelsLoaded') });
                         return;
                       }
 
@@ -11829,14 +11828,14 @@ export default function AdminScreen({
                   }}
                 />
                 <FunctionButton
-                  name="🔲 Vali AINULT assemblyd (kellel on alamdetailid)"
+                  name={t('viewer.fn.selectOnlyAssemblies')}
                   result={functionResults["selectOnlyAssemblies"]}
                   onClick={async () => {
                     updateFunctionResult("selectOnlyAssemblies", { status: 'pending' });
                     try {
                       const allModelObjects = await api.viewer.getObjects();
                       if (!allModelObjects || allModelObjects.length === 0) {
-                        updateFunctionResult("selectOnlyAssemblies", { status: 'error', error: 'Mudeleid pole' });
+                        updateFunctionResult("selectOnlyAssemblies", { status: 'error', error: t('viewer.noModelsLoaded') });
                         return;
                       }
 
@@ -11924,7 +11923,7 @@ export default function AdminScreen({
                     try {
                       const selection = await api.viewer.getSelection();
                       if (!selection || selection.length === 0) {
-                        updateFunctionResult("countCastUnitMark", { status: 'error', error: 'Vali esmalt objektid!' });
+                        updateFunctionResult("countCastUnitMark", { status: 'error', error: t('selectObjectsFirst') });
                         return;
                       }
 
@@ -12019,7 +12018,7 @@ export default function AdminScreen({
                       <span style={{ fontSize: '11px', fontWeight: 600 }}>
                         📍 Baaspunkt: {shapeBasePoint
                           ? `X: ${shapeBasePoint.x.toFixed(0)}mm, Y: ${shapeBasePoint.y.toFixed(0)}mm, Z: ${shapeBasePoint.z.toFixed(0)}mm`
-                          : 'Pole määratud (kasutatakse absoluutseid koordinaate)'
+                          : t('viewer.notSetUsingAbsolute')
                         }
                       </span>
                     </div>
@@ -12029,7 +12028,7 @@ export default function AdminScreen({
                           try {
                             const selection = await api.viewer.getSelection();
                             if (!selection || selection.length === 0) {
-                              alert('⚠️ Vali esmalt üks detail mudelist!');
+                              alert(t('selectFirstDetailFromModel'));
                               return;
                             }
 
@@ -12080,7 +12079,7 @@ export default function AdminScreen({
                         <button
                           onClick={() => {
                             setShapeBasePoint(null);
-                            alert('🔄 Baaspunkt tühjendatud');
+                            alert(t('basePointCleared'));
                           }}
                           style={{
                             padding: '4px 10px',
@@ -12130,7 +12129,7 @@ export default function AdminScreen({
                         const textarea = document.getElementById('shapeCodeInput') as HTMLTextAreaElement;
                         const code = textarea?.value?.trim();
                         if (!code) {
-                          alert('Sisesta kujundi kood!');
+                          alert(t('enterShapeCode'));
                           return;
                         }
 
@@ -12224,7 +12223,7 @@ export default function AdminScreen({
                           }
 
                           if (freelineEntries.length === 0) {
-                            alert('Jooni ei leitud! Kontrolli formaati.');
+                            alert(t('viewer.linesNotFound'));
                             return;
                           }
 
@@ -12232,7 +12231,7 @@ export default function AdminScreen({
 
                           const basePointInfo = shapeBasePoint
                             ? `\n📍 Baaspunkt: X:${shapeBasePoint.x.toFixed(0)}, Y:${shapeBasePoint.y.toFixed(0)}, Z:${shapeBasePoint.z.toFixed(0)}mm`
-                            : '\n📍 Absoluutsed koordinaadid (baaspunkt pole määratud)';
+                            : t('viewer.absoluteCoordinates');
 
                           alert(`✅ Joonistatud ${totalLines} joont (${freelineEntries.length} kujundit)${basePointInfo}`);
                         } catch (e: any) {
@@ -12275,7 +12274,7 @@ export default function AdminScreen({
 
             {/* VISIBILITY / COLOR section */}
             <div className="function-section">
-              <h4>🎨 Nähtavus / Värvid</h4>
+              <h4>{t('viewer.sections.visibility')}</h4>
               <div className="function-grid">
                 <FunctionButton
                   name="Reset All Colors"
@@ -12334,7 +12333,7 @@ export default function AdminScreen({
                   result={functionResults["isolateSelection()"]}
                   onClick={() => testFunction("isolateSelection()", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     // Convert selection to IModelEntities format for isolateEntities
                     const modelEntities = sel.map((s: any) => ({
                       modelId: s.modelId,
@@ -12353,7 +12352,7 @@ export default function AdminScreen({
                   result={functionResults["Color Selection RED"]}
                   onClick={() => testFunction("Color Selection RED", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 255, g: 0, b: 0, a: 255 } });
                   })}
                 />
@@ -12362,7 +12361,7 @@ export default function AdminScreen({
                   result={functionResults["Color Selection GREEN"]}
                   onClick={() => testFunction("Color Selection GREEN", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 0, g: 255, b: 0, a: 255 } });
                   })}
                 />
@@ -12371,7 +12370,7 @@ export default function AdminScreen({
                   result={functionResults["Color Selection BLACK"]}
                   onClick={() => testFunction("Color Selection BLACK", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 0, g: 0, b: 0, a: 255 } });
                   })}
                 />
@@ -12380,7 +12379,7 @@ export default function AdminScreen({
                   result={functionResults["Hide Selection"]}
                   onClick={() => testFunction("Hide Selection", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     return api.viewer.setObjectState({ modelObjectIds: sel }, { visible: false });
                   })}
                 />
@@ -12390,12 +12389,12 @@ export default function AdminScreen({
                   onClick={() => testFunction("Show All + Reset Colors", () => api.viewer.setObjectState(undefined, { color: "reset", visible: "reset" }))}
                 />
                 <FunctionButton
-                  name="🎨 Grupeeri värvi järgi"
+                  name={t('viewer.fn.groupByColor')}
                   result={functionResults["groupByColor"]}
                   onClick={() => testFunction("groupByColor", async () => {
                     // Get all loaded models
                     const models = await api.viewer.getModels('loaded');
-                    if (!models || models.length === 0) throw new Error('Ühtegi mudelit pole laaditud');
+                    if (!models || models.length === 0) throw new Error(t('viewer.noModelsLoaded'));
 
                     const colorGroups = new Map<string, { color: { r: number; g: number; b: number; a: number } | null; count: number; modelObjects: { modelId: string; runtimeIds: number[] }[] }>();
                     let totalObjects = 0;
@@ -12445,10 +12444,10 @@ export default function AdminScreen({
                         }
                       }
                       return {
-                        message: 'Värviinfo pole saadaval (API ei toeta getObjectState)',
+                        message: t('viewer.colorInfoNotAvailable'),
                         totalModels: models.length,
                         totalObjects: totalObjects || 'teadmata',
-                        hint: 'Kasuta värvi määramiseks setObjectState ja seejärel vaata tulemust visuaalselt'
+                        hint: t('viewer.useSetObjectStateHint')
                       };
                     }
 
@@ -12456,7 +12455,7 @@ export default function AdminScreen({
                     const sortedGroups = Array.from(colorGroups.entries())
                       .sort((a, b) => b[1].count - a[1].count)
                       .map(([key, data]) => ({
-                        color: key === 'default' ? 'Vaikimisi (värv pole määratud)' : key,
+                        color: key === 'default' ? t('viewer.defaultNoColor') : key,
                         rgb: data.color,
                         count: data.count,
                         percent: ((data.count / totalObjects) * 100).toFixed(1) + '%'
@@ -12475,14 +12474,14 @@ export default function AdminScreen({
 
             {/* MEASUREMENT section */}
             <div className="function-section">
-              <h4>📏 Mõõtmine</h4>
+              <h4>{t('viewer.sections.measurementTool')}</h4>
               <div className="function-grid">
                 <FunctionButton
-                  name="Automaatne mõõtmine"
-                  result={functionResults["Automaatne mõõtmine"]}
-                  onClick={() => testFunction("Automaatne mõõtmine", async () => {
+                  name={t('viewer.fn.autoMeasurement')}
+                  result={functionResults[t('viewer.fn.autoMeasurement')]}
+                  onClick={() => testFunction(t('viewer.fn.autoMeasurement'), async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                     const results: string[] = [];
 
@@ -12517,7 +12516,7 @@ export default function AdminScreen({
                   result={functionResults["Bounding Box (raw)"]}
                   onClick={() => testFunction("Bounding Box (raw)", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                     const allBoxes: any[] = [];
 
@@ -12536,11 +12535,11 @@ export default function AdminScreen({
                   })}
                 />
                 <FunctionButton
-                  name="Lisa mõõtjooned"
-                  result={functionResults["Lisa mõõtjooned"]}
-                  onClick={() => testFunction("Lisa mõõtjooned", async () => {
+                  name={t('viewer.fn.addMeasurementLines')}
+                  result={functionResults[t('viewer.fn.addMeasurementLines')]}
+                  onClick={() => testFunction(t('viewer.fn.addMeasurementLines'), async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                     // Get bounding box for selected object
                     for (const modelSel of sel) {
@@ -12592,7 +12591,7 @@ export default function AdminScreen({
                         return `Mõõtjooned lisatud:\nX (punane): ${width.toFixed(0)} mm\nY (roheline): ${depth.toFixed(0)} mm\nZ (sinine): ${height.toFixed(0)} mm`;
                       }
                     }
-                    return 'Mõõtjooneid ei õnnestunud lisada';
+                    return t('viewer.measurementLinesFailed');
                   })}
                 />
                 <FunctionButton
@@ -12600,7 +12599,7 @@ export default function AdminScreen({
                   result={functionResults["Kahe objekti vahe"]}
                   onClick={() => testFunction("Kahe objekti vahe", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali kaks objekti!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectTwoObjects'));
 
                     // Collect all selected object bounding boxes
                     const allBoxes: { modelId: string; id: number; box: any }[] = [];
@@ -12616,7 +12615,7 @@ export default function AdminScreen({
                       }
                     }
 
-                    if (allBoxes.length < 2) throw new Error('Vali vähemalt 2 objekti!');
+                    if (allBoxes.length < 2) throw new Error(t('selectAtLeastTwoObjects'));
 
                     // Calculate distance between first two objects
                     const box1 = allBoxes[0].box;
@@ -12653,11 +12652,11 @@ export default function AdminScreen({
                   })}
                 />
                 <FunctionButton
-                  name="Kõik 12 serva"
-                  result={functionResults["Kõik 12 serva"]}
-                  onClick={() => testFunction("Kõik 12 serva", async () => {
+                  name={t('viewer.fn.all12EdgesShort')}
+                  result={functionResults[t('viewer.fn.all12EdgesShort')]}
+                  onClick={() => testFunction(t('viewer.fn.all12EdgesShort'), async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                     for (const modelSel of sel) {
                       const modelId = modelSel.modelId;
@@ -12707,15 +12706,15 @@ export default function AdminScreen({
                         return `12 serva lisatud:\n🔵 Põhi: ${width.toFixed(0)}×${depth.toFixed(0)} mm\n🟢 Üla: ${width.toFixed(0)}×${depth.toFixed(0)} mm\n🔴 Kõrgus: ${height.toFixed(0)} mm`;
                       }
                     }
-                    return 'Ei õnnestunud';
+                    return t('viewer.failed');
                   })}
                 />
                 <FunctionButton
-                  name="Diagonaalid"
-                  result={functionResults["Diagonaalid"]}
-                  onClick={() => testFunction("Diagonaalid", async () => {
+                  name={t('viewer.fn.diagonalsShort')}
+                  result={functionResults[t('viewer.fn.diagonalsShort')]}
+                  onClick={() => testFunction(t('viewer.fn.diagonalsShort'), async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                     for (const modelSel of sel) {
                       const modelId = modelSel.modelId;
@@ -12764,13 +12763,13 @@ export default function AdminScreen({
                         return `Diagonaalid:\n🟣 Ruumi diagonaal: ${spaceDiag.toFixed(0)} mm\n🔵 Põhja diagonaal: ${bottomDiag.toFixed(0)} mm`;
                       }
                     }
-                    return 'Ei õnnestunud';
+                    return t('viewer.failed');
                   })}
                 />
                 <FunctionButton
-                  name="Eemalda mõõtjooned"
-                  result={functionResults["Eemalda mõõtjooned"]}
-                  onClick={() => testFunction("Eemalda mõõtjooned", () => api.markup.removeMarkups(undefined))}
+                  name={t('viewer.fn.removeMeasurementLinesShort')}
+                  result={functionResults[t('viewer.fn.removeMeasurementLinesShort')]}
+                  onClick={() => testFunction(t('viewer.fn.removeMeasurementLinesShort'), () => api.markup.removeMarkups(undefined))}
                 />
               </div>
             </div>
@@ -12784,7 +12783,7 @@ export default function AdminScreen({
                   result={functionResults["Raw getObjectProperties"]}
                   onClick={() => testFunction("Raw getObjectProperties", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                     const allProps: any[] = [];
                     for (const modelSel of sel) {
@@ -12806,7 +12805,7 @@ export default function AdminScreen({
                   result={functionResults["Otsi GUID (MS)"]}
                   onClick={() => testFunction("Otsi GUID (MS)", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                     const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
                     const found: string[] = [];
@@ -12842,7 +12841,7 @@ export default function AdminScreen({
                     }
 
                     if (found.length === 0) {
-                      return 'GUID (MS) ei leitud API kaudu.\nVaata Console logi (F12) täpsemaks infoks.';
+                      return t('viewer.guidMsNotFound');
                     }
                     return found.join('\n');
                   })}
@@ -12852,7 +12851,7 @@ export default function AdminScreen({
                   result={functionResults["Property Set nimed"]}
                   onClick={() => testFunction("Property Set nimed", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                     const setNames = new Set<string>();
 
@@ -12878,7 +12877,7 @@ export default function AdminScreen({
                   result={functionResults["IFC → MS GUID"]}
                   onClick={() => testFunction("IFC → MS GUID", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
 
                     // IFC GUID base64 charset (non-standard!)
                     const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
@@ -12934,7 +12933,7 @@ export default function AdminScreen({
 
             {/* BACKGROUND COLOR section */}
             <div className="function-section">
-              <h4>🎨 Taustavärv</h4>
+              <h4>{t('viewer.sections.backgroundColor')}</h4>
               <div className="function-grid">
                 <FunctionButton
                   name="Praegune taust"
@@ -12970,7 +12969,7 @@ export default function AdminScreen({
                       await embed.setSettings({ backgroundColor: "White" });
                       return 'Set via embed.setSettings';
                     }
-                    throw new Error('setSettings pole saadaval - API ei toeta taustavärvi muutmist');
+                    throw new Error(t('viewer.setSettingsNotAvailable'));
                   })}
                 />
                 <FunctionButton
@@ -13078,7 +13077,7 @@ export default function AdminScreen({
 
             {/* MODEL INFO section */}
             <div className="function-section">
-              <h4>📁 Mudeli info</h4>
+              <h4>{t('viewer.sections.modelInfo')}</h4>
               <div className="function-grid">
                 <FunctionButton
                   name="getModels()"
@@ -13100,7 +13099,7 @@ export default function AdminScreen({
 
             {/* TEAM / MEMBERS section */}
             <div className="function-section">
-              <h4>👥 Meeskond / Team</h4>
+              <h4>{t('viewer.sections.team')}</h4>
 
               {/* Load Team Button */}
               <div style={{ marginBottom: '12px' }}>
@@ -13128,7 +13127,7 @@ export default function AdminScreen({
                   style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
                   {teamMembersLoading ? <FiLoader className="spin" size={16} /> : <FiRefreshCw size={16} />}
-                  {teamMembersLoading ? 'Laadin...' : 'Laadi meeskond'}
+                  {teamMembersLoading ? t('loading') : t('users.loadTeam')}
                 </button>
               </div>
 
@@ -13337,17 +13336,17 @@ export default function AdminScreen({
               <h4>🔎 Zoom detailile (kaugus)</h4>
               <div className="function-grid">
                 <FunctionButton
-                  name="Zoom: 0.3x (väga lähedal)"
-                  result={functionResults["Zoom: 0.3x (väga lähedal)"]}
-                  onClick={() => testFunction("Zoom: 0.3x (väga lähedal)", async () => {
+                  name={t('viewer.zoom03x')}
+                  result={functionResults[t('viewer.zoom03x')]}
+                  onClick={() => testFunction(t('viewer.zoom03x'), async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     // First zoom to object normally
                     await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
                     await new Promise(r => setTimeout(r, 150));
                     // Get camera and move closer
                     const cam = await api.viewer.getCamera() as any;
-                    if (!cam.position || !cam.target) throw new Error('Kaamera positsioon pole saadaval');
+                    if (!cam.position || !cam.target) throw new Error(t('settings.cameraPositionNotAvailable'));
                     const pos = Array.isArray(cam.position) ? cam.position : [cam.position?.x || 0, cam.position?.y || 0, cam.position?.z || 0];
                     const tgt = Array.isArray(cam.target) ? cam.target : [cam.target?.x || 0, cam.target?.y || 0, cam.target?.z || 0];
                     // Move position 70% closer to target (0.3x distance)
@@ -13360,15 +13359,15 @@ export default function AdminScreen({
                   })}
                 />
                 <FunctionButton
-                  name="Zoom: 0.5x (lähedal)"
-                  result={functionResults["Zoom: 0.5x (lähedal)"]}
-                  onClick={() => testFunction("Zoom: 0.5x (lähedal)", async () => {
+                  name={t('viewer.zoom05x')}
+                  result={functionResults[t('viewer.zoom05x')]}
+                  onClick={() => testFunction(t('viewer.zoom05x'), async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
                     await new Promise(r => setTimeout(r, 150));
                     const cam = await api.viewer.getCamera() as any;
-                    if (!cam.position || !cam.target) throw new Error('Kaamera positsioon pole saadaval');
+                    if (!cam.position || !cam.target) throw new Error(t('settings.cameraPositionNotAvailable'));
                     const pos = Array.isArray(cam.position) ? cam.position : [cam.position?.x || 0, cam.position?.y || 0, cam.position?.z || 0];
                     const tgt = Array.isArray(cam.target) ? cam.target : [cam.target?.x || 0, cam.target?.y || 0, cam.target?.z || 0];
                     const newPos = [
@@ -13384,7 +13383,7 @@ export default function AdminScreen({
                   result={functionResults["Zoom: 0.7x"]}
                   onClick={() => testFunction("Zoom: 0.7x", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
                     await new Promise(r => setTimeout(r, 150));
                     const cam = await api.viewer.getCamera() as any;
@@ -13403,7 +13402,7 @@ export default function AdminScreen({
                   result={functionResults["Zoom: 1.0x (vaikimisi)"]}
                   onClick={() => testFunction("Zoom: 1.0x (vaikimisi)", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200 });
                   })}
                 />
@@ -13412,7 +13411,7 @@ export default function AdminScreen({
                   result={functionResults["Zoom: 1.5x (kaugemal)"]}
                   onClick={() => testFunction("Zoom: 1.5x (kaugemal)", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
                     await new Promise(r => setTimeout(r, 150));
                     const cam = await api.viewer.getCamera() as any;
@@ -13427,11 +13426,11 @@ export default function AdminScreen({
                   })}
                 />
                 <FunctionButton
-                  name="Zoom: 2.0x (kaugel)"
-                  result={functionResults["Zoom: 2.0x (kaugel)"]}
-                  onClick={() => testFunction("Zoom: 2.0x (kaugel)", async () => {
+                  name={t('viewer.zoom2x')}
+                  result={functionResults[t('viewer.zoom2x')]}
+                  onClick={() => testFunction(t('viewer.zoom2x'), async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
                     await new Promise(r => setTimeout(r, 150));
                     const cam = await api.viewer.getCamera() as any;
@@ -13446,11 +13445,11 @@ export default function AdminScreen({
                   })}
                 />
                 <FunctionButton
-                  name="Zoom: 3.0x (väga kaugel)"
-                  result={functionResults["Zoom: 3.0x (väga kaugel)"]}
-                  onClick={() => testFunction("Zoom: 3.0x (väga kaugel)", async () => {
+                  name={t('viewer.zoom3x')}
+                  result={functionResults[t('viewer.zoom3x')]}
+                  onClick={() => testFunction(t('viewer.zoom3x'), async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
                     await new Promise(r => setTimeout(r, 150));
                     const cam = await api.viewer.getCamera() as any;
@@ -13472,11 +13471,11 @@ export default function AdminScreen({
               <h4>🎯 Zoom + Vaade</h4>
               <div className="function-grid">
                 <FunctionButton
-                  name="Zoom + Top (lähedal)"
-                  result={functionResults["Zoom + Top (lähedal)"]}
-                  onClick={() => testFunction("Zoom + Top (lähedal)", async () => {
+                  name={t('viewer.zoomTopClose')}
+                  result={functionResults[t('viewer.zoomTopClose')]}
+                  onClick={() => testFunction(t('viewer.zoomTopClose'), async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await api.viewer.setCamera('top', { animationTime: 200 });
                     await new Promise(r => setTimeout(r, 250));
                     return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.2 } as any);
@@ -13487,18 +13486,18 @@ export default function AdminScreen({
                   result={functionResults["Zoom + Top (keskmine)"]}
                   onClick={() => testFunction("Zoom + Top (keskmine)", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await api.viewer.setCamera('top', { animationTime: 200 });
                     await new Promise(r => setTimeout(r, 250));
                     return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.8 } as any);
                   })}
                 />
                 <FunctionButton
-                  name="Zoom + Front (lähedal)"
-                  result={functionResults["Zoom + Front (lähedal)"]}
-                  onClick={() => testFunction("Zoom + Front (lähedal)", async () => {
+                  name={t('viewer.zoomFrontClose')}
+                  result={functionResults[t('viewer.zoomFrontClose')]}
+                  onClick={() => testFunction(t('viewer.zoomFrontClose'), async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await api.viewer.setCamera('front', { animationTime: 200 });
                     await new Promise(r => setTimeout(r, 250));
                     return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.2 } as any);
@@ -13509,18 +13508,18 @@ export default function AdminScreen({
                   result={functionResults["Zoom + Front (keskmine)"]}
                   onClick={() => testFunction("Zoom + Front (keskmine)", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await api.viewer.setCamera('front', { animationTime: 200 });
                     await new Promise(r => setTimeout(r, 250));
                     return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.8 } as any);
                   })}
                 />
                 <FunctionButton
-                  name="Zoom + ISO (lähedal)"
-                  result={functionResults["Zoom + ISO (lähedal)"]}
-                  onClick={() => testFunction("Zoom + ISO (lähedal)", async () => {
+                  name={t('viewer.zoomISOClose')}
+                  result={functionResults[t('viewer.zoomISOClose')]}
+                  onClick={() => testFunction(t('viewer.zoomISOClose'), async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await (api.viewer as any).setCamera('iso', { animationTime: 200 });
                     await new Promise(r => setTimeout(r, 250));
                     return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.2 } as any);
@@ -13531,7 +13530,7 @@ export default function AdminScreen({
                   result={functionResults["Zoom + ISO (keskmine)"]}
                   onClick={() => testFunction("Zoom + ISO (keskmine)", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await (api.viewer as any).setCamera('iso', { animationTime: 200 });
                     await new Promise(r => setTimeout(r, 250));
                     return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.8 } as any);
@@ -13542,7 +13541,7 @@ export default function AdminScreen({
                   result={functionResults["Zoom + Left"]}
                   onClick={() => testFunction("Zoom + Left", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await api.viewer.setCamera('left', { animationTime: 200 });
                     await new Promise(r => setTimeout(r, 250));
                     return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.3 } as any);
@@ -13553,7 +13552,7 @@ export default function AdminScreen({
                   result={functionResults["Zoom + Right"]}
                   onClick={() => testFunction("Zoom + Right", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await api.viewer.setCamera('right', { animationTime: 200 });
                     await new Promise(r => setTimeout(r, 250));
                     return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.3 } as any);
@@ -13564,7 +13563,7 @@ export default function AdminScreen({
                   result={functionResults["Zoom + Back"]}
                   onClick={() => testFunction("Zoom + Back", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await api.viewer.setCamera('back', { animationTime: 200 });
                     await new Promise(r => setTimeout(r, 250));
                     return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.3 } as any);
@@ -13575,7 +13574,7 @@ export default function AdminScreen({
 
             {/* CAMERA MANIPULATION section */}
             <div className="function-section">
-              <h4>📹 Kaamera manipulatsioon</h4>
+              <h4>{t('viewer.sections.cameraManipulation')}</h4>
               <div className="function-grid">
                 <FunctionButton
                   name="Get Camera Position"
@@ -13673,7 +13672,7 @@ export default function AdminScreen({
                   result={functionResults["flyTo selection"]}
                   onClick={() => testFunction("flyTo selection", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     return (api.viewer as any).flyTo?.(sel);
                   })}
                 />
@@ -13689,7 +13688,7 @@ export default function AdminScreen({
                   result={functionResults["Detail: Isolate + Zoom"]}
                   onClick={() => testFunction("Detail: Isolate + Zoom", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await (api.viewer as any).isolate?.(sel);
                     return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.3 } as any);
                   })}
@@ -13699,7 +13698,7 @@ export default function AdminScreen({
                   result={functionResults["Detail: Color RED + Zoom"]}
                   onClick={() => testFunction("Detail: Color RED + Zoom", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 255, g: 0, b: 0, a: 255 } });
                     return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.3 } as any);
                   })}
@@ -13709,7 +13708,7 @@ export default function AdminScreen({
                   result={functionResults["Detail: Color GREEN + Zoom"]}
                   onClick={() => testFunction("Detail: Color GREEN + Zoom", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 0, g: 200, b: 0, a: 255 } });
                     return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.3 } as any);
                   })}
@@ -13719,7 +13718,7 @@ export default function AdminScreen({
                   result={functionResults["Others Gray + Selection RED"]}
                   onClick={() => testFunction("Others Gray + Selection RED", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     // First set all to gray
                     const models = await api.viewer.getModels();
                     for (const model of models) {
@@ -13734,7 +13733,7 @@ export default function AdminScreen({
                   result={functionResults["Top + Zoom + Snapshot"]}
                   onClick={() => testFunction("Top + Zoom + Snapshot", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await api.viewer.setCamera('top', { animationTime: 200 });
                     await new Promise(r => setTimeout(r, 250));
                     await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.5 } as any);
@@ -13749,7 +13748,7 @@ export default function AdminScreen({
                   result={functionResults["ISO + Zoom + Snapshot"]}
                   onClick={() => testFunction("ISO + Zoom + Snapshot", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     await (api.viewer as any).setCamera('iso', { animationTime: 200 });
                     await new Promise(r => setTimeout(r, 250));
                     await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.5 } as any);
@@ -13859,14 +13858,14 @@ export default function AdminScreen({
 
             {/* MORE COLORS section */}
             <div className="function-section">
-              <h4>🌈 Rohkem värve</h4>
+              <h4>{t('viewer.sections.moreColors')}</h4>
               <div className="function-grid">
                 <FunctionButton
                   name="Color: Yellow"
                   result={functionResults["Color: Yellow"]}
                   onClick={() => testFunction("Color: Yellow", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 255, g: 255, b: 0, a: 255 } });
                   })}
                 />
@@ -13875,7 +13874,7 @@ export default function AdminScreen({
                   result={functionResults["Color: Orange"]}
                   onClick={() => testFunction("Color: Orange", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 255, g: 165, b: 0, a: 255 } });
                   })}
                 />
@@ -13884,7 +13883,7 @@ export default function AdminScreen({
                   result={functionResults["Color: Blue"]}
                   onClick={() => testFunction("Color: Blue", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 0, g: 100, b: 255, a: 255 } });
                   })}
                 />
@@ -13893,7 +13892,7 @@ export default function AdminScreen({
                   result={functionResults["Color: Purple"]}
                   onClick={() => testFunction("Color: Purple", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 128, g: 0, b: 128, a: 255 } });
                   })}
                 />
@@ -13902,7 +13901,7 @@ export default function AdminScreen({
                   result={functionResults["Color: Cyan"]}
                   onClick={() => testFunction("Color: Cyan", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 0, g: 255, b: 255, a: 255 } });
                   })}
                 />
@@ -13911,7 +13910,7 @@ export default function AdminScreen({
                   result={functionResults["Semi-transparent (50%)"]}
                   onClick={() => testFunction("Semi-transparent (50%)", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 100, g: 100, b: 100, a: 128 } });
                   })}
                 />
@@ -13920,7 +13919,7 @@ export default function AdminScreen({
                   result={functionResults["Semi-transparent (25%)"]}
                   onClick={() => testFunction("Semi-transparent (25%)", async () => {
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    if (!sel || sel.length === 0) throw new Error(t('selectObjectFirst'));
                     return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 100, g: 100, b: 100, a: 64 } });
                   })}
                 />
@@ -13997,7 +13996,7 @@ export default function AdminScreen({
 
             {/* CAMERA MODES section - Official API */}
             <div className="function-section">
-              <h4>🚶 Kaamera režiimid</h4>
+              <h4>{t('viewer.sections.cameraModes')}</h4>
               <div className="function-grid">
                 <FunctionButton
                   name="getCameraMode()"
@@ -14029,7 +14028,7 @@ export default function AdminScreen({
 
             {/* SECTION PLANES section - Official API */}
             <div className="function-section">
-              <h4>✂️ Lõiketasandid</h4>
+              <h4>{t('viewer.sections.clipPlanes')}</h4>
               <div className="function-grid">
                 <FunctionButton
                   name="getSectionPlanes()"
@@ -14070,7 +14069,7 @@ export default function AdminScreen({
 
             {/* ADDITIONAL INFO section - Official API */}
             <div className="function-section">
-              <h4>📊 Lisainfo</h4>
+              <h4>{t('viewer.sections.additionalInfo')}</h4>
               <div className="function-grid">
                 <FunctionButton
                   name="getPresentation()"
@@ -14207,7 +14206,7 @@ export default function AdminScreen({
                     const sortedDates = [...allDates].sort();
 
                     if (sortedDates.length === 0) {
-                      throw new Error('Andmeid pole');
+                      throw new Error(t('common:status.noData'));
                     }
 
                     // Build HTML
@@ -14253,7 +14252,7 @@ th { background: #f8f9fa; font-weight: 600; position: sticky; top: 0; }
 </style></head><body>
 <h2>📊 Gantt Timeline</h2>
 <div class="gantt-container"><table><thead><tr>
-<th class="row-header">Ressurss</th>
+<th class="row-header">{t('resources.resource')}</th>
 ${sortedDates.map(d => {
   const wd = getWeekday(d);
   const isWeekend = wd === 'L' || wd === 'P';
@@ -14275,7 +14274,7 @@ ${sortedDates.map(d => {
 }).join('')}
 </tr>`).join('')}
 <tr><td class="row-header section-title" colspan="${sortedDates.length + 1}">🔧 PAIGALDUS</td></tr>
-<tr><td class="row-header">Paigaldus</td>
+<tr><td class="row-header">{t('resources.installation')}</td>
 ${sortedDates.map(d => {
   const wd = getWeekday(d);
   const isWeekend = wd === 'L' || wd === 'P';
@@ -14308,7 +14307,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     if (popup) {
                       popup.document.write(html);
                       popup.document.close();
-                      return `Gantt Timeline avatud (${sortedDates.length} päeva)`;
+                      return `Gantt Timeline (${sortedDates.length} ${t('database.days')})`;
                     } else {
                       throw new Error('Popup blokeeritud - luba popupid');
                     }
@@ -14319,19 +14318,19 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
 
             {/* GUID EXPORT section */}
             <div className="function-section">
-              <h4>📋 GUID Eksport</h4>
+              <h4>{t('viewer.sections.guidExport')}</h4>
               <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
                 Ekspordi mudeli assemblyde (Cast Unit) GUID koodid Excelisse koos Tekla infoga.
               </p>
               <div className="function-grid">
                 <FunctionButton
-                  name="📋 Ekspordi KÕIK assemblyd (Cast_unit_Mark)"
-                  result={functionResults["📋 Ekspordi KÕIK assemblyd (Cast_unit_Mark)"]}
-                  onClick={() => testFunction("📋 Ekspordi KÕIK assemblyd (Cast_unit_Mark)", async () => {
+                  name={t('viewer.fn.exportAllAssemblies')}
+                  result={functionResults[t('viewer.fn.exportAllAssemblies')]}
+                  onClick={() => testFunction(t('viewer.fn.exportAllAssemblies'), async () => {
                     // Get all objects from all models
                     const allModelObjects = await api.viewer.getObjects();
                     if (!allModelObjects || allModelObjects.length === 0) {
-                      throw new Error('Ühtegi mudelit pole laetud!');
+                      throw new Error(t('viewer.noModelsLoaded'));
                     }
 
                     // Get model names
@@ -14472,7 +14471,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     }
 
                     if (allObjects.length === 0) {
-                      throw new Error('Ühtegi assembly-t (Cast_unit_Mark) ei leitud!');
+                      throw new Error(t('viewer.noAssembliesFound'));
                     }
 
                     // Sort by Cast Unit Mark
@@ -14515,13 +14514,13 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   })}
                 />
                 <FunctionButton
-                  name="🔬 Analüüsi objektide hierarhiat"
-                  result={functionResults["🔬 Analüüsi objektide hierarhiat"]}
-                  onClick={() => testFunction("🔬 Analüüsi objektide hierarhiat", async () => {
+                  name={t('viewer.fn.analyzeHierarchy')}
+                  result={functionResults[t('viewer.fn.analyzeHierarchy')]}
+                  onClick={() => testFunction(t('viewer.fn.analyzeHierarchy'), async () => {
                     // Get all objects
                     const allModelObjects = await api.viewer.getObjects();
                     if (!allModelObjects || allModelObjects.length === 0) {
-                      throw new Error('Ühtegi mudelit pole laetud!');
+                      throw new Error(t('viewer.noModelsLoaded'));
                     }
 
                     const results: string[] = [];
@@ -14576,7 +14575,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     // Get all objects
                     const allModelObjects = await api.viewer.getObjects();
                     if (!allModelObjects || allModelObjects.length === 0) {
-                      throw new Error('Ühtegi mudelit pole laetud!');
+                      throw new Error(t('viewer.noModelsLoaded'));
                     }
 
                     const models = await api.viewer.getModels();
@@ -14683,7 +14682,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     }
 
                     if (allAssemblies.length === 0) {
-                      throw new Error('Ühtegi assembly-t ei leitud!');
+                      throw new Error(t('viewer.noAssembliesFound'));
                     }
 
                     // Sort and export
@@ -14708,22 +14707,22 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   })}
                 />
                 <FunctionButton
-                  name="1️⃣ Lülita Assembly Selection SISSE"
-                  result={functionResults["1️⃣ Lülita Assembly Selection SISSE"]}
-                  onClick={() => testFunction("1️⃣ Lülita Assembly Selection SISSE", async () => {
+                  name={t('database.enableAssemblySelection')}
+                  result={functionResults[t('database.enableAssemblySelection')]}
+                  onClick={() => testFunction(t('database.enableAssemblySelection'), async () => {
                     await (api.viewer as any).setSettings?.({ assemblySelection: true });
-                    return "Assembly selection SEES. Nüüd vajuta mudelis Ctrl+A, et valida kõik assemblyd!";
+                    return t('database.assemblySelectionEnabled');
                   })}
                 />
                 <FunctionButton
-                  name="2️⃣ Ekspordi VALITUD assemblyd Excelisse"
-                  result={functionResults["2️⃣ Ekspordi VALITUD assemblyd Excelisse"]}
-                  onClick={() => testFunction("2️⃣ Ekspordi VALITUD assemblyd Excelisse", async () => {
+                  name={t('viewer.fn.exportSelectedAssemblies')}
+                  result={functionResults[t('viewer.fn.exportSelectedAssemblies')]}
+                  onClick={() => testFunction(t('viewer.fn.exportSelectedAssemblies'), async () => {
                     // Get current selection (user must have selected assemblies first)
                     const selection = await api.viewer.getSelection();
 
                     if (!selection || selection.length === 0) {
-                      throw new Error('Vali esmalt assemblyd mudelis! (Lülita Assembly Selection sisse → vajuta Ctrl+A)');
+                      throw new Error(t('database.selectAssembliesFirst'));
                     }
 
                     // Count total objects
@@ -14893,7 +14892,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     }
 
                     if (allObjects.length === 0) {
-                      throw new Error('Ühtegi objekti ei leitud!');
+                      throw new Error(t('viewer.noObjectsFound'));
                     }
 
                     // Sort by Cast Unit Mark
@@ -14960,9 +14959,9 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   })}
                 />
                 <FunctionButton
-                  name="🔍 Kontrolli viewer meetodeid"
-                  result={functionResults["🔍 Kontrolli viewer meetodeid"]}
-                  onClick={() => testFunction("🔍 Kontrolli viewer meetodeid", async () => {
+                  name={t('viewer.fn.checkViewerMethods')}
+                  result={functionResults[t('viewer.fn.checkViewerMethods')]}
+                  onClick={() => testFunction(t('viewer.fn.checkViewerMethods'), async () => {
                     // Log all available viewer methods
                     const viewerMethods = Object.keys(api.viewer).filter(k => typeof (api.viewer as any)[k] === 'function');
                     console.log('Available viewer methods:', viewerMethods);
@@ -15247,7 +15246,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                             {propCount === 0 && (
                               <div className="property-row empty">
                                 <span className="prop-name">-</span>
-                                <span className="prop-value">Tühi property set</span>
+                                <span className="prop-value">{t('viewer.emptyPropertySet')}</span>
                               </div>
                             )}
                           </div>
@@ -15438,7 +15437,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   <table className="assembly-table">
                     <thead>
                       <tr>
-                        <th>Cast Unit Mark</th>
+                        <th>{t('viewer.castUnitMark')}</th>
                         <th>Product Name</th>
                         <th>Weight</th>
                       </tr>
@@ -15455,7 +15454,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   </table>
                 </div>
               ) : (
-                <p className="no-data">Detaile ei leitud</p>
+                <p className="no-data">{t('viewer.noDetailsFound')}</p>
               )}
             </div>
 
@@ -15516,8 +15515,8 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
       {adminView === 'guidImport' && (
         <div className="guid-import-panel" style={{ padding: '16px' }}>
           <div className="guid-import-description" style={{ marginBottom: '16px', color: '#666' }}>
-            <p>Kleebi siia GUID (MS) koodid (UUID formaat). Süsteem tuvastab automaatselt kõik kehtivad UUID-d tekstist.</p>
-            <p style={{ fontSize: '12px', marginTop: '4px' }}>Toetatud formaadid: üks GUID rea kohta, komaga eraldatud, semikooloniga eraldatud.</p>
+            <p>{t('guid.importDescription')}</p>
+            <p style={{ fontSize: '12px', marginTop: '4px' }}>{t('guid.supportedFormats')}</p>
           </div>
 
           <textarea
@@ -15585,7 +15584,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
                 <div style={{ backgroundColor: '#dcfce7', padding: '12px', borderRadius: '6px', textAlign: 'center' }}>
                   <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#16a34a' }}>{guidImportResults.found}</div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>Leitud</div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>{t('viewer.found')}</div>
                 </div>
                 <div style={{ backgroundColor: '#fef2f2', padding: '12px', borderRadius: '6px', textAlign: 'center' }}>
                   <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#dc2626' }}>{guidImportResults.notFound.length}</div>
@@ -15676,7 +15675,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                       hour: '2-digit',
                       minute: '2-digit'
                     })
-                  : 'Andmed puuduvad'
+                  : t('common:status.noData')
                 }
               </div>
               <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>
@@ -15686,7 +15685,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
           </div>
 
           <div className="model-objects-description" style={{ marginBottom: '20px', color: '#666' }}>
-            <p>Vali mudelis objektid ja salvesta need andmebaasi koos GUID, mark ja product infoga.</p>
+            <p>{t('database.sendToDbDescription')}</p>
             <p style={{ fontSize: '12px', marginTop: '4px' }}>
               Andmebaasi salvestatud objekte kasutatakse tarnegraafiku lehel värvimiseks.
             </p>
@@ -15801,9 +15800,9 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                   <thead>
                     <tr style={{ backgroundColor: '#f3f4f6', position: 'sticky', top: 0 }}>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#374151', borderBottom: '1px solid #e5e7eb' }}>Kuupäev</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#374151', borderBottom: '1px solid #e5e7eb' }}>Mark</th>
-                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#374151', borderBottom: '1px solid #e5e7eb' }}>Toode</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#374151', borderBottom: '1px solid #e5e7eb' }}>{t('database.date')}</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#374151', borderBottom: '1px solid #e5e7eb' }}>{t('viewer.mark')}</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#374151', borderBottom: '1px solid #e5e7eb' }}>{t('viewer.product')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -15853,7 +15852,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
               style={{ background: '#059669', color: 'white' }}
             >
               <FiCheck size={16} />
-              <span>Salvesta seaded</span>
+              <span>{t('settings.saveSettings')}</span>
               {propertyMappingsSaving && <FiRefreshCw className="spin" size={14} />}
             </button>
 
@@ -15874,12 +15873,12 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   guid_set: 'Tekla Common',
                   guid_prop: 'GUID',
                 });
-                setMessage('Lähtestatud vaikimisi seadetele');
+                setMessage(t('settings.resetToDefaults'));
               }}
               style={{ background: '#6b7280', color: 'white' }}
             >
               <FiRefreshCw size={16} />
-              <span>Lähtesta vaikimisi</span>
+              <span>{t('settings.resetToDefaultsBtn')}</span>
             </button>
           </div>
 
@@ -15991,8 +15990,8 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                         <tr style={{ position: 'sticky', top: 0, background: 'var(--bg-secondary)' }}>
                           <th style={{ textAlign: 'left', padding: '4px 8px', borderBottom: '1px solid var(--border-color)' }}>Property Set</th>
                           <th style={{ textAlign: 'left', padding: '4px 8px', borderBottom: '1px solid var(--border-color)' }}>Property</th>
-                          <th style={{ textAlign: 'left', padding: '4px 8px', borderBottom: '1px solid var(--border-color)' }}>Näidis</th>
-                          <th style={{ textAlign: 'center', padding: '4px 8px', borderBottom: '1px solid var(--border-color)' }}>Kasuta</th>
+                          <th style={{ textAlign: 'left', padding: '4px 8px', borderBottom: '1px solid var(--border-color)' }}>{t('settings.sample')}</th>
+                          <th style={{ textAlign: 'center', padding: '4px 8px', borderBottom: '1px solid var(--border-color)' }}>{t('settings.use')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -16011,7 +16010,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                                       [setKey]: prop.setName,
                                       [propKey]: prop.propName,
                                     }));
-                                    setMessage(`Määratud: ${prop.setName}.${prop.propName}`);
+                                    setMessage(`${t('settings.propertyMapped')}: ${prop.setName}.${prop.propName}`);
                                     e.target.value = '';
                                   }
                                 }}
@@ -16022,8 +16021,8 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                                   border: '1px solid var(--border-color)'
                                 }}
                               >
-                                <option value="">→ Määra...</option>
-                                <option value="assembly_mark_set|assembly_mark_prop">Assembly Mark</option>
+                                <option value="">{t('settings.assign')}</option>
+                                <option value="assembly_mark_set|assembly_mark_prop">{t('settings.assemblyMark')}</option>
                                 <option value="position_code_set|position_code_prop">Position Code</option>
                                 <option value="top_elevation_set|top_elevation_prop">Top Elevation</option>
                                 <option value="bottom_elevation_set|bottom_elevation_prop">Bottom Elevation</option>
@@ -16084,7 +16083,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
           ) : projectUsers.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
               <FiUsers size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
-              <p>Kasutajaid pole veel lisatud</p>
+              <p>{t('users.noUsersYet')}</p>
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '12px' }}>
                 <button className="inspector-button primary" onClick={syncTeamMembers} disabled={usersLoading}>
                   <FiUsers size={14} /> Laadi meeskond
@@ -16102,8 +16101,8 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: '600' }}>Nimi</th>
                     <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: '600' }}>Email</th>
                     <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '600' }}>Roll</th>
-                    <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '600' }}>Assembly</th>
-                    <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '600' }}>Poldid</th>
+                    <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '600' }}>{t('users.assemblyInspection')}</th>
+                    <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '600' }}>{t('users.boltInspection')}</th>
                     <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '600' }}>Aktiivne</th>
                     <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '600' }}>Tegevused</th>
                   </tr>
@@ -16285,20 +16284,20 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
 
                   {/* Permissions Table */}
                   <div style={{ marginTop: '8px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-                    <h4 style={{ margin: 0, padding: '12px', fontSize: '14px', fontWeight: '600', borderBottom: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>Õigused moodulite kaupa</h4>
+                    <h4 style={{ margin: 0, padding: '12px', fontSize: '14px', fontWeight: '600', borderBottom: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>{t('users.permissions')}</h4>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', backgroundColor: 'white' }}>
                       <thead>
                         <tr style={{ backgroundColor: '#f3f4f6' }}>
                           <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #e5e7eb' }}>Moodul</th>
                           <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid #e5e7eb', width: '60px' }}>Vaata</th>
-                          <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid #e5e7eb', width: '60px' }}>Muuda</th>
-                          <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid #e5e7eb', width: '60px' }}>Kustuta</th>
+                          <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid #e5e7eb', width: '60px' }}>{t('users.edit')}</th>
+                          <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid #e5e7eb', width: '60px' }}>{t('common:buttons.delete')}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {/* Tarnegraafik */}
                         <tr style={{ backgroundColor: 'white' }}>
-                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #e5e7eb' }}>🚚 Tarnegraafik</td>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #e5e7eb' }}>{t('users.deliveryScheduleModule')}</td>
                           <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid #e5e7eb' }}>
                             <input type="checkbox" checked={userFormData.can_view_delivery} onChange={e => setUserFormData(prev => ({ ...prev, can_view_delivery: e.target.checked }))} />
                           </td>
@@ -16311,7 +16310,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                         </tr>
                         {/* Paigaldusgraafik */}
                         <tr style={{ backgroundColor: 'white' }}>
-                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #e5e7eb' }}>📅 Paigaldusgraafik</td>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #e5e7eb' }}>{t('users.installationScheduleModule')}</td>
                           <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid #e5e7eb' }}>
                             <input type="checkbox" checked={userFormData.can_view_installation_schedule} onChange={e => setUserFormData(prev => ({ ...prev, can_view_installation_schedule: e.target.checked }))} />
                           </td>
@@ -16324,7 +16323,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                         </tr>
                         {/* Paigaldused */}
                         <tr style={{ backgroundColor: 'white' }}>
-                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #e5e7eb' }}>🔧 Paigaldused</td>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #e5e7eb' }}>{t('users.installationsModule')}</td>
                           <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid #e5e7eb' }}>
                             <input type="checkbox" checked={userFormData.can_view_installations} onChange={e => setUserFormData(prev => ({ ...prev, can_view_installations: e.target.checked }))} />
                           </td>
@@ -16441,7 +16440,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
               style={{ padding: '6px 12px' }}
             >
               <FiRefreshCw size={14} className={resourcesLoading ? 'spin' : ''} />
-              <span>Värskenda</span>
+              <span>{t('common:buttons.refresh')}</span>
             </button>
           </div>
 
@@ -16629,7 +16628,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   <div style={{ marginBottom: '12px', padding: '8px 12px', background: '#fef3c7', borderRadius: '6px', fontSize: '12px', color: '#92400e' }}>
                     Praegune nimi: <strong>{editingInstallationResource.oldName}</strong>
                     <br />
-                    <span style={{ fontSize: '11px' }}>Uuendatakse kõikides paigaldustes automaatselt</span>
+                    <span style={{ fontSize: '11px' }}>{t('resources.autoUpdatedInInstallations')}</span>
                   </div>
                 )}
 
@@ -16677,7 +16676,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                   >
                     {resourcesSaving ? <FiRefreshCw size={14} className="spin" /> : <FiSave size={14} />}
-                    {editingInstallationResource ? 'Uuenda nimi' : editingResource ? 'Salvesta' : 'Lisa'}
+                    {editingInstallationResource ? t('users.updateName') : editingResource ? t('users.save') : t('users.add')}
                   </button>
                 </div>
               </div>
@@ -16702,7 +16701,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                 return (
                   <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
                     <FiRefreshCw size={24} className="spin" />
-                    <p>Laadin ressursse...</p>
+                    <p>{t('resources.loadingResources')}</p>
                   </div>
                 );
               }
@@ -16897,7 +16896,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
               style={{ padding: '6px 12px' }}
             >
               <FiRefreshCw size={14} className={cameraPositionsLoading ? 'spin' : ''} />
-              <span>Värskenda</span>
+              <span>{t('common:buttons.refresh')}</span>
             </button>
           </div>
 
@@ -16940,7 +16939,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                   <h3 style={{ margin: 0, fontSize: '14px' }}>
-                    {editingCameraPosition ? 'Muuda vaadet' : 'Salvesta praegune vaade'}
+                    {editingCameraPosition ? t('settings.views.editView') : t('settings.saveCurrentView')}
                   </h3>
                   <button onClick={() => setShowCameraForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}>
                     <FiX size={16} />
@@ -17067,7 +17066,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', padding: '6px 10px', fontSize: '12px' }}
                   >
                     {cameraPositionsSaving ? <FiRefreshCw size={12} className="spin" /> : <FiSave size={12} />}
-                    {editingCameraPosition ? 'Salvesta' : 'Salvesta vaade'}
+                    {editingCameraPosition ? t('users.save') : t('settings.views.save')}
                   </button>
                 </div>
               </div>
@@ -17242,8 +17241,8 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   <FiDownload size={24} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Ekspordi kõik</h3>
-                  <p style={{ margin: 0, fontSize: '12px', opacity: 0.9 }}>Kõik graafikute andmed</p>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>{t('exportAll')}</h3>
+                  <p style={{ margin: 0, fontSize: '12px', opacity: 0.9 }}>{t('database.allScheduleData')}</p>
                 </div>
               </div>
               <p style={{ fontSize: '12px', opacity: 0.85, marginBottom: '16px', lineHeight: '1.5' }}>
@@ -17544,7 +17543,7 @@ div.style.cssText = 'position:fixed;top:10px;right:10px;background:white;padding
 div.innerHTML = '<h3 style="margin:0 0 10px">TC Icons</h3><button onclick="this.parentElement.remove()" style="position:absolute;top:5px;right:5px;border:none;background:#eee;cursor:pointer;padding:4px 8px;border-radius:4px;">✕</button>' + allIcons.map(ic => '<div style="display:flex;align-items:center;gap:10px;padding:5px;border-bottom:1px solid #eee;"><i class="icon-font ' + ic + '" style="font-size:24px;"></i><code style="font-size:11px;">' + ic + '</code></div>').join('');
 document.body.appendChild(div);`;
                   navigator.clipboard.writeText(code);
-                  setMessage('Script kopeeritud lõikelauale!');
+                  setMessage(t('scriptCopied'));
                 }}
                 style={{
                   position: 'absolute',
@@ -17704,7 +17703,7 @@ document.body.appendChild(div);`;
             <textarea
               value={guidControllerInput}
               onChange={(e) => setGuidControllerInput(e.target.value)}
-              placeholder="Sisesta GUID(id)..."
+              placeholder={t('viewer.enterGuids')}
               style={{
                 width: '100%',
                 minHeight: '50px',
@@ -17818,7 +17817,7 @@ document.body.appendChild(div);`;
                 try {
                   await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
                   await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
-                  setGuidControllerResult({ status: 'success', message: 'Mudel lähtestatud!' });
+                  setGuidControllerResult({ status: 'success', message: t('viewer.modelReset') });
                 } catch (e: any) {
                   setGuidControllerResult({ status: 'error', message: e.message });
                 }
@@ -18017,7 +18016,7 @@ document.body.appendChild(div);`;
                   style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
                   <FiCamera size={16} />
-                  <span>Skänni siin</span>
+                  <span>{t('positioner.scanHere')}</span>
                 </button>
                 <button
                   className="btn-primary"
@@ -18400,7 +18399,7 @@ document.body.appendChild(div);`;
                           title={t('common:buttons.add')}
                         >
                           <FiMapPin size={12} />
-                          <span>Marker</span>
+                          <span>{t('positioner.marker')}</span>
                         </button>
                         <button
                           className="admin-tool-btn"
@@ -18434,7 +18433,7 @@ document.body.appendChild(div);`;
               background: '#f9fafb',
               borderRadius: '8px'
             }}>
-              {positionsLoading ? 'Laadin...' : 'Positsioneeritud detaile pole. Skänni QR kood detaili asukohaga.'}
+              {positionsLoading ? t('loading') : t('positioner.noPositions')}
             </div>
           )}
         </div>
@@ -18453,7 +18452,7 @@ document.body.appendChild(div);`;
           {deliveryAdminLoading ? (
             <div style={{ textAlign: 'center', padding: '40px' }}>
               <FiRefreshCw className="spin" size={32} style={{ color: '#6b7280' }} />
-              <p style={{ marginTop: '12px', color: '#6b7280' }}>Laadin statistikat...</p>
+              <p style={{ marginTop: '12px', color: '#6b7280' }}>{t('database.loadingStats')}</p>
             </div>
           ) : deliveryAdminStats ? (
             <div style={{
@@ -18478,7 +18477,7 @@ document.body.appendChild(div);`;
                 color: 'white'
               }}>
                 <div style={{ fontSize: '28px', fontWeight: '700' }}>{deliveryAdminStats.items}</div>
-                <div style={{ fontSize: '12px', opacity: 0.9 }}>Tarnedetailid</div>
+                <div style={{ fontSize: '12px', opacity: 0.9 }}>{t('database.deliveryItems')}</div>
               </div>
               <div style={{
                 padding: '16px',
@@ -18500,7 +18499,7 @@ document.body.appendChild(div);`;
                 <div style={{ fontSize: '28px', fontWeight: '700' }}>
                   {deliveryAdminStats.sheetsConfig ? '✓' : '—'}
                 </div>
-                <div style={{ fontSize: '12px', opacity: 0.9 }}>Sheets sünk.</div>
+                <div style={{ fontSize: '12px', opacity: 0.9 }}>{t('database.sheetsSync')}</div>
               </div>
             </div>
           ) : (
@@ -18574,7 +18573,7 @@ document.body.appendChild(div);`;
                   <li>Kõik tarnedetailid ({deliveryAdminStats?.items || 0})</li>
                   <li>Kõik tehased ({deliveryAdminStats?.factories || 0})</li>
                   <li>Veokite ajalugu ja kommentaarid</li>
-                  <li>Google Sheets sünkroonimise seaded</li>
+                  <li>{t('database.sheetsSyncSettings')}</li>
                 </ul>
                 <div style={{ display: 'flex', gap: '12px' }}>
                   <button

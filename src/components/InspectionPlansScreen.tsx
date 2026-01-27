@@ -192,7 +192,7 @@ export default function InspectionPlansScreen({
   return (
     <div className="screen">
       <PageHeader
-        title="Kontrollplaanid"
+        title={t('plans.title')}
         onBack={onBack}
         user={user}
         projectId={projectId}
@@ -221,7 +221,7 @@ export default function InspectionPlansScreen({
             }}
           >
             <FiShield size={18} />
-            Admin paneel
+            {t('plans.adminPanel')}
           </button>
         </div>
       )}
@@ -238,7 +238,7 @@ export default function InspectionPlansScreen({
             <p>{t('plans.noPlans')}</p>
             {checkIsAdmin(user) && (
               <p style={{ marginTop: '8px', fontSize: '14px', color: '#6b7280' }}>
-                Koosta inspektsiooni kava administratsiooni menüüst
+                {t('plans.createHint')}
               </p>
             )}
           </div>

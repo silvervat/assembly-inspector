@@ -724,7 +724,7 @@ export default function InspectionPlanScreen({
   // Save selected objects to plan
   const saveToplan = async (skipDuplicates: boolean = true) => {
     if (selectedObjects.length === 0) {
-      showMessage('⚠️ Pole objekte salvestamiseks', 'warning');
+      showMessage(t('planScreen.noObjectsToSave'), 'warning');
       return;
     }
 
@@ -738,7 +738,7 @@ export default function InspectionPlanScreen({
         : selectedObjects;
 
       if (objectsToSave.length === 0) {
-        showMessage('⚠️ Kõik valitud objektid on juba kavas', 'warning');
+        showMessage(t('planScreen.allObjectsAlreadyInPlan'), 'warning');
         setIsSaving(false);
         return;
       }
@@ -803,7 +803,7 @@ export default function InspectionPlanScreen({
 
       if (error) throw error;
 
-      showMessage(`✅ ${items.length} objekti lisatud kavasse!`, 'success');
+      showMessage(t('planScreen.objectsAddedToPlan', { count: items.length }), 'success');
 
       // Color newly added items blue (planned) using GUIDs
       const newGuids = objectsToSave
@@ -819,7 +819,7 @@ export default function InspectionPlanScreen({
 
     } catch (error) {
       console.error('Failed to save plan items:', error);
-      showMessage('❌ Viga salvestamisel: ' + (error as Error).message, 'error');
+      showMessage(t('planScreen.errorSaving') + ': ' + (error as Error).message, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -828,7 +828,7 @@ export default function InspectionPlanScreen({
   // Navigate to existing item
   const zoomToItem = async (item: InspectionPlanItem) => {
     try {
-      showMessage(`🔍 Otsin objekti...`, 'info');
+      showMessage(t('planScreen.searchingObject'), 'info');
 
       // Apply assembly selection mode from the plan item
       const itemAssemblyMode = item.assembly_selection_mode ?? true;
@@ -851,22 +851,22 @@ export default function InspectionPlanScreen({
       }];
       await api.viewer.setCamera({ modelObjectIds } as any, { animationTime: 300 });
 
-      showMessage(`✅ ${item.assembly_mark || item.object_name || 'Objekt'} valitud`, 'success');
+      showMessage(t('planScreen.objectSelected', { name: item.assembly_mark || item.object_name || 'Object' }), 'success');
     } catch (error) {
       console.error('Failed to zoom to item:', error);
-      showMessage('❌ Viga objekti valimisel', 'error');
+      showMessage(t('planScreen.errorSelectingObject'), 'error');
     }
   };
 
   // Export inspection result as PDF
   const exportInspectionPdf = async (item: PlanItemWithStats) => {
     if (!item.checkpointResults || item.checkpointResults.length === 0) {
-      showMessage('⚠️ Sellel objektil pole inspektsiooni tulemusi PDF-i jaoks', 'warning');
+      showMessage(t('planScreen.noPdfResults'), 'warning');
       return;
     }
 
     setExportingPdfItemId(item.id);
-    setPdfProgress({ percent: 0, message: 'Alustab PDF genereerimist...' });
+    setPdfProgress({ percent: 0, message: t('planScreen.startingPdf') });
 
     try {
       // Get the inspection type and category info
@@ -913,10 +913,10 @@ export default function InspectionPlanScreen({
         setPdfProgress({ percent, message });
       });
 
-      showMessage('✅ PDF allalaaditud!', 'success');
+      showMessage(t('planScreen.pdfDownloaded'), 'success');
     } catch (error) {
       console.error('Failed to export PDF:', error);
-      showMessage('❌ PDF genereerimise viga: ' + (error as Error).message, 'error');
+      showMessage(t('planScreen.pdfError') + ': ' + (error as Error).message, 'error');
     } finally {
       setExportingPdfItemId(null);
       setPdfProgress(null);
@@ -925,7 +925,7 @@ export default function InspectionPlanScreen({
 
   // Delete item from plan
   const deleteItem = async (item: InspectionPlanItem) => {
-    if (!confirm(`Kas kustutada "${item.assembly_mark || item.object_name || 'objekt'}" kavast?`)) {
+    if (!confirm(t('planScreen.deleteFromPlanConfirm', { name: item.assembly_mark || item.object_name || 'object' }))) {
       return;
     }
 
@@ -937,23 +937,23 @@ export default function InspectionPlanScreen({
 
       if (error) throw error;
 
-      showMessage('✅ Objekt kustutatud kavast', 'success');
+      showMessage(t('planScreen.objectDeletedFromPlan'), 'success');
       fetchPlanItems();
     } catch (error) {
       console.error('Failed to delete item:', error);
-      showMessage('❌ Viga kustutamisel', 'error');
+      showMessage(t('planScreen.errorDeleting'), 'error');
     }
   };
 
   // Delete inspection results for a plan item
   const deleteInspectionResults = async (item: PlanItemWithStats) => {
     if (!item.checkpointResults || item.checkpointResults.length === 0) {
-      showMessage('⚠️ Sellel objektil pole inspektsiooni tulemusi', 'warning');
+      showMessage(t('planScreen.noResultsToDelete'), 'warning');
       return;
     }
 
     const resultCount = item.checkpointResults.length;
-    if (!confirm(`Kas kustutada ${resultCount} inspektsiooni tulemust objektilt "${item.assembly_mark || item.object_name || 'objekt'}"? Seda tegevust ei saa tagasi võtta!`)) {
+    if (!confirm(t('planScreen.deleteResultsConfirm', { count: resultCount, name: item.assembly_mark || item.object_name || 'object' }))) {
       return;
     }
 
@@ -980,17 +980,17 @@ export default function InspectionPlanScreen({
 
       if (error) throw error;
 
-      showMessage(`✅ ${resultCount} inspektsiooni tulemust kustutatud`, 'success');
+      showMessage(t('planScreen.resultsDeleted', { count: resultCount }), 'success');
       fetchPlanItems();
     } catch (error) {
       console.error('Failed to delete inspection results:', error);
-      showMessage('❌ Viga inspektsiooni tulemuste kustutamisel', 'error');
+      showMessage(t('planScreen.errorDeletingResults'), 'error');
     }
   };
 
   // Delete a single checkpoint result
   const deleteSingleResult = async (resultId: string, resultName: string) => {
-    if (!confirm(`Kas kustutada tulemus "${resultName}"?`)) {
+    if (!confirm(t('planScreen.deleteResultConfirm', { name: resultName }))) {
       return;
     }
 
@@ -1009,17 +1009,17 @@ export default function InspectionPlanScreen({
 
       if (error) throw error;
 
-      showMessage('✅ Tulemus kustutatud', 'success');
+      showMessage(t('planScreen.resultDeleted'), 'success');
       fetchPlanItems();
     } catch (error) {
       console.error('Failed to delete result:', error);
-      showMessage('❌ Viga kustutamisel', 'error');
+      showMessage(t('planScreen.errorDeleting'), 'error');
     }
   };
 
   // Delete a single photo
   const deletePhoto = async (photoId: string) => {
-    if (!confirm('Kas kustutada see foto?')) {
+    if (!confirm(t('planScreen.deletePhotoConfirm'))) {
       return;
     }
 
@@ -1031,11 +1031,11 @@ export default function InspectionPlanScreen({
 
       if (error) throw error;
 
-      showMessage('✅ Foto kustutatud', 'success');
+      showMessage(t('planScreen.photoDeleted'), 'success');
       fetchPlanItems();
     } catch (error) {
       console.error('Failed to delete photo:', error);
-      showMessage('❌ Viga foto kustutamisel', 'error');
+      showMessage(t('planScreen.errorDeletingPhoto'), 'error');
     }
   };
 
@@ -1049,11 +1049,11 @@ export default function InspectionPlanScreen({
 
       if (error) throw error;
 
-      showMessage('✅ Kommentaar uuendatud', 'success');
+      showMessage(t('planScreen.commentUpdated'), 'success');
       fetchPlanItems();
     } catch (error) {
       console.error('Failed to update comment:', error);
-      showMessage('❌ Viga kommentaari uuendamisel', 'error');
+      showMessage(t('planScreen.errorUpdatingComment'), 'error');
     }
   };
 
@@ -1204,11 +1204,11 @@ export default function InspectionPlanScreen({
   // Mass delete selected items
   const deleteSelectedItems = async () => {
     if (selectedItemIds.size === 0) {
-      showMessage('⚠️ Valige kõigepealt elemendid kustutamiseks', 'warning');
+      showMessage(t('planScreen.selectItemsFirst'), 'warning');
       return;
     }
 
-    if (!confirm(`Kas kustutada ${selectedItemIds.size} elementi kavast? Seda tegevust ei saa tagasi võtta!`)) {
+    if (!confirm(t('planScreen.deleteItemsConfirm', { count: selectedItemIds.size }))) {
       return;
     }
 
@@ -1223,13 +1223,13 @@ export default function InspectionPlanScreen({
 
       if (error) throw error;
 
-      showMessage(`✅ ${idsToDelete.length} elementi kustutatud kavast`, 'success');
+      showMessage(t('planScreen.itemsDeletedFromPlan', { count: idsToDelete.length }), 'success');
       setSelectedItemIds(new Set());
       setSelectionMode(false);
       fetchPlanItems();
     } catch (error) {
       console.error('Failed to delete selected items:', error);
-      showMessage('❌ Viga kustutamisel: ' + (error as Error).message, 'error');
+      showMessage(t('planScreen.errorDeleting') + ': ' + (error as Error).message, 'error');
     } finally {
       setIsSaving(false);
     }
@@ -1246,7 +1246,7 @@ export default function InspectionPlanScreen({
     const completedItems = planItems.filter(item => (item.inspection_count || 0) > 0);
 
     if (completedItems.length === 0) {
-      showMessage('⚠️ Pole tehtud inspektsioone', 'warning');
+      showMessage(t('planScreen.noInspectionsDone'), 'warning');
       return;
     }
 
@@ -1274,10 +1274,10 @@ export default function InspectionPlanScreen({
         { color: { r: 34, g: 197, b: 94, a: 255 } }
       );
 
-      showMessage(`✅ ${completedItems.length} tehtud objekti valitud`, 'success');
+      showMessage(t('planScreen.doneObjectsSelected', { count: completedItems.length }), 'success');
     } catch (error) {
       console.error('Failed to select completed items:', error);
-      showMessage('❌ Viga valimisel', 'error');
+      showMessage(t('planScreen.errorSelecting'), 'error');
     }
   };
 
@@ -1286,7 +1286,7 @@ export default function InspectionPlanScreen({
     const uncompletedItems = planItems.filter(item => (item.inspection_count || 0) === 0);
 
     if (uncompletedItems.length === 0) {
-      showMessage('✅ Kõik on tehtud!', 'success');
+      showMessage(t('planScreen.allDone'), 'success');
       return;
     }
 
@@ -1314,10 +1314,10 @@ export default function InspectionPlanScreen({
         { color: { r: 249, g: 115, b: 22, a: 255 } }
       );
 
-      showMessage(`⚠️ ${uncompletedItems.length} tegemata objekti valitud`, 'warning');
+      showMessage(t('planScreen.pendingObjectsSelected', { count: uncompletedItems.length }), 'warning');
     } catch (error) {
       console.error('Failed to select uncompleted items:', error);
-      showMessage('❌ Viga valimisel', 'error');
+      showMessage(t('planScreen.errorSelecting'), 'error');
     }
   };
 
@@ -1387,10 +1387,10 @@ export default function InspectionPlanScreen({
 
     for (const item of filtered) {
       const typeId = item.inspection_type_id || 'unknown';
-      const typeName = item.inspection_type?.name || 'Kategooria määramata';
+      const typeName = item.inspection_type?.name || t('planScreen.categoryNotSet');
       const typeColor = item.inspection_type?.color;
       const categoryId = item.category_id || 'unknown';
-      const categoryName = item.category?.name || 'Tüüp määramata';
+      const categoryName = item.category?.name || t('planScreen.typeNotSet');
 
       if (!typeMap.has(typeId)) {
         typeMap.set(typeId, {
@@ -1450,7 +1450,7 @@ export default function InspectionPlanScreen({
       }));
 
       await api.viewer.setSelection({ modelObjectIds }, 'set');
-      showMessage(`✅ ${items.length} objekti valitud`, 'success');
+      showMessage(t('planScreen.objectsSelectedCount', { count: items.length }), 'success');
     } catch (error) {
       console.error('Failed to select type items:', error);
     }
@@ -1475,7 +1475,7 @@ export default function InspectionPlanScreen({
       }));
 
       await api.viewer.setSelection({ modelObjectIds }, 'set');
-      showMessage(`✅ ${items.length} objekti valitud`, 'success');
+      showMessage(t('planScreen.objectsSelectedCount', { count: items.length }), 'success');
     } catch (error) {
       console.error('Failed to select category items:', error);
     }
@@ -1513,7 +1513,7 @@ export default function InspectionPlanScreen({
     <div className="inspector-container">
       {/* PageHeader with hamburger menu */}
       <PageHeader
-        title="Inspektsiooni kava"
+        title={t('planScreen.title')}
         onBack={onBackToMenu}
         onNavigate={handleHeaderNavigate}
         currentMode="inspection_plan"
@@ -1531,24 +1531,24 @@ export default function InspectionPlanScreen({
           onClick={() => setViewMode('add')}
         >
           <FiPlus size={16} />
-          Lisa kavasse
+          {t('planScreen.addToPlan')}
         </button>
         <button
           className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
           onClick={() => setViewMode('list')}
         >
           <FiList size={16} />
-          Kava nimekiri ({planItems.length})
+          {t('planScreen.planList')} ({planItems.length})
         </button>
         {/* Config button - only for admin/moderator */}
         {isAdminOrModerator(user) && (
           <button
             className="config-btn"
             onClick={() => setShowConfigScreen(true)}
-            title="Seadista inspektsioone"
+            title={t('planScreen.configureTooltip')}
           >
             <FiSettings size={16} />
-            Seadista
+            {t('planScreen.configure')}
           </button>
         )}
       </div>
@@ -1558,7 +1558,7 @@ export default function InspectionPlanScreen({
         <div className="plan-stats">
           <div className="stat-item" style={{ borderColor: '#6b7280' }}>
             <span className="stat-value">{stats.total_items}</span>
-            <span className="stat-label">Kokku</span>
+            <span className="stat-label">{t('planScreen.total')}</span>
           </div>
           <div className="stat-item" style={{ borderColor: INSPECTION_STATUS_COLORS.planned.hex, backgroundColor: INSPECTION_STATUS_COLORS.planned.hex + '15' }}>
             <span className="stat-value" style={{ color: INSPECTION_STATUS_COLORS.planned.hex }}>{stats.planned_count}</span>
@@ -1595,33 +1595,33 @@ export default function InspectionPlanScreen({
         <div className="plan-add-section">
           {/* Assembly Selection Mode */}
           <div className="plan-mode-select">
-            <label>Assembly Selection režiim:</label>
+            <label>{t('planScreen.assemblySelectionMode')}</label>
             <div className="mode-buttons">
               <button
                 className={`mode-btn ${assemblyMode === 'on' ? 'active assembly-on' : ''}`}
                 onClick={() => setAssemblyMode('on')}
               >
                 <FiGrid size={16} />
-                Assembly SEES
+                {t('planScreen.assemblyOn')}
               </button>
               <button
                 className={`mode-btn ${assemblyMode === 'off' ? 'active assembly-off' : ''}`}
                 onClick={() => setAssemblyMode('off')}
               >
                 <FiList size={16} />
-                Assembly VÄLJAS
+                {t('planScreen.assemblyOff')}
               </button>
             </div>
             <p className="mode-hint">
               {assemblyMode === 'on'
-                ? '💡 Valides detaili, valitakse kogu assembly (nt tala koos plaatidega)'
-                : '💡 Valides detaili, valitakse ainult see konkreetne osa'}
+                ? t('planScreen.assemblyHintOn')
+                : t('planScreen.assemblyHintOff')}
             </p>
           </div>
 
           {/* Inspection Type Select */}
           <div className="plan-type-select">
-            <label>Inspektsiooni kategooria: *</label>
+            <label>{t('planScreen.inspectionCategory')}</label>
             <div className="type-grid">
               {inspectionTypes.map(type => (
                 <button
@@ -1644,32 +1644,32 @@ export default function InspectionPlanScreen({
 
           {/* Category Select - REQUIRED */}
           <div className="plan-category-select">
-            <label>Inspektsiooni tüüp: *</label>
+            <label>{t('planScreen.inspectionType')}</label>
             {filteredCategories.length > 0 ? (
               <select
                 value={selectedCategoryId}
                 onChange={(e) => setSelectedCategoryId(e.target.value)}
                 className={`category-dropdown ${!selectedCategoryId ? 'required-empty' : ''}`}
               >
-                <option value="">-- Vali inspektsiooni tüüp --</option>
+                <option value="">{t('planScreen.selectInspectionType')}</option>
                 {filteredCategories.map(cat => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
             ) : (
               <div className="category-hint">
-                {selectedTypeId ? '⚠️ Sellel kategoorial pole inspektsiooni tüüpe' : 'Vali esmalt inspektsiooni kategooria'}
+                {selectedTypeId ? t('planScreen.noTypesInCategory') : t('planScreen.selectCategoryFirst')}
               </div>
             )}
           </div>
 
           {/* Notes */}
           <div className="plan-notes">
-            <label>Märkmed (valikuline):</label>
+            <label>{t('planScreen.notesOptional')}</label>
             <textarea
               value={plannerNotes}
               onChange={(e) => setPlannerNotes(e.target.value)}
-              placeholder="Lisa märkmeid kavasse..."
+              placeholder={t('planScreen.addNotesPlaceholder')}
               rows={2}
             />
           </div>
@@ -1681,13 +1681,13 @@ export default function InspectionPlanScreen({
                 {selectedObjects.length > 0 ? (
                   <>
                     <span className="selection-count">{selectedObjects.length}</span>
-                    <span className="selection-label">objekti valitud</span>
+                    <span className="selection-label">{t('planScreen.objectsSelected')}</span>
                     {duplicates.length > 0 && (
-                      <span className="selection-duplicates">({duplicates.length} juba kavas)</span>
+                      <span className="selection-duplicates">({duplicates.length} {t('planScreen.alreadyInPlan')})</span>
                     )}
                   </>
                 ) : (
-                  <span className="selection-hint">Vali mudelis objekte lisamiseks kavasse</span>
+                  <span className="selection-hint">{t('planScreen.selectObjectsHint')}</span>
                 )}
               </div>
             </div>
@@ -1712,20 +1712,20 @@ export default function InspectionPlanScreen({
                     {/* Location info */}
                     {(obj.positionCode || obj.bottomElevation || obj.topElevation || obj.parentAssemblyMark) && (
                       <span className="selected-location" style={{ fontSize: '10px', color: '#64748b' }}>
-                        {obj.positionCode && <span title="Telje asukoht">📍{obj.positionCode}</span>}
-                        {obj.bottomElevation && <span title="Alumine kõrgus"> ⬇️{obj.bottomElevation}</span>}
-                        {obj.topElevation && <span title="Ülemine kõrgus"> ⬆️{obj.topElevation}</span>}
-                        {obj.parentAssemblyMark && <span title="Ema detaili mark"> 🏠{obj.parentAssemblyMark}</span>}
+                        {obj.positionCode && <span title={t('planScreen.axisLocation')}>📍{obj.positionCode}</span>}
+                        {obj.bottomElevation && <span title={t('planScreen.lowerHeight')}> ⬇️{obj.bottomElevation}</span>}
+                        {obj.topElevation && <span title={t('planScreen.upperHeight')}> ⬆️{obj.topElevation}</span>}
+                        {obj.parentAssemblyMark && <span title={t('planScreen.parentMark')}> 🏠{obj.parentAssemblyMark}</span>}
                       </span>
                     )}
                     {duplicates.find(d => d.guid === obj.guid) && (
-                      <span className="duplicate-badge">⚠️ Juba kavas</span>
+                      <span className="duplicate-badge">{t('planScreen.alreadyInPlan')}</span>
                     )}
                   </div>
                 ))}
                 {selectedObjects.length > 10 && (
                   <div className="selected-more">
-                    ... ja veel {selectedObjects.length - 10} objekti
+                    {t('planScreen.andMore', { count: selectedObjects.length - 10 })} {t('planScreen.objects')}
                   </div>
                 )}
               </div>
@@ -1743,12 +1743,12 @@ export default function InspectionPlanScreen({
                 {isSaving ? (
                   <>
                     <FiRefreshCw className="spin" size={18} />
-                    Salvestan...
+                    {t('planScreen.saving')}
                   </>
                 ) : (
                   <>
                     <FiSave size={18} />
-                    Lisa kavasse ({selectedObjects.length - duplicates.length} uut)
+                    {t('planScreen.addToPlanBtn')} ({selectedObjects.length - duplicates.length} {t('planScreen.newItems')})
                   </>
                 )}
               </button>
@@ -1763,8 +1763,8 @@ export default function InspectionPlanScreen({
           {planItems.length === 0 ? (
             <div className="empty-state">
               <FiList size={48} />
-              <h3>Kava on tühi</h3>
-              <p>Lisa objekte kavasse "Lisa kavasse" vaates</p>
+              <h3>{t('planScreen.emptyPlan')}</h3>
+              <p>{t('planScreen.emptyPlanHint')}</p>
             </div>
           ) : (
             <>
@@ -1775,7 +1775,7 @@ export default function InspectionPlanScreen({
                     <FiSearch size={14} className="search-icon" />
                     <input
                       type="text"
-                      placeholder="Otsi mark, GUID, nimi..."
+                      placeholder={t('planScreen.searchPlaceholder')}
                       value={searchText}
                       onChange={(e) => setSearchText(e.target.value)}
                       className="search-input"
@@ -1801,16 +1801,16 @@ export default function InspectionPlanScreen({
                       onChange={(e) => setFilterStatus(e.target.value as 'all' | 'done' | 'pending')}
                       className="filter-select"
                     >
-                      <option value="all">Kõik staatused</option>
-                      <option value="done">Tehtud</option>
-                      <option value="pending">Tegemata</option>
+                      <option value="all">{t('planScreen.allStatuses')}</option>
+                      <option value="done">{t('planScreen.done')}</option>
+                      <option value="pending">{t('planScreen.pending')}</option>
                     </select>
                     <select
                       value={filterInspector}
                       onChange={(e) => setFilterInspector(e.target.value)}
                       className="filter-select"
                     >
-                      <option value="">Kõik inspektorid</option>
+                      <option value="">{t('planScreen.allInspectors')}</option>
                       {getUniqueInspectors().map(name => (
                         <option key={name} value={name}>{name}</option>
                       ))}
@@ -1820,13 +1820,13 @@ export default function InspectionPlanScreen({
 
                 {(searchText || filterStatus !== 'all' || filterInspector) && (
                   <div className="filter-results">
-                    <span>{filteredPlanItems().length} / {planItems.length} objekti</span>
+                    <span>{filteredPlanItems().length} / {planItems.length} {t('planScreen.objects')}</span>
                     <button className="filter-clear-all" onClick={() => {
                       setSearchText('');
                       setFilterStatus('all');
                       setFilterInspector('');
                     }}>
-                      Tühjenda filtrid
+                      {t('planScreen.clearFilters')}
                     </button>
                   </div>
                 )}
@@ -1841,22 +1841,22 @@ export default function InspectionPlanScreen({
                       onClick={selectCompletedItems}
                     >
                       <FiCheckCircle size={16} />
-                      Vali tehtud ({filteredPlanItems().filter(i => (i.inspection_count || 0) > 0).length})
+                      {t('planScreen.selectDone')} ({filteredPlanItems().filter(i => (i.inspection_count || 0) > 0).length})
                     </button>
                     <button
                       className="btn-select-uncompleted"
                       onClick={selectUncompletedItems}
                     >
                       <FiClock size={16} />
-                      Vali tegemata ({filteredPlanItems().filter(i => (i.inspection_count || 0) === 0).length})
+                      {t('planScreen.selectPending')} ({filteredPlanItems().filter(i => (i.inspection_count || 0) === 0).length})
                     </button>
                     <button
                       className="btn-edit-mode"
                       onClick={() => setSelectionMode(true)}
-                      title="Kustuta elemente"
+                      title={t('planScreen.deleteItemTooltip')}
                     >
                       <FiTrash2 size={16} />
-                      Muuda kava
+                      {t('planScreen.editPlan')}
                     </button>
                   </>
                 ) : (
@@ -1865,14 +1865,14 @@ export default function InspectionPlanScreen({
                       className="btn-select-all"
                       onClick={selectAllFilteredItems}
                     >
-                      Vali kõik ({filteredPlanItems().length})
+                      {t('planScreen.selectAll')} ({filteredPlanItems().length})
                     </button>
                     <button
                       className="btn-deselect-all"
                       onClick={deselectAllItems}
                       disabled={selectedItemIds.size === 0}
                     >
-                      Tühista valik
+                      {t('planScreen.deselectAll')}
                     </button>
                     <button
                       className="btn-delete-selected"
@@ -1880,14 +1880,14 @@ export default function InspectionPlanScreen({
                       disabled={selectedItemIds.size === 0 || isSaving}
                     >
                       <FiTrash2 size={16} />
-                      Kustuta ({selectedItemIds.size})
+                      {t('planScreen.delete')} ({selectedItemIds.size})
                     </button>
                     <button
                       className="btn-cancel-mode"
                       onClick={exitSelectionMode}
                     >
                       <FiX size={16} />
-                      Tühista
+                      {t('planScreen.cancel')}
                     </button>
                   </>
                 )}
@@ -1920,7 +1920,7 @@ export default function InspectionPlanScreen({
                         <button
                           className="btn-select-group"
                           onClick={(e) => { e.stopPropagation(); selectTypeItems(typeGroup.typeId); }}
-                          title="Vali kõik"
+                          title={t('planScreen.selectAllTooltip')}
                         >
                           <FiTarget size={14} />
                         </button>
@@ -1953,7 +1953,7 @@ export default function InspectionPlanScreen({
                                   <button
                                     className="btn-select-group btn-small"
                                     onClick={(e) => { e.stopPropagation(); selectCategoryItems(catGroup.categoryId); }}
-                                    title="Vali kõik"
+                                    title={t('planScreen.selectAllTooltip')}
                                   >
                                     <FiTarget size={12} />
                                   </button>
@@ -2022,14 +2022,14 @@ export default function InspectionPlanScreen({
                                                 <button
                                                   className="btn-icon-small"
                                                   onClick={(e) => { e.stopPropagation(); zoomToItem(item); }}
-                                                  title="Vaata mudelis"
+                                                  title={t('planScreen.viewInModel')}
                                                 >
                                                   <FiZoomIn size={14} />
                                                 </button>
                                                 <button
                                                   className="btn-icon-small btn-danger"
                                                   onClick={(e) => { e.stopPropagation(); deleteItem(item); }}
-                                                  title="Kustuta kavast"
+                                                  title={t('planScreen.deleteFromPlan')}
                                                 >
                                                   <FiTrash2 size={14} />
                                                 </button>
@@ -2044,16 +2044,16 @@ export default function InspectionPlanScreen({
                                               {(item.cast_unit_position_code || item.cast_unit_bottom_elevation || item.cast_unit_top_elevation || item.parent_assembly_mark) && (
                                                 <div className="item-location-info" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px', fontSize: '11px', color: '#64748b' }}>
                                                   {item.cast_unit_position_code && (
-                                                    <span title="Telje asukoht">📍 {item.cast_unit_position_code}</span>
+                                                    <span title={t('planScreen.axisLocation')}>📍 {item.cast_unit_position_code}</span>
                                                   )}
                                                   {item.cast_unit_bottom_elevation && (
-                                                    <span title="Alumine kõrgus">⬇️ {item.cast_unit_bottom_elevation}</span>
+                                                    <span title={t('planScreen.lowerHeight')}>⬇️ {item.cast_unit_bottom_elevation}</span>
                                                   )}
                                                   {item.cast_unit_top_elevation && (
-                                                    <span title="Ülemine kõrgus">⬆️ {item.cast_unit_top_elevation}</span>
+                                                    <span title={t('planScreen.upperHeight')}>⬆️ {item.cast_unit_top_elevation}</span>
                                                   )}
                                                   {item.parent_assembly_mark && (
-                                                    <span title="Ema detaili mark">🏠 {item.parent_assembly_mark}</span>
+                                                    <span title={t('planScreen.parentMark')}>🏠 {item.parent_assembly_mark}</span>
                                                   )}
                                                 </div>
                                               )}
@@ -2075,29 +2075,29 @@ export default function InspectionPlanScreen({
                                                     <button
                                                       className="btn-history"
                                                       onClick={(e) => { e.stopPropagation(); setHistoryItemId(item.id); }}
-                                                      title="Vaata ajalugu"
+                                                      title={t('planScreen.history')}
                                                       style={{ marginRight: '4px', background: '#3B82F6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}
                                                     >
                                                       <FiFileText size={12} />
-                                                      Ajalugu
+                                                      {t('planScreen.history')}
                                                     </button>
                                                     <button
                                                       className="btn-export-pdf"
                                                       onClick={(e) => { e.stopPropagation(); exportInspectionPdf(item); }}
-                                                      title="Ekspordi PDF raport"
+                                                      title="Export PDF report"
                                                       disabled={exportingPdfItemId === item.id}
                                                       style={{ marginRight: '4px', background: exportingPdfItemId === item.id ? '#94a3b8' : '#059669', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: exportingPdfItemId === item.id ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}
                                                     >
                                                       <FiDownload size={12} />
-                                                      {exportingPdfItemId === item.id ? (pdfProgress?.message || 'Genereerin...') : 'PDF'}
+                                                      {exportingPdfItemId === item.id ? (pdfProgress?.message || t('planScreen.generating')) : 'PDF'}
                                                     </button>
                                                     <button
                                                       className="btn-delete-results"
                                                       onClick={(e) => { e.stopPropagation(); deleteInspectionResults(item); }}
-                                                      title="Kustuta inspektsiooni tulemused"
+                                                      title={t('planScreen.deleteResultsTooltip')}
                                                     >
                                                       <FiTrash2 size={12} />
-                                                      Kustuta
+                                                      {t('planScreen.deleteResults')}
                                                     </button>
                                                   </div>
 
@@ -2113,7 +2113,7 @@ export default function InspectionPlanScreen({
                                                           <button
                                                             className="result-action-btn delete"
                                                             onClick={(e) => { e.stopPropagation(); deleteSingleResult(result.id, result.checkpoint_name || 'tulemus'); }}
-                                                            title="Kustuta tulemus"
+                                                            title={t('planScreen.delete')}
                                                           >
                                                             <FiTrash2 size={12} />
                                                           </button>
@@ -2124,7 +2124,7 @@ export default function InspectionPlanScreen({
                                                               value={editingComment}
                                                               onChange={(e) => setEditingComment(e.target.value)}
                                                               rows={2}
-                                                              placeholder="Lisa kommentaar..."
+                                                              placeholder={t('planScreen.addComment')}
                                                               autoFocus
                                                             />
                                                             <div className="comment-edit-actions">
@@ -2136,7 +2136,7 @@ export default function InspectionPlanScreen({
                                                                   setEditingResultId(null);
                                                                 }}
                                                               >
-                                                                <FiCheck size={12} /> Salvesta
+                                                                <FiCheck size={12} /> {t('planScreen.save')}
                                                               </button>
                                                               <button
                                                                 className="comment-cancel-btn"
@@ -2146,7 +2146,7 @@ export default function InspectionPlanScreen({
                                                                   setEditingComment('');
                                                                 }}
                                                               >
-                                                                <FiX size={12} /> Tühista
+                                                                <FiX size={12} /> {t('planScreen.cancel')}
                                                               </button>
                                                             </div>
                                                           </div>
@@ -2157,7 +2157,7 @@ export default function InspectionPlanScreen({
                                                                 <FiMessageSquare size={10} /> {result.comment}
                                                               </div>
                                                             ) : (
-                                                              <span className="result-no-comment">Kommentaar puudub</span>
+                                                              <span className="result-no-comment">{t('planScreen.noComment')}</span>
                                                             )}
                                                             <button
                                                               className="result-action-btn edit"
@@ -2166,7 +2166,7 @@ export default function InspectionPlanScreen({
                                                                 setEditingResultId(result.id);
                                                                 setEditingComment(result.comment || '');
                                                               }}
-                                                              title="Muuda kommentaari"
+                                                              title={t('planScreen.addComment')}
                                                             >
                                                               <FiEdit2 size={12} />
                                                             </button>
@@ -2186,17 +2186,17 @@ export default function InspectionPlanScreen({
                                                       <>
                                                         {userPhotos.length > 0 && (
                                                           <div className="results-photos">
-                                                            <div className="photos-label"><FiCamera size={12} /> Fotod:</div>
+                                                            <div className="photos-label"><FiCamera size={12} /> {t('planScreen.photos')}</div>
                                                             <div className="photos-grid-small">
                                                               {userPhotos.map(photo => (
                                                                 <div key={photo.id} className="photo-item-wrapper">
                                                                   <a href={photo.url} target="_blank" rel="noopener noreferrer">
-                                                                    <img src={photo.url} alt="Foto" />
+                                                                    <img src={photo.url} alt={t('planScreen.photo')} />
                                                                   </a>
                                                                   <button
                                                                     className="photo-delete-btn"
                                                                     onClick={(e) => { e.stopPropagation(); e.preventDefault(); deletePhoto(photo.id); }}
-                                                                    title="Kustuta foto"
+                                                                    title={t('planScreen.deletePhoto')}
                                                                   >
                                                                     <FiX size={10} />
                                                                   </button>
@@ -2207,18 +2207,18 @@ export default function InspectionPlanScreen({
                                                         )}
                                                         {snapshots.length > 0 && (
                                                           <div className="results-snapshots">
-                                                            <div className="photos-label"><FiImage size={12} /> 3D pildid:</div>
+                                                            <div className="photos-label"><FiImage size={12} /> {t('planScreen.snapshots3d')}</div>
                                                             <div className="photos-grid-small">
                                                               {snapshots.map(photo => (
                                                                 <div key={photo.id} className="photo-item-wrapper">
                                                                   <a href={photo.url} target="_blank" rel="noopener noreferrer">
-                                                                    <img src={photo.url} alt={photo.photo_type === 'topview' ? 'Pealtvaade' : '3D vaade'} />
+                                                                    <img src={photo.url} alt={photo.photo_type === 'topview' ? t('planScreen.topView') : t('planScreen.view3d')} />
                                                                     <span className="snapshot-type">{photo.photo_type === 'topview' ? 'Top' : '3D'}</span>
                                                                   </a>
                                                                   <button
                                                                     className="photo-delete-btn"
                                                                     onClick={(e) => { e.stopPropagation(); e.preventDefault(); deletePhoto(photo.id); }}
-                                                                    title="Kustuta foto"
+                                                                    title={t('planScreen.deletePhoto')}
                                                                   >
                                                                     <FiX size={10} />
                                                                   </button>
@@ -2232,7 +2232,7 @@ export default function InspectionPlanScreen({
                                                   })()}
                                                 </div>
                                               ) : (
-                                                <div className="item-no-inspection">Inspektsioon puudub</div>
+                                                <div className="item-no-inspection">{t('planScreen.noInspection')}</div>
                                               )}
                                             </div>
                                           )}
@@ -2256,7 +2256,7 @@ export default function InspectionPlanScreen({
           {/* Refresh Button */}
           <button className="btn-secondary" onClick={fetchPlanItems}>
             <FiRefreshCw size={16} />
-            Värskenda nimekirja
+            {t('planScreen.refreshList')}
           </button>
         </div>
       )}
@@ -2265,8 +2265,8 @@ export default function InspectionPlanScreen({
       {showDuplicateModal && duplicates.length > 0 && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h3>⚠️ Duplikaadid leitud!</h3>
-            <p>{duplicates.length} valitud objekti on juba inspektsiooni kavas:</p>
+            <h3>{t('planScreen.duplicatesFound')}</h3>
+            <p>{t('planScreen.duplicatesDescription', { count: duplicates.length })}</p>
             <div className="duplicate-list">
               {duplicates.slice(0, 5).map(dup => (
                 <div key={dup.guid} className="duplicate-item">
@@ -2283,13 +2283,13 @@ export default function InspectionPlanScreen({
                       zoomToItem(dup.existingItem);
                     }}
                   >
-                    <FiZoomIn size={14} /> Vaata
+                    <FiZoomIn size={14} /> {t('planScreen.view')}
                   </button>
                 </div>
               ))}
               {duplicates.length > 5 && (
                 <div className="duplicate-more">
-                  ... ja veel {duplicates.length - 5} duplikaati
+                  {t('planScreen.andMoreDuplicates', { count: duplicates.length - 5 })}
                 </div>
               )}
             </div>
@@ -2298,13 +2298,13 @@ export default function InspectionPlanScreen({
                 className="btn-secondary"
                 onClick={() => setShowDuplicateModal(false)}
               >
-                Tühista
+                {t('planScreen.cancel')}
               </button>
               <button
                 className="btn-primary"
                 onClick={() => saveToplan(true)}
               >
-                Lisa ainult uued ({selectedObjects.length - duplicates.length})
+                {t('planScreen.addOnlyNew')} ({selectedObjects.length - duplicates.length})
               </button>
             </div>
           </div>

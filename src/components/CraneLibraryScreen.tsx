@@ -123,7 +123,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
 
   const handleSave = async () => {
     if (!formData.manufacturer || !formData.model) {
-      alert('Palun täida tootja ja mudeli väljad!');
+      alert(t('crane.fillManufacturerModel'));
       return;
     }
 
@@ -189,7 +189,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
   if (loading && cranes.length === 0) {
     return (
       <div className="crane-library-screen">
-        <PageHeader title="Kraanade Andmebaas" onBack={onBackToMenu} onNavigate={onNavigate} user={user} />
+        <PageHeader title={t('crane.title')} onBack={onBackToMenu} onNavigate={onNavigate} user={user} />
         <div className="flex items-center justify-center p-8">
           <FiLoader className="animate-spin mr-2" size={24} />
           <span>{t('crane.loadingCranes')}</span>
@@ -202,10 +202,10 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
   if (error) {
     return (
       <div className="crane-library-screen">
-        <PageHeader title="Kraanade Andmebaas" onBack={onBackToMenu} onNavigate={onNavigate} user={user} />
+        <PageHeader title={t('crane.title')} onBack={onBackToMenu} onNavigate={onNavigate} user={user} />
         <div className="flex items-center justify-center p-8 text-red-600">
           <FiAlertCircle className="mr-2" size={24} />
-          <span>Viga: {error}</span>
+          <span>{t('crane.error', { message: error })}</span>
         </div>
       </div>
     );
@@ -213,7 +213,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
 
   return (
     <div className="crane-library-screen" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PageHeader title="Kraanade Andmebaas" onBack={onBackToMenu} onNavigate={onNavigate} user={user} />
+      <PageHeader title={t('crane.title')} onBack={onBackToMenu} onNavigate={onNavigate} user={user} />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
         {/* Editor Form - Compact */}
@@ -239,7 +239,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
                   fontSize: '12px'
                 }}
               >
-                Põhiandmed
+                {t('crane.basicInfo')}
               </button>
               <button
                 onClick={() => setActiveTab('charts')}
@@ -255,7 +255,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
                   fontSize: '12px'
                 }}
               >
-                Tõstegraafikud
+                {t('crane.liftingChartsTab')}
               </button>
             </div>
 
@@ -301,7 +301,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
                 }}
               >
                 <FiDatabase size={14} style={{ verticalAlign: 'middle', marginRight: '6px' }} />
-                Kraanide Raamatukogu
+                {t('crane.craneLibrary')}
               </button>
               <button
                 onClick={() => setActiveMainTab('import')}
@@ -318,7 +318,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
                 }}
               >
                 <FiUpload size={14} style={{ verticalAlign: 'middle', marginRight: '6px' }} />
-                Import
+                {t('crane.import')}
               </button>
             </div>
 
@@ -328,7 +328,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
                 {cranes.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '30px', color: '#6b7280' }}>
                     <FiDatabase size={32} style={{ opacity: 0.3, marginBottom: '8px' }} />
-                    <p style={{ fontSize: '13px', margin: 0 }}>Kraanasid pole veel lisatud</p>
+                    <p style={{ fontSize: '13px', margin: 0 }}>{t('crane.noCranesAdded')}</p>
                   </div>
                 ) : (
                   <div>
@@ -383,9 +383,9 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
                                 fontSize: '11px',
                                 color: '#374151'
                               }}
-                              title={`Lisa ${CRANE_TYPE_LABELS[type]}`}
+                              title={t('crane.addType', { type: CRANE_TYPE_LABELS[type] })}
                             >
-                              <FiPlus size={12} /> Lisa
+                              <FiPlus size={12} /> {t('crane.addLabel')}
                             </button>
                           </div>
 
@@ -450,14 +450,14 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
                                         <button
                                           onClick={() => startEditing(crane)}
                                           style={{ padding: '4px', border: 'none', borderRadius: '3px', backgroundColor: 'transparent', cursor: 'pointer', color: '#6b7280' }}
-                                          title="Muuda"
+                                          title={t('crane.editLabel')}
                                         >
                                           <FiEdit2 size={12} />
                                         </button>
                                         <button
                                           onClick={() => setDeleteConfirmId(crane.id)}
                                           style={{ padding: '4px', border: 'none', borderRadius: '3px', backgroundColor: 'transparent', cursor: 'pointer', color: '#dc2626' }}
-                                          title="Kustuta"
+                                          title={t('crane.deleteLabel')}
                                         >
                                           <FiTrash2 size={12} />
                                         </button>
@@ -466,15 +466,15 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
 
                                     {/* Details line - small text */}
                                     <div style={{ fontSize: '11px', color: '#6b7280', marginLeft: '20px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                      <span>{(crane.max_capacity_kg / 1000).toFixed(0)}t tõstevõime</span>
+                                      <span>{(crane.max_capacity_kg / 1000).toFixed(0)}t {t('crane.liftingCapacity')}</span>
                                       <span style={{ color: '#d1d5db' }}>•</span>
-                                      <span>{crane.max_radius_m}m raadius</span>
+                                      <span>{crane.max_radius_m}m {t('crane.radius')}</span>
                                       <span style={{ color: '#d1d5db' }}>•</span>
-                                      <span>{crane.default_boom_length_m}m nool</span>
+                                      <span>{crane.default_boom_length_m}m {t('crane.boomLengthUnit')}</span>
                                       {crane.is_active && (
                                         <>
                                           <span style={{ color: '#d1d5db' }}>•</span>
-                                          <span style={{ color: '#16a34a' }}>✓ Aktiivne</span>
+                                          <span style={{ color: '#16a34a' }}>✓ {t('crane.activeLabel')}</span>
                                         </>
                                       )}
                                     </div>
@@ -484,11 +484,11 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
                                   {expandedCraneId === crane.id && (
                                     <div style={{ padding: '10px 12px 10px 60px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb', fontSize: '11px' }}>
                                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '6px 12px' }}>
-                                        <span><span style={{ color: '#9ca3af' }}>Max kõrgus:</span> {crane.max_height_m}m</span>
-                                        <span><span style={{ color: '#9ca3af' }}>Min radius:</span> {crane.min_radius_m}m</span>
-                                        <span><span style={{ color: '#9ca3af' }}>Alus:</span> {crane.base_width_m}×{crane.base_length_m}m</span>
-                                        <span><span style={{ color: '#9ca3af' }}>Kabiin:</span> {CAB_POSITION_LABELS[crane.cab_position]}</span>
-                                        {crane.notes && <span style={{ gridColumn: 'span 2' }}><span style={{ color: '#9ca3af' }}>Märkus:</span> {crane.notes}</span>}
+                                        <span><span style={{ color: '#9ca3af' }}>{t('crane.expandedMaxHeight')}</span> {crane.max_height_m}m</span>
+                                        <span><span style={{ color: '#9ca3af' }}>{t('crane.expandedMinRadius')}</span> {crane.min_radius_m}m</span>
+                                        <span><span style={{ color: '#9ca3af' }}>{t('crane.expandedBase')}</span> {crane.base_width_m}×{crane.base_length_m}m</span>
+                                        <span><span style={{ color: '#9ca3af' }}>{t('crane.expandedCab')}</span> {CAB_POSITION_LABELS[crane.cab_position]}</span>
+                                        {crane.notes && <span style={{ gridColumn: 'span 2' }}><span style={{ color: '#9ca3af' }}>{t('crane.expandedNote')}</span> {crane.notes}</span>}
                                       </div>
                                     </div>
                                   )}
@@ -499,19 +499,19 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
                                       padding: '6px 12px 6px 60px', backgroundColor: '#fef2f2', borderBottom: '1px solid #fecaca',
                                       display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px'
                                     }}>
-                                      <span style={{ color: '#dc2626' }}>Kas kustutada {crane.manufacturer} {crane.model}?</span>
+                                      <span style={{ color: '#dc2626' }}>{t('crane.deleteConfirmCraneModel', { manufacturer: crane.manufacturer, model: crane.model })}</span>
                                       <div style={{ display: 'flex', gap: '6px' }}>
                                         <button
                                           onClick={() => setDeleteConfirmId(null)}
                                           style={{ padding: '3px 10px', border: '1px solid #d1d5db', borderRadius: '3px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }}
                                         >
-                                          Ei
+                                          {t('crane.no')}
                                         </button>
                                         <button
                                           onClick={() => handleDelete(crane.id)}
                                           style={{ padding: '3px 10px', border: 'none', borderRadius: '3px', backgroundColor: '#dc2626', color: 'white', cursor: 'pointer', fontSize: '11px' }}
                                         >
-                                          Jah, kustuta
+                                          {t('crane.yesDelete')}
                                         </button>
                                       </div>
                                     </div>
@@ -524,7 +524,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
                           {/* Empty group message */}
                           {isExpanded && cranesInGroup.length === 0 && (
                             <div style={{ padding: '20px', textAlign: 'center', color: '#9ca3af', fontSize: '11px' }}>
-                              Selles grupis pole veel kraanasid. Vajuta "Lisa" nuppu kraana lisamiseks.
+                              {t('crane.noCranesInGroup')}
                             </div>
                           )}
                         </div>
@@ -576,13 +576,13 @@ function BasicInfoForm({
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      alert('Palun vali pildifail!');
+      alert(t('crane.selectImageFile'));
       return;
     }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      alert('Pilt peab olema väiksem kui 5MB!');
+      alert(t('crane.imageSizeLimit'));
       return;
     }
 
@@ -613,7 +613,7 @@ function BasicInfoForm({
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
         <div>
-          <label style={labelStyle}>Tootja *</label>
+          <label style={labelStyle}>{t('crane.manufacturer')}</label>
           <input
             type="text"
             style={inputStyle}
@@ -624,7 +624,7 @@ function BasicInfoForm({
         </div>
 
         <div>
-          <label style={labelStyle}>Mudel *</label>
+          <label style={labelStyle}>{t('crane.model')}</label>
           <input
             type="text"
             style={inputStyle}
@@ -635,7 +635,7 @@ function BasicInfoForm({
         </div>
 
         <div>
-          <label style={labelStyle}>Tüüp</label>
+          <label style={labelStyle}>{t('crane.type')}</label>
           <select
             style={inputStyle}
             value={formData.crane_type || 'mobile'}
@@ -648,7 +648,7 @@ function BasicInfoForm({
         </div>
 
         <div>
-          <label style={labelStyle}>Max koormus (t)</label>
+          <label style={labelStyle}>{t('crane.maxLoad')}</label>
           <input
             type="number"
             style={inputStyle}
@@ -659,7 +659,7 @@ function BasicInfoForm({
         </div>
 
         <div>
-          <label style={labelStyle}>Max kõrgus (m)</label>
+          <label style={labelStyle}>{t('crane.maxHeight')}</label>
           <input
             type="number"
             style={inputStyle}
@@ -670,7 +670,7 @@ function BasicInfoForm({
         </div>
 
         <div>
-          <label style={labelStyle}>Max radius (m)</label>
+          <label style={labelStyle}>{t('crane.maxRadiusField')}</label>
           <input
             type="number"
             style={{
@@ -689,13 +689,13 @@ function BasicInfoForm({
           />
           {(formData.max_radius_m || 0) > (formData.default_boom_length_m || 0) && (
             <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '2px' }}>
-              Max radius ei saa olla suurem kui nool ({formData.default_boom_length_m}m)
+              {t('crane.maxRadiusExceedsBoom', { boom: formData.default_boom_length_m })}
             </div>
           )}
         </div>
 
         <div>
-          <label style={labelStyle}>Min radius (m)</label>
+          <label style={labelStyle}>{t('crane.minRadius')}</label>
           <input
             type="number"
             style={inputStyle}
@@ -706,7 +706,7 @@ function BasicInfoForm({
         </div>
 
         <div>
-          <label style={labelStyle}>Default noole pikkus (m)</label>
+          <label style={labelStyle}>{t('crane.defaultBoomLength')}</label>
           <input
             type="number"
             style={inputStyle}
@@ -725,11 +725,11 @@ function BasicInfoForm({
         <div style={{ gridColumn: 'span 2', padding: '8px', backgroundColor: '#f0f9ff', borderRadius: '4px', marginTop: '4px', marginBottom: '4px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
             <FiInfo size={12} style={{ color: '#0369a1' }} />
-            <span style={{ fontSize: '11px', fontWeight: 500, color: '#0369a1' }}>Kraana kuju mudelis</span>
+            <span style={{ fontSize: '11px', fontWeight: 500, color: '#0369a1' }}>{t('crane.craneShapeInModel')}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
             <div>
-              <label style={labelStyle}>Aluse laius (m)</label>
+              <label style={labelStyle}>{t('crane.baseWidth')}</label>
               <input
                 type="number"
                 style={inputStyle}
@@ -740,7 +740,7 @@ function BasicInfoForm({
               />
             </div>
             <div>
-              <label style={labelStyle}>Aluse pikkus (m)</label>
+              <label style={labelStyle}>{t('crane.baseLength')}</label>
               <input
                 type="number"
                 style={inputStyle}
@@ -751,7 +751,7 @@ function BasicInfoForm({
               />
             </div>
             <div>
-              <label style={labelStyle}>Kabiini positsioon</label>
+              <label style={labelStyle}>{t('crane.cabPosition')}</label>
               <select
                 style={inputStyle}
                 value={formData.cab_position || 'rear'}
@@ -764,37 +764,37 @@ function BasicInfoForm({
             </div>
           </div>
           <div style={{ marginTop: '6px', fontSize: '10px', color: '#6b7280' }}>
-            Kraana = ristküliku alus + 4 tugijalga + pöördalus. Kabiini asend määrab operaatori positsiooni.
+            {t('crane.craneShapeDescription')}
           </div>
         </div>
 
         <div>
-          <label style={labelStyle}>Staatus</label>
+          <label style={labelStyle}>{t('crane.status')}</label>
           <select
             style={inputStyle}
             value={formData.is_active ? 'true' : 'false'}
             onChange={(e) => onChange({ ...formData, is_active: e.target.value === 'true' })}
           >
-            <option value="true">Aktiivne</option>
-            <option value="false">Mitteaktiivne</option>
+            <option value="true">{t('crane.active')}</option>
+            <option value="false">{t('crane.inactive')}</option>
           </select>
         </div>
       </div>
 
       <div style={{ marginTop: '8px' }}>
-        <label style={labelStyle}>Märkused</label>
+        <label style={labelStyle}>{t('crane.notes')}</label>
         <textarea
           style={{ ...inputStyle, minHeight: '50px', resize: 'vertical' }}
           value={formData.notes || ''}
           onChange={(e) => onChange({ ...formData, notes: e.target.value })}
-          placeholder="Lisainfo, eripärad, piirangud..."
+          placeholder={t('crane.additionalInfo')}
         />
       </div>
 
       {/* Image Upload - compact, only show when editing existing crane */}
       {!isCreating && craneId && (
         <div style={{ marginTop: '8px' }}>
-          <label style={labelStyle}>Kraana pilt</label>
+          <label style={labelStyle}>{t('crane.craneImage')}</label>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
             {formData.image_url ? (
               <div style={{ position: 'relative' }}>
@@ -826,7 +826,7 @@ function BasicInfoForm({
                 backgroundColor: 'var(--modus-primary)', color: 'white', borderRadius: '4px', fontSize: '11px',
                 cursor: uploadingImage ? 'not-allowed' : 'pointer', opacity: uploadingImage ? 0.7 : 1
               }}>
-                {uploadingImage ? <><FiLoader className="animate-spin" size={12} /> Laen...</> : <><FiUpload size={12} /> Lae üles</>}
+                {uploadingImage ? <><FiLoader className="animate-spin" size={12} /> {t('crane.uploadingImage')}</> : <><FiUpload size={12} /> {t('crane.uploadImage')}</>}
                 <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} disabled={uploadingImage} />
               </label>
               <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '4px' }}>Max 5MB</div>
@@ -840,13 +840,13 @@ function BasicInfoForm({
           onClick={onCancel}
           style={{ padding: '5px 12px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '12px' }}
         >
-          Tühista
+          {t('crane.cancel')}
         </button>
         <button
           onClick={onSave}
           style={{ padding: '5px 12px', border: 'none', borderRadius: '4px', backgroundColor: 'var(--modus-primary)', color: 'white', cursor: 'pointer', fontSize: '12px' }}
         >
-          {isCreating ? t('buttons.saveAndContinue') : t('buttons.save')}
+          {isCreating ? t('crane.saveAndContinue') : t('buttons.save')}
         </button>
       </div>
     </div>
@@ -1099,11 +1099,11 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
           setFormData(prev => ({ ...prev, pastedTable: text }));
           parseTable(text);
           setIsAdding(true);
-          alert('Excel ei sisaldanud vastukaalu lehti (nt "72t"). Andmed laeti ühe vastukaaluna - määra vastukaal käsitsi.');
+          alert(t('crane.excelNoCounterweightFallback'));
           return;
         }
 
-        alert('Excel fail peab sisaldama lehti vastukaalu nimedega (nt "72t", "48t") või "Andmed" lehte!');
+        alert(t('crane.excelMustContainSheets'));
         return;
       }
 
@@ -1116,7 +1116,7 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
         const tableData = parseSheetToTable(rows);
         if (!tableData || tableData.boomLengths.length === 0) {
           skipped++;
-          errors.push(`"${name}": tühi või vigane tabel`);
+          errors.push(`"${name}": ${t('crane.emptyOrInvalidTable')}`);
           continue;
         }
 
@@ -1128,13 +1128,13 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
           const newCw = await createCounterweight({
             name: cwName,
             weight_kg: weight_kg,
-            description: `Imporditud Excelist`,
+            description: t('crane.importedFromExcel'),
             sort_order: counterweights.length + imported + 1
           });
           if (newCw) {
             counterweightId = newCw.id;
           } else {
-            errors.push(`"${name}": vastukaalu loomine ebaõnnestus`);
+            errors.push(`"${name}": ${t('crane.counterweightCreationFailed')}`);
             continue;
           }
         }
@@ -1176,16 +1176,16 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
       await refetchLoadCharts();
 
       // Show result
-      let message = `Imporditud ${imported} vastukaalu tõstegraafikut!`;
+      let message = t('crane.importedCounterweights', { count: imported });
       if (skipped > 0) {
-        message += `\n\nVahele jäeti ${skipped} lehte:`;
+        message += `\n\n${t('crane.skippedSheets', { count: skipped })}`;
         errors.forEach(err => { message += `\n- ${err}`; });
       }
       alert(message);
 
     } catch (err) {
       console.error('Excel import error:', err);
-      alert('Excel importimine ebaõnnestus! Kontrolli faili formaati.');
+      alert(t('crane.excelImportFailed'));
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -1195,11 +1195,11 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
   // Save the 2D table as multiple load charts
   const handleSave = async () => {
     if (formData.counterweight_kg <= 0) {
-      alert('Palun sisesta vastukaalu kaal!');
+      alert(t('crane.enterCounterweightWeight'));
       return;
     }
     if (!parsedTable || parsedTable.boomLengths.length === 0) {
-      alert('Palun sisesta tõstegraafiku tabel!');
+      alert(t('crane.enterLiftingTable'));
       return;
     }
 
@@ -1215,14 +1215,14 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
         const newCw = await createCounterweight({
           name: cwName,
           weight_kg: formData.counterweight_kg * 1000,
-          description: `Vastukaal ${formData.counterweight_kg} tonni`,
+          description: t('crane.counterweightDesc', { weight: formData.counterweight_kg }),
           sort_order: counterweights.length + 1
         });
         if (newCw) {
           counterweightId = newCw.id;
           await refetchCounterweights();
         } else {
-          alert('Vastukaalu loomine ebaõnnestus!');
+          alert(t('crane.counterweightCreateFailed'));
           setSaving(false);
           return;
         }
@@ -1274,7 +1274,7 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
 
   // Delete all charts for a counterweight
   const handleDeleteCounterweight = async (cwId: string) => {
-    if (!confirm('Kas kustutada see vastukaal ja kõik selle tõstegraafikud?')) return;
+    if (!confirm(t('crane.deleteCounterweightConfirm'))) return;
 
     const chartsToDelete = loadCharts.filter(lc => lc.counterweight_config_id === cwId);
     for (const chart of chartsToDelete) {
@@ -1299,29 +1299,29 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-        <h3 style={{ margin: 0, fontSize: '12px', fontWeight: 600 }}>Tõstevõime graafikud</h3>
+        <h3 style={{ margin: 0, fontSize: '12px', fontWeight: 600 }}>{t('crane.liftingCapacityCharts')}</h3>
         {!isAdding && (
           <div style={{ display: 'flex', gap: '4px' }}>
-            <button onClick={downloadTemplate} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }} title="Lae alla 2D tabeli mall"><FiDownload size={12} /> Mall</button>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: importing ? 'not-allowed' : 'pointer', fontSize: '11px', opacity: importing ? 0.7 : 1 }} title="Impordi Excelist">
+            <button onClick={downloadTemplate} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }} title={t('crane.downloadTemplate')}><FiDownload size={12} /> {t('crane.mall')}</button>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: importing ? 'not-allowed' : 'pointer', fontSize: '11px', opacity: importing ? 0.7 : 1 }} title={t('crane.importFromExcel')}>
               {importing ? <FiLoader className="animate-spin" size={12} /> : <FiFileText size={12} />}
-              {importing ? 'Laen...' : 'Impordi'}
+              {importing ? t('crane.loading') : t('crane.import')}
               <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleExcelImport} disabled={importing} />
             </label>
-            <button onClick={() => setIsAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }}><FiPlus size={12} /> Lisa</button>
+            <button onClick={() => setIsAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }}><FiPlus size={12} /> {t('crane.add')}</button>
           </div>
         )}
       </div>
 
       <div style={{ padding: '6px 10px', backgroundColor: '#e0f2fe', borderRadius: '4px', marginBottom: '8px', fontSize: '10px', color: '#0369a1' }}>
-        <strong>Vihje:</strong> Exceli import toetab <strong>mitut vastukaalu korraga</strong> - iga leht = üks vastukaal (nt "72t", "48t"). Lae mall alla näite nägemiseks.
+        {t('crane.excelImportHintPlain')}
       </div>
 
       {/* Add new capacity table */}
       {isAdding && (
         <div style={{ backgroundColor: '#f9fafb', padding: '10px', borderRadius: '4px', marginBottom: '8px', border: '1px solid #e5e7eb' }}>
           <div style={{ marginBottom: '8px' }}>
-            <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280', fontWeight: 500 }}>Vastukaal (t) *</label>
+            <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280', fontWeight: 500 }}>{t('crane.counterweight')}</label>
             <input
               type="number"
               style={{ ...inputStyle, width: '120px' }}
@@ -1330,12 +1330,12 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
               step="0.5"
               placeholder="72"
             />
-            <span style={{ marginLeft: '8px', fontSize: '10px', color: '#6b7280' }}>nt: 72t nagu pildil</span>
+            <span style={{ marginLeft: '8px', fontSize: '10px', color: '#6b7280' }}>{t('crane.counterweightExample')}</span>
           </div>
 
           <div>
             <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280', fontWeight: 500 }}>
-              Tõstevõime tabel (kopeeri PDF-ist või Excelist)
+              {t('crane.liftingCapacityTable')}
             </label>
             <textarea
               style={{ ...inputStyle, minHeight: '150px', fontFamily: 'monospace', fontSize: '10px' }}
@@ -1357,7 +1357,7 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
           {parsedTable && (
             <div style={{ marginTop: '8px', padding: '8px', backgroundColor: '#dcfce7', borderRadius: '4px', fontSize: '10px' }}>
               <div style={{ color: '#166534', fontWeight: 500, marginBottom: '4px' }}>
-                Eelvaade: {parsedTable.boomLengths.length} poomi pikkust, {parsedTable.radii.length} raadiust
+                {t('crane.preview', { booms: parsedTable.boomLengths.length, radii: parsedTable.radii.length })}
               </div>
               <div style={{ overflowX: 'auto', maxHeight: '200px' }}>
                 <table style={{ borderCollapse: 'collapse', fontSize: '9px', width: '100%' }}>
@@ -1386,7 +1386,7 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
                     {parsedTable.radii.length > 10 && (
                       <tr>
                         <td colSpan={parsedTable.boomLengths.length + 1} style={{ textAlign: 'center', padding: '4px', color: '#6b7280' }}>
-                          ... ja veel {parsedTable.radii.length - 10} rida
+                          {t('crane.andMoreRows', { count: parsedTable.radii.length - 10 })}
                         </td>
                       </tr>
                     )}
@@ -1402,7 +1402,7 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
               disabled={saving}
               style={{ padding: '4px 10px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }}
             >
-              Tühista
+              {t('crane.cancel')}
             </button>
             <button
               onClick={handleSave}
@@ -1419,7 +1419,7 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
       {chartsByCounterweight.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>
           <FiDatabase size={24} style={{ opacity: 0.3, marginBottom: '6px' }} />
-          <p style={{ fontSize: '11px', margin: 0 }}>Tõstegraafikuid pole lisatud</p>
+          <p style={{ fontSize: '11px', margin: 0 }}>{t('crane.noLiftingCharts')}</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -1459,16 +1459,16 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
                       {isExpanded ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
                     </span>
                     <span style={{ fontWeight: 600, fontSize: '13px', color: '#374151' }}>
-                      {(cw.weight_kg / 1000).toFixed(1)}t vastukaal
+                      {(cw.weight_kg / 1000).toFixed(1)}t {t('crane.counterweightLabel')}
                     </span>
                     <span style={{ fontSize: '11px', color: '#6b7280' }}>
-                      ({boomLengths.length} poomi pikkust, {radii.length} raadiust)
+                      ({boomLengths.length} {t('crane.boomLengthsCount')}, {radii.length} {t('crane.radiiCount')})
                     </span>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDeleteCounterweight(cw.id); }}
                     style={{ padding: '4px', border: '1px solid #fecaca', borderRadius: '3px', backgroundColor: '#fef2f2', color: '#dc2626', cursor: 'pointer' }}
-                    title="Kustuta vastukaal ja graafikud"
+                    title={t('crane.deleteCounterweightAndCharts')}
                   >
                     <FiTrash2 size={12} />
                   </button>
@@ -1782,7 +1782,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
       const singleCraneSheet = workbook.Sheets['Kraana'];
 
       if (!cranesSheet && !singleCraneSheet) {
-        setFullImportResult({ cranes: [], error: 'Excel fail peab sisaldama "Kraanid" või "Kraana" lehte!' });
+        setFullImportResult({ cranes: [], error: t('crane.excelMustContainCranesSheet') });
         return;
       }
 
@@ -1841,7 +1841,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
             cab_position: 'rear',
             default_crane_color: DEFAULT_CRANE_COLOR,
             default_radius_color: DEFAULT_RADIUS_COLOR,
-            notes: 'Imporditud Excelist koos tõstegraafikutega',
+            notes: t('crane.importedFromExcel'),
             is_active: true,
             created_by_email: userEmail
           });
@@ -1878,7 +1878,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
               crane_model_id: craneDbId,
               name: cwName,
               weight_kg: parsed.weight * 1000,
-              description: 'Imporditud Excelist',
+              description: t('crane.importedFromExcel'),
               sort_order: (craneResult?.counterweights || 0) + 1
             })
             .select()
@@ -1932,7 +1932,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
         const model = String(craneData['mudel'] || '').trim();
 
         if (!manufacturer || !model) {
-          setFullImportResult({ cranes: [], error: 'Kraana lehel peavad olema täidetud "Tootja" ja "Mudel" väljad!' });
+          setFullImportResult({ cranes: [], error: t('crane.manufacturerModelRequired') });
           return;
         }
 
@@ -1953,13 +1953,13 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
           cab_position: cabPosition,
           default_crane_color: DEFAULT_CRANE_COLOR,
           default_radius_color: DEFAULT_RADIUS_COLOR,
-          notes: String(craneData['märkused'] || 'Imporditud Excelist koos tõstegraafikutega'),
+          notes: String(craneData['märkused'] || t('crane.importedFromExcel')),
           is_active: true,
           created_by_email: userEmail
         });
 
         if (!newCrane) {
-          setFullImportResult({ cranes: [], error: 'Kraana loomine ebaõnnestus!' });
+          setFullImportResult({ cranes: [], error: t('crane.craneCreationFailed') });
           return;
         }
 
@@ -1984,7 +1984,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
               crane_model_id: newCrane.id,
               name: cwName,
               weight_kg: parsed.weight * 1000,
-              description: 'Imporditud Excelist',
+              description: t('crane.importedFromExcel'),
               sort_order: craneResult.counterweights + 1
             })
             .select()
@@ -2046,7 +2046,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
       // Find data sheet
       const dataSheet = workbook.Sheets['Andmed'] || workbook.Sheets[workbook.SheetNames[workbook.SheetNames.length > 1 ? 1 : 0]];
       if (!dataSheet) {
-        alert('Excel fail peab sisaldama "Andmed" lehte!');
+        alert(t('crane.excelMustContainDataSheet'));
         setImporting(false);
         return;
       }
@@ -2067,7 +2067,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
         try {
           const craneType = parseCraneType(String(row[0]));
           if (!craneType) {
-            errors.push('Rida ' + (i + 2) + ': Tundmatu kraana grupp "' + row[0] + '"');
+            errors.push(t('crane.rowError', { row: i + 2, message: `${t('crane.unknownCraneGroup')} "${row[0]}"` }));
             failedCount++;
             continue;
           }
@@ -2075,7 +2075,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
           const manufacturer = String(row[1]).trim();
           const model = String(row[2]).trim();
           const maxCapacityKg = (parseFloat(row[3]) || 0) * 1000;
-          const counterweightKg = (parseFloat(row[4]) || 0) * 1000;
+          void (parseFloat(row[4]) || 0); // counterweight from template, reserved for future use
           const mainBoomLength = parseFloat(row[5]) || 40;
           const jibLength = parseFloat(row[6]) || 0;
 
@@ -2097,7 +2097,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
             cab_position: 'rear',
             default_crane_color: DEFAULT_CRANE_COLOR,
             default_radius_color: DEFAULT_RADIUS_COLOR,
-            notes: counterweightKg > 0 ? 'Vastukaal: ' + (counterweightKg / 1000).toFixed(0) + 't. Imporditud Excelist.' : 'Imporditud Excelist.',
+            notes: t('crane.importedFromExcel'),
             is_active: true,
             created_by_email: userEmail
           });
@@ -2112,7 +2112,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
       setImportResults({ success: successCount, failed: failedCount, errors });
     } catch (err: any) {
       console.error('Excel import error:', err);
-      alert('Excel importimine ebaõnnestus! ' + (err.message || 'Kontrolli faili formaati.'));
+      alert(t('crane.excelImportFailedGeneric') + (err.message || ''));
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -2125,11 +2125,11 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
       <div style={{ marginBottom: '24px', paddingBottom: '24px', borderBottom: '2px solid #e5e7eb' }}>
         <div style={{ marginBottom: '16px' }}>
           <h3 style={{ fontSize: '15px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ backgroundColor: '#059669', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '11px' }}>SOOVITATAV</span>
-            Täielik Kraana Import
+            <span style={{ backgroundColor: '#059669', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '11px' }}>{t('crane.recommended')}</span>
+            {t('crane.fullCraneImport')}
           </h3>
           <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
-            Impordi üks kraana koos kõigi tõstegraafikutega. Üks Excel fail = üks kraana.
+            {t('crane.fullCraneImportDesc')}
           </p>
         </div>
 
@@ -2151,7 +2151,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
             }}
           >
             <FiDownload size={14} />
-            Lae alla täielik mall
+            {t('crane.downloadFullTemplate')}
           </button>
 
           <label style={{
@@ -2170,12 +2170,12 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
             {importingFull ? (
               <>
                 <FiLoader className="animate-spin" size={14} />
-                Importin kraana...
+                {t('crane.importingCrane')}
               </>
             ) : (
               <>
                 <FiUpload size={14} />
-                Impordi kraana + tõstegraafikud
+                {t('crane.importCraneAndCharts')}
               </>
             )}
             <input
@@ -2204,13 +2204,13 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
             ) : (
               <div style={{ fontSize: '12px', color: '#166534' }}>
                 <div style={{ fontWeight: 600, marginBottom: '8px' }}>
-                  ✓ {fullImportResult.cranes.length} kraana{fullImportResult.cranes.length !== 1 ? 't' : ''} imporditud edukalt!
+                  ✓ {t('crane.cranesImported', { count: fullImportResult.cranes.length, plural: fullImportResult.cranes.length !== 1 ? 's' : '' })}
                 </div>
                 {fullImportResult.cranes.map((crane, idx) => (
                   <div key={idx} style={{ padding: '6px 8px', backgroundColor: 'white', borderRadius: '4px', marginBottom: '4px' }}>
                     <div style={{ fontWeight: 500 }}>{crane.name}</div>
                     <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                      {crane.counterweights} vastukaalu, {crane.charts} tõstegraafikut
+                      {t('crane.counterweightsCount', { count: crane.counterweights })}, {t('crane.chartsCount', { count: crane.charts })}
                     </div>
                   </div>
                 ))}
@@ -2220,21 +2220,21 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
         )}
 
         <div style={{ marginTop: '12px', padding: '10px', backgroundColor: '#ecfdf5', borderRadius: '6px', fontSize: '11px', color: '#047857' }}>
-          <strong>Excel faili struktuur:</strong>
+          <strong>{t('crane.excelStructure')}</strong>
           <ul style={{ margin: '4px 0 0 0', paddingLeft: '16px' }}>
-            <li><strong>"Kraanid"</strong> leht - kõik kraanid tabelina (ID, Tootja, Mudel, jne)</li>
-            <li><strong>"1-72t", "1-48t"</strong> jne - kraana nr 1 tõstegraafikud</li>
-            <li><strong>"2-60t", "2-40t"</strong> jne - kraana nr 2 tõstegraafikud</li>
-            <li>Lehe nimi = [kraana ID]-[vastukaal]t</li>
+            <li>{t('crane.excelStructureCranes')}</li>
+            <li>{t('crane.excelStructureCharts1')}</li>
+            <li>{t('crane.excelStructureCharts2')}</li>
+            <li>{t('crane.excelStructureSheetName')}</li>
           </ul>
         </div>
       </div>
 
       {/* BASIC IMPORT - just crane list, no load charts */}
       <div style={{ marginBottom: '20px' }}>
-        <h3 style={{ fontSize: '15px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>Kraanide Nimekiri (ilma tõstegraafikuteta)</h3>
+        <h3 style={{ fontSize: '15px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>{t('crane.craneListNoChartsTitle')}</h3>
         <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
-          Impordi mitu kraana korraga. Tõstegraafikuid saad lisada hiljem käsitsi.
+          {t('crane.craneListNoChartsDesc')}
         </p>
       </div>
 
@@ -2256,9 +2256,9 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
             1
           </div>
           <div style={{ flex: 1 }}>
-            <h4 style={{ fontSize: '13px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>Lae alla mall</h4>
+            <h4 style={{ fontSize: '13px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>{t('crane.downloadTemplateStep')}</h4>
             <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 12px 0' }}>
-              Lae alla Excel mall ja täida see oma kraanide andmetega.
+              {t('crane.downloadTemplateDesc')}
             </p>
             <button
               onClick={downloadTemplate}
@@ -2277,7 +2277,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
               }}
             >
               <FiDownload size={14} />
-              Lae alla mall
+              {t('crane.downloadTemplateStep')}
             </button>
           </div>
         </div>
@@ -2301,9 +2301,9 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
             2
           </div>
           <div style={{ flex: 1 }}>
-            <h4 style={{ fontSize: '13px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>Lae üles täidetud fail</h4>
+            <h4 style={{ fontSize: '13px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>{t('crane.uploadCompletedFileStep')}</h4>
             <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 12px 0' }}>
-              Vali täidetud Excel fail oma arvutist ja impordi kraanid andmebaasi.
+              {t('crane.uploadCompletedFileDesc')}
             </p>
             <label style={{
               display: 'inline-flex',
@@ -2321,12 +2321,12 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
               {importing ? (
                 <>
                   <FiLoader className="animate-spin" size={14} />
-                  Importin...
+                  {t('crane.importing')}
                 </>
               ) : (
                 <>
                   <FiUpload size={14} />
-                  Vali fail ja impordi
+                  {t('crane.selectFileAndImport')}
                 </>
               )}
               <input
@@ -2353,22 +2353,22 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
             {importResults.failed === 0 ? (
               <>
                 <span style={{ fontSize: '16px' }}>✓</span>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#166534' }}>Import õnnestus!</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#166534' }}>{t('crane.importSuccess')}</span>
               </>
             ) : (
               <>
                 <FiAlertCircle size={16} style={{ color: '#dc2626' }} />
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#dc2626' }}>Import osaliselt ebaõnnestus</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#dc2626' }}>{t('crane.importPartialFail')}</span>
               </>
             )}
           </div>
           <div style={{ fontSize: '12px', color: '#374151', marginBottom: importResults.errors.length > 0 ? '12px' : '0' }}>
-            <p style={{ margin: 0 }}>Õnnestunud: <strong>{importResults.success}</strong></p>
-            {importResults.failed > 0 && <p style={{ margin: '4px 0 0 0' }}>Ebaõnnestunud: <strong>{importResults.failed}</strong></p>}
+            <p style={{ margin: 0 }}>{t('crane.succeeded')} <strong>{importResults.success}</strong></p>
+            {importResults.failed > 0 && <p style={{ margin: '4px 0 0 0' }}>{t('crane.failed')} <strong>{importResults.failed}</strong></p>}
           </div>
           {importResults.errors.length > 0 && (
             <div style={{ fontSize: '11px', color: '#dc2626', backgroundColor: 'white', padding: '8px', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto' }}>
-              <strong>Vead:</strong>
+              <strong>{t('crane.errors')}</strong>
               <ul style={{ margin: '4px 0 0 0', paddingLeft: '20px' }}>
                 {importResults.errors.map((err, idx) => (
                   <li key={idx}>{err}</li>
@@ -2383,12 +2383,12 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
         <div style={{ display: 'flex', gap: '8px' }}>
           <FiInfo size={14} style={{ color: '#0369a1', flexShrink: 0, marginTop: '2px' }} />
           <div style={{ fontSize: '11px', color: '#0369a1' }}>
-            <strong>Näpunäited:</strong>
+            <strong>{t('crane.tips')}</strong>
             <ul style={{ margin: '4px 0 0 0', paddingLeft: '16px' }}>
-              <li>Kraana tüüp peab olema täpselt üks järgnevatest: Mobiilkraana, Roomikkraana, Manipulaator, Tornkraana, Pöörlev teleskooplaadur</li>
-              <li>Tootja ja Mudel on kohustuslikud väljad</li>
-              <li>Iga imporditud kraana saab automaatselt unikaalse ID (C001, C002, jne)</li>
-              <li>Vastukaal ja lisanool on valikulised - jäta tühjaks kui ei ole</li>
+              <li>{t('crane.tipCraneType')}</li>
+              <li>{t('crane.tipRequiredFields')}</li>
+              <li>{t('crane.tipAutoId')}</li>
+              <li>{t('crane.tipOptional')}</li>
             </ul>
           </div>
         </div>

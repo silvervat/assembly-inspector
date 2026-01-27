@@ -121,7 +121,7 @@ function formatDateTime(dateStr: string | undefined | null): string {
   });
 }
 
-function formatRelativeTime(dateStr: string): string {
+function formatRelativeTime(dateStr: string, t: (key: string, opts?: Record<string, unknown>) => string): string {
   const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -129,10 +129,10 @@ function formatRelativeTime(dateStr: string): string {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins} min tagasi`;
-  if (diffHours < 24) return `${diffHours}h tagasi`;
-  if (diffDays < 7) return `${diffDays}p tagasi`;
+  if (diffMins < 1) return t('issues.justNow');
+  if (diffMins < 60) return t('issues.minutesAgo', { count: diffMins });
+  if (diffHours < 24) return t('issues.hoursAgo', { count: diffHours });
+  if (diffDays < 7) return t('issues.daysAgo', { count: diffDays });
   return formatDate(dateStr);
 }
 
@@ -283,10 +283,10 @@ export default function IssuesScreen({
       await (api.viewer as any).setSettings?.({ assemblySelection: true });
       setAssemblySelectionEnabled(true);
       setShowAssemblyModal(false);
-      setMessage('✅ Assembly Selection sisse lülitatud');
+      setMessage(`✅ ${t('issues.assemblySelectionEnabled')}`);
     } catch (e) {
       console.error('Failed to enable assembly selection:', e);
-      setMessage('⚠️ Assembly Selection sisselülitamine ebaõnnestus');
+      setMessage(`⚠️ ${t('issues.assemblySelectionFailed')}`);
     }
   }, [api]);
 
@@ -342,7 +342,7 @@ export default function IssuesScreen({
       const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
 
       if (!children || children.length === 0) {
-        setMessage('⚠️ Valitud detailil pole alamdetaile');
+        setMessage(`⚠️ ${t('issues.noSubDetails')}`);
         return;
       }
 
@@ -432,7 +432,7 @@ export default function IssuesScreen({
 
     } catch (e) {
       console.error('Error loading sub-details:', e);
-      setMessage('⚠️ Alamdetailide laadimine ebaõnnestus');
+      setMessage(`⚠️ ${t('issues.subDetailsLoadFailed')}`);
       setLoadingSubDetails(false);
       setLockedParentObjects([]);
     }
@@ -1031,14 +1031,14 @@ export default function IssuesScreen({
   // Color only issues of a specific status
   const colorStatusInModel = useCallback(async (status: IssueStatus) => {
     setStatusMenuOpen(null);
-    setColoringStatus(`Värvin ${ISSUE_STATUS_CONFIG[status].label}...`);
+    setColoringStatus(t('issues.coloringStatusLabel', { label: ISSUE_STATUS_CONFIG[status].label }));
 
     try {
       // Get issues of this status
       const statusIssues = issues.filter(i => mapDeprecatedStatus(i.status) === status);
 
       if (statusIssues.length === 0) {
-        setMessage('⚠️ Selles staatuses pole mittevastavusi');
+        setMessage(`⚠️ ${t('issues.noIssuesInStatus')}`);
         setColoringStatus('');
         return;
       }
@@ -1073,7 +1073,7 @@ export default function IssuesScreen({
         }
       }
 
-      setMessage(`✓ Värvitud ${statusIssues.length} mittevastavust`);
+      setMessage(`✓ ${t('issues.coloredCount', { count: statusIssues.length })}`);
       setColoringStatus('');
 
     } catch (e: unknown) {
@@ -1119,17 +1119,17 @@ export default function IssuesScreen({
 
   const handleSubmitIssue = useCallback(async () => {
     if (!formData.title.trim()) {
-      setMessage('⚠️ Pealkiri on kohustuslik');
+      setMessage(`⚠️ ${t('issues.titleRequired')}`);
       return;
     }
 
     if (!formData.fixed_category) {
-      setMessage('⚠️ Kategooria valimine on kohustuslik');
+      setMessage(`⚠️ ${t('issues.categoryRequired')}`);
       return;
     }
 
     if (!editingIssue && newIssueObjects.length === 0) {
-      setMessage('⚠️ Vähemalt üks detail peab olema valitud');
+      setMessage(`⚠️ ${t('issues.atLeastOneDetail')}`);
       return;
     }
 
@@ -1423,7 +1423,7 @@ export default function IssuesScreen({
 
   // Delete comment handler
   const handleDeleteComment = useCallback(async (commentId: string) => {
-    if (!confirm('Kas oled kindel, et soovid kommentaari kustutada?')) return;
+    if (!confirm(t('issues.deleteCommentConfirm'))) return;
     if (!detailIssue) return;
 
     try {
@@ -1513,7 +1513,7 @@ export default function IssuesScreen({
         details: { count: files.length }
       });
 
-      setMessage(`✅ ${files.length} fail(i) üles laetud`);
+      setMessage(`✅ ${t('issues.filesUploaded', { count: files.length })}`);
 
       // Reload attachments
       const { data: attachments } = await supabase
@@ -1564,7 +1564,7 @@ export default function IssuesScreen({
   }, [showDetail, detailIssue, handlePhotoUpload]);
 
   const handleDeleteAttachment = useCallback(async (attachment: IssueAttachment) => {
-    if (!confirm('Kas oled kindel, et soovid faili kustutada?')) return;
+    if (!confirm(t('issues.deleteFileConfirm'))) return;
 
     try {
       // Extract storage path from URL
@@ -1621,7 +1621,7 @@ export default function IssuesScreen({
         .single();
 
       if (existing) {
-        setMessage('⚠️ Kasutaja on juba määratud');
+        setMessage(`⚠️ ${t('issues.userAlreadyAssigned')}`);
         return;
       }
 
@@ -1638,7 +1638,7 @@ export default function IssuesScreen({
 
       if (error) throw error;
 
-      setMessage(`✅ ${userName} määratud`);
+      setMessage(`✅ ${t('issues.userAssigned', { name: userName })}`);
       setShowAssignDialog(false);
       setAssigningIssueId(null);
       await loadIssues();
@@ -1746,15 +1746,15 @@ export default function IssuesScreen({
 
   const exportToExcel = useCallback(async () => {
     try {
-      setMessage('Genereerin Excelit...');
+      setMessage(t('issues.generatingExcel'));
 
       const rows: (string | number | null)[][] = [];
 
       // Header row
       rows.push([
-        'Number', 'Pealkiri', 'Staatus', 'Prioriteet', 'Kategooria',
-        'Detailid', 'Assembly Mark', 'Avastatud', 'Tähtaeg',
-        'Vastutaja', 'Teavitaja', 'Kirjeldus', 'Asukoht'
+        t('issues.excelNumber'), t('issues.excelTitle'), t('issues.excelStatus'), t('issues.excelPriority'), t('issues.excelCategory'),
+        t('issues.excelDetails'), t('issues.excelAssemblyMark'), t('issues.excelDetected'), t('issues.excelDueDate'),
+        t('issues.excelResponsible'), t('issues.excelReporter'), t('issues.excelDescription'), t('issues.excelLocation')
       ]);
 
       // Sort by status order then by number
@@ -1888,7 +1888,7 @@ export default function IssuesScreen({
     <div className="issues-screen">
       {/* PageHeader with hamburger menu */}
       <PageHeader
-        title={`Mittevastavused (${filteredIssues.length}/${issues.length})`}
+        title={`${t('issues.pageTitle')} (${filteredIssues.length}/${issues.length})`}
         onBack={onBackToMenu}
         onNavigate={handleHeaderNavigate}
         currentMode="issues"
@@ -1901,24 +1901,24 @@ export default function IssuesScreen({
         <button
           className="icon-button"
           onClick={colorModelByIssueStatus}
-          title="Värvi mudel"
+          title={t('issues.colorModel')}
         >
           <FiRefreshCw size={18} />
         </button>
         <button
           className="icon-button"
           onClick={exportToExcel}
-          title="Ekspordi Excel"
+          title={t('issues.exportExcel')}
         >
           <FiDownload size={18} />
         </button>
         <button
           className="primary-button"
           onClick={handleCreateIssue}
-          title={currentSelectedObjects.length > 0 ? `Lisa mittevastavus (${currentSelectedObjects.length} detaili valitud)` : 'Lisa mittevastavus'}
+          title={currentSelectedObjects.length > 0 ? t('issues.addIssueWithCount', { count: currentSelectedObjects.length }) : t('issues.addNonConformance')}
         >
           <FiPlus size={18} />
-          Lisa {currentSelectedObjects.length > 0 && `(${currentSelectedObjects.length})`}
+          {t('issues.addButton')} {currentSelectedObjects.length > 0 && `(${currentSelectedObjects.length})`}
         </button>
       </PageHeader>
 
@@ -1970,7 +1970,7 @@ export default function IssuesScreen({
             value={filters.status}
             onChange={e => setFilters(f => ({ ...f, status: e.target.value as IssueStatus | 'all' }))}
           >
-            <option value="all">Kõik staatused</option>
+            <option value="all">{t('issues.allStatuses')}</option>
             {Object.entries(ISSUE_STATUS_CONFIG).map(([key, config]) => (
               <option key={key} value={key}>{config.label}</option>
             ))}
@@ -1980,7 +1980,7 @@ export default function IssuesScreen({
             value={filters.priority}
             onChange={e => setFilters(f => ({ ...f, priority: e.target.value as IssuePriority | 'all' }))}
           >
-            <option value="all">Kõik prioriteedid</option>
+            <option value="all">{t('issues.allPriorities')}</option>
             {Object.entries(ISSUE_PRIORITY_CONFIG).map(([key, config]) => (
               <option key={key} value={key}>{config.label}</option>
             ))}
@@ -1990,8 +1990,8 @@ export default function IssuesScreen({
             value={filters.assignedTo}
             onChange={e => setFilters(f => ({ ...f, assignedTo: e.target.value }))}
           >
-            <option value="all">Kõik vastutajad</option>
-            <option value={tcUserEmail}>Mulle määratud</option>
+            <option value="all">{t('issues.allAssignees')}</option>
+            <option value={tcUserEmail}>{t('issues.assignedToMe')}</option>
             {teamMembers.map(member => (
               <option key={member.email} value={member.email}>
                 {member.fullName}
@@ -2003,10 +2003,10 @@ export default function IssuesScreen({
             value={filters.dateRange}
             onChange={e => setFilters(f => ({ ...f, dateRange: e.target.value as 'today' | 'week' | 'month' | 'all' }))}
           >
-            <option value="all">Kõik kuupäevad</option>
-            <option value="today">Täna</option>
-            <option value="week">Viimane nädal</option>
-            <option value="month">Viimane kuu</option>
+            <option value="all">{t('issues.allDates')}</option>
+            <option value="today">{t('issues.filterToday')}</option>
+            <option value="week">{t('issues.filterLastWeek')}</option>
+            <option value="month">{t('issues.filterLastMonth')}</option>
           </select>
 
           <label className="filter-checkbox">
@@ -2015,7 +2015,7 @@ export default function IssuesScreen({
               checked={filters.overdue}
               onChange={e => setFilters(f => ({ ...f, overdue: e.target.checked }))}
             />
-            <span>Tähtaeg ületatud</span>
+            <span>{t('issues.overdueLabel')}</span>
           </label>
 
           <button
@@ -2028,7 +2028,7 @@ export default function IssuesScreen({
               setSearchQuery('');
             }}
           >
-            <FiX size={14} /> Tühjenda
+            <FiX size={14} /> {t('issues.clearFilters')}
           </button>
         </div>
       )}
@@ -2038,14 +2038,14 @@ export default function IssuesScreen({
         {loading ? (
           <div className="issues-loading">
             <FiLoader className="spinning" size={24} />
-            <span>Laen mittevastavusi...</span>
+            <span>{t('issues.loadingIssues')}</span>
           </div>
         ) : filteredIssues.length === 0 ? (
           <div className="issues-empty">
             <FiAlertCircle size={48} />
-            <p>Mittevastavusi ei leitud</p>
+            <p>{t('issues.noIssuesFound')}</p>
             <p className="issues-empty-hint">
-              Vali mudelist detail ja klõpsa "Lisa mittevastavus"
+              {t('issues.selectFromModelAndAdd')}
             </p>
           </div>
         ) : (
@@ -2143,7 +2143,7 @@ export default function IssuesScreen({
                           onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
                         >
                           <FiTarget size={14} />
-                          Vali kõik mudelis
+                          {t('issues.selectAllInModel')}
                         </button>
                         <button
                           onClick={() => colorStatusInModel(status)}
@@ -2170,7 +2170,7 @@ export default function IssuesScreen({
                             background: config.color,
                             display: 'inline-block'
                           }} />
-                          Värvi mudelis
+                          {t('issues.colorInModel')}
                         </button>
                       </div>
                     )}
@@ -2205,12 +2205,12 @@ export default function IssuesScreen({
                           )}
                           {/* Icons for comments and photos */}
                           {(issue.comments_count || 0) > 0 && (
-                            <span className="issue-meta-icon" title={`${issue.comments_count} kommentaari`}>
+                            <span className="issue-meta-icon" title={t('issues.commentsTooltip', { count: issue.comments_count })}>
                               <FiMessageSquare size={10} />
                             </span>
                           )}
                           {(issue.attachments_count || 0) > 0 && (
-                            <span className="issue-meta-icon" title={`${issue.attachments_count} pilti`}>
+                            <span className="issue-meta-icon" title={t('issues.photosTooltip', { count: issue.attachments_count })}>
                               <FiCamera size={10} />
                             </span>
                           )}
@@ -2234,7 +2234,7 @@ export default function IssuesScreen({
                                 e.stopPropagation();
                                 selectIssueInModel(issue);
                               }}
-                              title="Näita mudelis"
+                              title={t('issues.showInModel')}
                             >
                               <FiTarget size={12} />
                             </button>
@@ -2261,7 +2261,7 @@ export default function IssuesScreen({
         }}>
           <div className="modal-content issue-form-modal issue-form-modal-compact" onClick={e => e.stopPropagation()}>
             <div className="modal-header compact">
-              <h2>{editingIssue ? 'Muuda mittevastavust' : 'Lisa uus mittevastavus'}</h2>
+              <h2>{editingIssue ? t('issues.editIssueTitle') : t('issues.addNewIssue')}</h2>
               <button onClick={() => {
                 setShowForm(false);
                 setNewIssueObjects([]);
@@ -2278,8 +2278,8 @@ export default function IssuesScreen({
               {!editingIssue && (
                 <div className="form-section" style={{ marginBottom: '8px' }}>
                   <label style={{ marginBottom: '2px', fontSize: '11px' }}>
-                    Detailid ({(showSubDetailsModal ? lockedParentObjects : newIssueObjects).length})
-                    {showSubDetailsModal && <span style={{ color: '#059669', marginLeft: '4px' }}>(lukustatud)</span>}
+                    {t('issues.detailsLabel')} ({(showSubDetailsModal ? lockedParentObjects : newIssueObjects).length})
+                    {showSubDetailsModal && <span style={{ color: '#059669', marginLeft: '4px' }}>({t('issues.locked')})</span>}
                   </label>
                   {(showSubDetailsModal ? lockedParentObjects : newIssueObjects).length === 0 ? (
                     <div style={{
@@ -2290,7 +2290,7 @@ export default function IssuesScreen({
                       fontSize: '11px',
                       textAlign: 'center'
                     }}>
-                      Vali mudelist detailid (Assembly Selection peab olema sisse lülitatud)
+                      {t('issues.selectFromModelAssembly')}
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -2361,7 +2361,7 @@ export default function IssuesScreen({
                               title={t('issues:selectSubDetails')}
                             >
                               <FiLink size={10} />
-                              Alamd.
+                              {t('issues.subDetailsShort')}
                             </button>
                           </div>
                         );
@@ -2373,7 +2373,7 @@ export default function IssuesScreen({
 
               <div className="form-row">
                 <div className="form-group full">
-                  <label>Pealkiri *</label>
+                  <label>{t('issues.titleFieldLabel')}</label>
                   <input
                     type="text"
                     value={formData.title}
@@ -2385,7 +2385,7 @@ export default function IssuesScreen({
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Staatus</label>
+                  <label>{t('issues.statusFieldLabel')}</label>
                   <select
                     value={formData.status}
                     onChange={e => setFormData(f => ({ ...f, status: e.target.value as IssueStatus }))}
@@ -2396,7 +2396,7 @@ export default function IssuesScreen({
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Prioriteet</label>
+                  <label>{t('issues.priorityFieldLabel')}</label>
                   <select
                     value={formData.priority}
                     onChange={e => setFormData(f => ({ ...f, priority: e.target.value as IssuePriority }))}
@@ -2410,20 +2410,20 @@ export default function IssuesScreen({
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Kategooria *</label>
+                  <label>{t('issues.categoryFieldLabel')}</label>
                   <select
                     value={formData.fixed_category}
                     onChange={e => setFormData(f => ({ ...f, fixed_category: e.target.value as IssueFixedCategory | '' }))}
                     style={{ borderColor: !formData.fixed_category ? '#dc2626' : undefined }}
                   >
-                    <option value="">-- Vali kategooria --</option>
+                    <option value="">{t('issues.selectCategory')}</option>
                     {Object.entries(ISSUE_FIXED_CATEGORY_CONFIG).map(([key, config]) => (
                       <option key={key} value={key}>{config.label}</option>
                     ))}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Avastamise kuupäev</label>
+                  <label>{t('issues.detectedDate')}</label>
                   <input
                     type="date"
                     value={formData.due_date}
@@ -2434,11 +2434,11 @@ export default function IssuesScreen({
 
               <div className="form-row">
                 <div className="form-group full">
-                  <label>Kirjeldus</label>
+                  <label>{t('issues.descriptionFieldLabel')}</label>
                   <textarea
                     value={formData.description}
                     onChange={e => setFormData(f => ({ ...f, description: e.target.value }))}
-                    placeholder="Detailne kirjeldus"
+                    placeholder={t('issues.detailedDescription')}
                     rows={2}
                   />
                 </div>
@@ -2446,12 +2446,12 @@ export default function IssuesScreen({
 
               <div className="form-row">
                 <div className="form-group full">
-                  <label>Asukoht</label>
+                  <label>{t('issues.locationFieldLabel')}</label>
                   <input
                     type="text"
                     value={formData.location}
                     onChange={e => setFormData(f => ({ ...f, location: e.target.value }))}
-                    placeholder="Nt. vasakpoolne serv"
+                    placeholder={t('issues.locationPlaceholder')}
                   />
                 </div>
               </div>
@@ -2459,7 +2459,7 @@ export default function IssuesScreen({
               {/* File upload section */}
               {!editingIssue && (
                 <div className="form-section" style={{ marginBottom: '12px' }}>
-                  <label style={{ marginBottom: '4px' }}>Fotod/failid</label>
+                  <label style={{ marginBottom: '4px' }}>{t('issues.photosFiles')}</label>
                   <div
                     className={`file-drop-zone ${isDraggingFiles ? 'dragging' : ''}`}
                     onDragOver={(e) => { e.preventDefault(); setIsDraggingFiles(true); }}
@@ -2505,7 +2505,7 @@ export default function IssuesScreen({
                     {pendingFiles.length === 0 ? (
                       <div style={{ color: '#6b7280', fontSize: '12px' }}>
                         <FiCamera size={20} style={{ marginBottom: '4px', opacity: 0.5 }} />
-                        <div>Lohista failid siia või kliki</div>
+                        <div>{t('issues.dragFilesOrClick')}</div>
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -2599,13 +2599,13 @@ export default function IssuesScreen({
                     hasConfirmedSubDetailsRef.current = false;
                   }}
                 >
-                  Tühista
+                  {t('buttons.cancel')}
                 </button>
                 <button
                   className="primary-button"
                   onClick={handleSubmitIssue}
                 >
-                  {editingIssue ? 'Salvesta muudatused' : 'Lisa mittevastavus'}
+                  {editingIssue ? t('issues.saveChanges') : t('issues.addNonConformance')}
                 </button>
               </div>
             </div>
@@ -2661,7 +2661,7 @@ export default function IssuesScreen({
               {/* Info grid */}
               <div className="detail-info-grid">
                 <div className="info-item">
-                  <span className="info-label">Prioriteet</span>
+                  <span className="info-label">{t('issues.priority')}</span>
                   <span
                     className="priority-badge"
                     style={{
@@ -2675,7 +2675,7 @@ export default function IssuesScreen({
                 </div>
                 {detailIssue.fixed_category && ISSUE_FIXED_CATEGORY_CONFIG[detailIssue.fixed_category] && (
                   <div className="info-item">
-                    <span className="info-label">Kategooria</span>
+                    <span className="info-label">{t('issues.category')}</span>
                     <span
                       className="category-badge"
                       style={{
@@ -2691,19 +2691,19 @@ export default function IssuesScreen({
                   </div>
                 )}
                 <div className="info-item">
-                  <span className="info-label">Avastatud</span>
+                  <span className="info-label">{t('issues.detected')}</span>
                   <span>{formatDateTime(detailIssue.detected_at)}</span>
                 </div>
                 {detailIssue.due_date && (
                   <div className="info-item">
-                    <span className="info-label">Tähtaeg</span>
+                    <span className="info-label">{t('issues.dueDate')}</span>
                     <span className={isOverdue(detailIssue) ? 'overdue' : ''}>
                       {formatDate(detailIssue.due_date)}
                     </span>
                   </div>
                 )}
                 <div className="info-item">
-                  <span className="info-label">Teavitas</span>
+                  <span className="info-label">{t('issues.reportedBy')}</span>
                   <span>{detailIssue.reported_by_name || detailIssue.reported_by}</span>
                 </div>
               </div>
@@ -2711,7 +2711,7 @@ export default function IssuesScreen({
               {/* Description */}
               {detailIssue.description && (
                 <div className="detail-section">
-                  <h4>Kirjeldus</h4>
+                  <h4>{t('issues.description')}</h4>
                   <p>{detailIssue.description}</p>
                 </div>
               )}
@@ -2719,7 +2719,7 @@ export default function IssuesScreen({
               {/* Location */}
               {detailIssue.location && (
                 <div className="detail-section">
-                  <h4>Asukoht</h4>
+                  <h4>{t('issues.location')}</h4>
                   <p>{detailIssue.location}</p>
                 </div>
               )}
@@ -2728,7 +2728,7 @@ export default function IssuesScreen({
               <div className="detail-section">
                 <h4>
                   <FiLayers size={14} />
-                  Seotud detailid ({detailIssue.objects?.length || 0})
+                  {t('issues.linkedDetails')} ({detailIssue.objects?.length || 0})
                 </h4>
                 <div className="detail-objects-list">
                   {detailIssue.objects?.map(obj => (
@@ -2755,7 +2755,7 @@ export default function IssuesScreen({
                     >
                       <span className="obj-mark">{obj.assembly_mark || 'Unknown'}</span>
                       {obj.product_name && <span className="obj-product">{obj.product_name}</span>}
-                      {obj.is_primary && <span className="primary-tag">Peamine</span>}
+                      {obj.is_primary && <span className="primary-tag">{t('issues.primaryTag')}</span>}
                     </div>
                   ))}
                 </div>
@@ -2765,7 +2765,7 @@ export default function IssuesScreen({
               <div className="detail-section">
                 <h4>
                   <FiUser size={14} />
-                  Vastutajad
+                  {t('issues.assignees')}
                   <button
                     className="add-btn"
                     onClick={() => {
@@ -2790,7 +2790,7 @@ export default function IssuesScreen({
                     </div>
                   ))}
                   {(!detailIssue.assignments || detailIssue.assignments.filter(a => a.is_active).length === 0) && (
-                    <span className="no-assignments">Pole määratud</span>
+                    <span className="no-assignments">{t('issues.notAssigned')}</span>
                   )}
                 </div>
               </div>
@@ -2799,7 +2799,7 @@ export default function IssuesScreen({
               <div className="detail-section">
                 <h4>
                   <FiCamera size={14} />
-                  Fotod/failid ({issueAttachments.length})
+                  {t('issues.photosFiles')} ({issueAttachments.length})
                   <button
                     className="add-btn"
                     onClick={() => fileInputRef.current?.click()}
@@ -2819,7 +2819,7 @@ export default function IssuesScreen({
                     e.target.value = '';
                   }}
                 />
-                <p className="paste-hint">Võid ka kleepida pildi (Ctrl+V)</p>
+                <p className="paste-hint">{t('issues.pasteHint')}</p>
 
                 {/* Photos grid */}
                 {issueAttachments.filter(a => a.attachment_type === 'photo').length > 0 && (
@@ -2927,7 +2927,7 @@ export default function IssuesScreen({
               <div className="detail-section">
                 <h4>
                   <FiMessageSquare size={14} />
-                  Kommentaarid ({issueComments.length})
+                  {t('issues.commentsLabel')} ({issueComments.length})
                 </h4>
                 <div className="comments-list">
                   {issueComments.map(comment => {
@@ -2942,7 +2942,7 @@ export default function IssuesScreen({
                           </span>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span className="comment-date" title={formatDateTime(comment.created_at)}>
-                              {formatDateTime(comment.created_at)} ({formatRelativeTime(comment.created_at)})
+                              {formatDateTime(comment.created_at)} ({formatRelativeTime(comment.created_at, t)})
                             </span>
                             {isOwnComment && !isEditing && (
                               <div style={{ display: 'flex', gap: '4px' }}>
@@ -3008,7 +3008,7 @@ export default function IssuesScreen({
                                   cursor: 'pointer'
                                 }}
                               >
-                                Salvesta
+                                {t('buttons.save')}
                               </button>
                               <button
                                 onClick={() => {
@@ -3025,7 +3025,7 @@ export default function IssuesScreen({
                                   cursor: 'pointer'
                                 }}
                               >
-                                Tühista
+                                {t('buttons.cancel')}
                               </button>
                             </div>
                           </div>
@@ -3034,7 +3034,7 @@ export default function IssuesScreen({
                         )}
                         {comment.old_status && comment.new_status && (
                           <div className="comment-status-change">
-                            Staatus: {ISSUE_STATUS_CONFIG[comment.old_status].label} →{' '}
+                            {t('issues.statusChangeLabel')} {ISSUE_STATUS_CONFIG[comment.old_status].label} →{' '}
                             {ISSUE_STATUS_CONFIG[comment.new_status].label}
                           </div>
                         )}
@@ -3046,7 +3046,7 @@ export default function IssuesScreen({
                   <textarea
                     value={newComment}
                     onChange={e => setNewComment(e.target.value)}
-                    placeholder="Lisa kommentaar..."
+                    placeholder={t('issues.addComment')}
                     rows={2}
                   />
                   <button
@@ -3063,7 +3063,7 @@ export default function IssuesScreen({
               <div className="detail-section">
                 <h4>
                   <FiActivity size={14} />
-                  Tegevused
+                  {t('issues.activities')}
                 </h4>
                 <div className="activity-list">
                   {issueActivities.slice(0, 10).map(activity => (
@@ -3077,7 +3077,7 @@ export default function IssuesScreen({
                         )}
                       </span>
                       <span className="activity-meta">
-                        {activity.actor_name || activity.actor_email} • {formatRelativeTime(activity.created_at)}
+                        {activity.actor_name || activity.actor_email} • {formatRelativeTime(activity.created_at, t)}
                       </span>
                     </div>
                   ))}
@@ -3094,7 +3094,7 @@ export default function IssuesScreen({
         <div className="modal-overlay" onClick={() => setShowAssignDialog(false)}>
           <div className="modal-content assign-dialog" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Määra vastutaja</h3>
+              <h3>{t('issues.assignResponsible')}</h3>
               <button onClick={() => setShowAssignDialog(false)}>
                 <FiX size={20} />
               </button>
@@ -3123,22 +3123,21 @@ export default function IssuesScreen({
         <div className="modal-overlay" onClick={() => setShowAssemblyModal(false)}>
           <div className="modal-content assembly-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Assembly Selection nõutav</h3>
+              <h3>{t('issues.assemblySelectionRequired')}</h3>
               <button onClick={() => setShowAssemblyModal(false)}>
                 <FiX size={20} />
               </button>
             </div>
             <div style={{ padding: '16px' }}>
               <p style={{ marginBottom: '12px', fontSize: '13px', color: '#64748b' }}>
-                Mittevastavuse lisamiseks peab Assembly Selection olema sisse lülitatud.
-                See tagab, et valitakse terviklik detail (assembly), mitte selle alamosad.
+                {t('issues.assemblySelectionRequiredDesc')}
               </p>
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                 <button
                   className="secondary-button"
                   onClick={() => setShowAssemblyModal(false)}
                 >
-                  Tühista
+                  {t('buttons.cancel')}
                 </button>
                 <button
                   className="primary-button"
@@ -3149,7 +3148,7 @@ export default function IssuesScreen({
                     handleCreateIssue();
                   }}
                 >
-                  Lülita sisse
+                  {t('issues.enableButton')}
                 </button>
               </div>
             </div>
@@ -3186,7 +3185,7 @@ export default function IssuesScreen({
             fontSize: '18px',
             fontWeight: 600
           }}>
-            Laen alamdetaile...
+            {t('issues.loadingSubDetailsLabel')}
           </div>
           <style>{`
             @keyframes spin {
@@ -3202,7 +3201,7 @@ export default function IssuesScreen({
         <div className="modal-overlay" onClick={closeSubDetailsModal}>
           <div className="modal-content sub-details-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '360px', display: 'flex', flexDirection: 'column', maxHeight: '80vh' }}>
             <div className="modal-header" style={{ padding: '8px 12px', flexShrink: 0 }}>
-              <h3 style={{ fontSize: '13px' }}>Alam-detailid ({subDetails.length})</h3>
+              <h3 style={{ fontSize: '13px' }}>{t('issues.subDetailsTitle')} ({subDetails.length})</h3>
               <button onClick={closeSubDetailsModal}>
                 <FiX size={16} />
               </button>
@@ -3211,7 +3210,7 @@ export default function IssuesScreen({
             {/* Scrollable content area */}
             <div style={{ padding: '8px', flex: 1, overflowY: 'auto', minHeight: 0 }}>
               <p style={{ margin: '0 0 6px', fontSize: '10px', color: '#64748b' }}>
-                Vali mudelist või klõpsa listis. "Seo" seob alamdetaili mittevastavusega.
+                {t('issues.linkSubDetail')}
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 {subDetails.map((detail) => {
@@ -3271,7 +3270,7 @@ export default function IssuesScreen({
                           flexShrink: 0
                         }}
                       >
-                        {isSelected ? '✓' : 'Seo'}
+                        {isSelected ? '✓' : t('issues.linkButton')}
                       </button>
                     </div>
                   );
@@ -3286,7 +3285,7 @@ export default function IssuesScreen({
                 onClick={closeSubDetailsModal}
                 style={{ padding: '4px 10px', fontSize: '11px' }}
               >
-                Tühista
+                {t('buttons.cancel')}
               </button>
               <button
                 className="primary-button"
@@ -3296,7 +3295,7 @@ export default function IssuesScreen({
                   fontSize: '11px'
                 }}
               >
-                Kinnita ({selectedSubDetailsByParent.get(currentSubDetailsParentGuid)?.size || 0})
+                {t('issues.confirmCount')} ({selectedSubDetailsByParent.get(currentSubDetailsParentGuid)?.size || 0})
               </button>
             </div>
           </div>

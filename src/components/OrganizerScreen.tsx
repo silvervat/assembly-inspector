@@ -1480,7 +1480,7 @@ export default function OrganizerScreen({
                       files.push({
                         url: fileData.url,
                         fieldName: field.name,
-                        itemMark: item.assembly_mark || item.product_name || 'Tundmatu',
+                        itemMark: item.assembly_mark || item.product_name || t('organizer:item.unknownUser'),
                         addedBy: fileData.addedBy || null,
                         addedAt: fileData.addedAt || null,
                         type: field.type === 'photo' ? 'photo' : 'attachment'
@@ -1491,7 +1491,7 @@ export default function OrganizerScreen({
                   files.push({
                     url: value,
                     fieldName: field.name,
-                    itemMark: item.assembly_mark || item.product_name || 'Tundmatu',
+                    itemMark: item.assembly_mark || item.product_name || t('organizer:item.unknownUser'),
                     addedBy: null,
                     addedAt: null,
                     type: field.type === 'photo' ? 'photo' : 'attachment'
@@ -5306,7 +5306,7 @@ export default function OrganizerScreen({
             { color: { r: 255, g: 255, b: 255, a: 255 } }
           );
           whiteCount += batch.length;
-          showToast(`Värvin valged... ${whiteCount}/${totalWhite}`);
+          showToast(t('organizer:color.coloringWhite', { current: whiteCount, total: totalWhite }));
         }
       }
 
@@ -5565,7 +5565,7 @@ export default function OrganizerScreen({
 
     if (lineTexts.length === 0) {
       // Fallback to assembly mark
-      return item.assembly_mark || 'Tundmatu';
+      return item.assembly_mark || t('organizer:item.unknownUser');
     }
 
     const lineSeparator = getSeparator(markupSettings.separator);
@@ -5609,8 +5609,8 @@ export default function OrganizerScreen({
 
       if (itemsWithGroup.length === 0) {
         const msg = markupSettings.onlySelectedInModel
-          ? 'Valitud detailid pole selles grupis'
-          : 'Grupis pole detaile';
+          ? t('organizer:toast.selectedNotInGroup')
+          : t('organizer:toast.noItemsInGroup');
         showToast(msg);
         setSaving(false);
         return;
@@ -6142,7 +6142,7 @@ export default function OrganizerScreen({
     const requiredFields = getRequiredFields(importGroupId);
     if (requiredFields.length > 0) {
       const fieldNames = requiredFields.map(f => f.name).join(', ');
-      showToast(`Grupil on kohustuslikud väljad (${fieldNames}). Kasuta tavalist lisamist mudelist.`);
+      showToast(t('organizer:item.requiredFieldsMissing', { fields: fieldNames }));
       setShowImportModal(false);
       return;
     }
@@ -6637,7 +6637,7 @@ export default function OrganizerScreen({
     // Show progress for large exports (>100 items)
     const showProgress = allItems.length > 100;
     if (showProgress) {
-      setExportProgress({ message: 'Koostan Exceli...', percent: 0 });
+      setExportProgress({ message: t('organizer:toast.preparingExcel'), percent: 0 });
     }
 
     // Allow UI to update
@@ -6669,16 +6669,16 @@ export default function OrganizerScreen({
 
     const wb = XLSX.utils.book_new();
     // Headers: Different for assembly vs non-assembly groups
-    const headers = ['#', 'Grupp', 'Grupi värv'];
+    const headers = ['#', t('organizer:excelExport.groupHeader'), t('organizer:excelExport.groupColor')];
     if (isNonAssemblyGroup && displayProps.length > 0) {
       // Use display_properties as columns
       displayProps.forEach(dp => headers.push(dp.label || `${dp.set}.${dp.prop}`));
     } else {
       // Standard assembly columns
-      headers.push('Mark', 'Toode', 'Kaal (kg)', 'Positsioon');
+      headers.push(t('organizer:excelExport.markHeader'), t('organizer:excelExport.productHeader'), t('organizer:excelExport.weightHeader'), t('organizer:excelExport.positionHeader'));
     }
     customFields.forEach(f => headers.push(f.name));
-    headers.push('GUID_IFC', 'GUID_MS', 'Lisatud', 'Ajavöönd', 'Lisaja email', 'Lisaja nimi');
+    headers.push('GUID_IFC', 'GUID_MS', t('organizer:excelExport.addedHeader'), t('organizer:excelExport.timezoneHeader'), t('organizer:excelExport.addedByEmailHeader'), t('organizer:excelExport.addedByNameHeader'));
 
     // Get timezone name
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -6759,13 +6759,13 @@ export default function OrganizerScreen({
 
       if (showProgress) {
         const percent = Math.round(((i + batch.length) / allItems.length) * 80); // 0-80% for data
-        setExportProgress({ message: `Töötlen andmeid... (${i + batch.length}/${allItems.length})`, percent });
+        setExportProgress({ message: t('organizer:importProgress.processingItemsCount', { current: i + batch.length, total: allItems.length }), percent });
         await new Promise(resolve => setTimeout(resolve, 0));
       }
     }
 
     if (showProgress) {
-      setExportProgress({ message: 'Loon Exceli faili...', percent: 90 });
+      setExportProgress({ message: t('organizer:toast.creatingExcelFile'), percent: 90 });
       await new Promise(resolve => setTimeout(resolve, 10));
     }
 
@@ -6797,7 +6797,7 @@ export default function OrganizerScreen({
     if (showProgress) {
       setExportProgress(null);
     }
-    showToast(`Eksport loodud (${allItems.length} rida)`);
+    showToast(t('organizer:toast.exportCreated', { count: allItems.length }));
     setGroupMenuId(null);
   };
 
@@ -6824,14 +6824,13 @@ export default function OrganizerScreen({
     const displayProps = group.display_properties || [];
 
     // Build headers: Different for assembly vs non-assembly groups
-    // Removed: Grupi värv, GUID columns, Lisatud info
-    const headers = ['#', 'Grupp'];
+    const headers = ['#', t('organizer:excelExport.groupHeader')];
     if (isNonAssemblyGroup && displayProps.length > 0) {
       // Use display_properties as columns
       displayProps.forEach(dp => headers.push(dp.label || `${dp.set}.${dp.prop}`));
     } else {
       // Standard assembly columns
-      headers.push('Mark', 'Toode', 'Kaal (kg)', 'Positsioon');
+      headers.push(t('organizer:excelExport.markHeader'), t('organizer:excelExport.productHeader'), t('organizer:excelExport.weightHeader'), t('organizer:excelExport.positionHeader'));
     }
     customFields.forEach(f => headers.push(f.name));
 
@@ -7022,7 +7021,7 @@ export default function OrganizerScreen({
     const wb = XLSX.utils.book_new();
 
     // Headers: GUID columns + Subgroup + Custom fields
-    const headers = ['GUID_IFC', 'GUID_MS', 'Alamgrupp', 'Alamgrupi_kirjeldus'];
+    const headers = ['GUID_IFC', 'GUID_MS', t('organizer:excelExport.subgroupHeader'), t('organizer:excelExport.subgroupDescHeader')];
     customFields.forEach(f => headers.push(f.name.replace(/\s+/g, '_')));
 
     const data: string[][] = [headers];
@@ -7053,8 +7052,8 @@ export default function OrganizerScreen({
       const exampleRow = [
         '2O2Fr$t4X7Zf8NOew3FLOH', // IFC GUID example
         '85ca28da-b297-4bdc-87df-fac7573fb32d', // MS GUID example
-        'Alamgrupi nimi (valikuline)',
-        'Alamgrupi kirjeldus (valikuline)'
+        t('organizer:excelExport.subgroupNameOptional'),
+        t('organizer:excelExport.subgroupDescOptional')
       ];
       customFields.forEach(f => {
         if (f.type === 'dropdown' && f.options?.dropdownOptions?.length) {
@@ -7081,34 +7080,34 @@ export default function OrganizerScreen({
 
     // Add instructions sheet
     const instructionsData = [
-      ['IMPORDI JUHEND'],
+      [t('organizer:excelExport.importGuide')],
       [''],
-      ['1. Täida GUID_IFC VÕI GUID_MS veerg (üks on kohustuslik)'],
-      ['2. GUID_MS konverteeritakse automaatselt GUID_IFC formaati'],
-      ['3. Alamgrupp veerg loob uue alamgrupi kui seda pole veel olemas'],
-      ['4. Alamgrupi_kirjeldus on valikuline'],
-      ['5. Lisaväljad (custom fields) täidetakse vastavate väärtustega'],
+      [t('organizer:excelExport.guideFillGuid')],
+      [t('organizer:excelExport.guideGuidMsConvert')],
+      [t('organizer:excelExport.guideSubgroup')],
+      [t('organizer:excelExport.guideSubgroupDesc')],
+      [t('organizer:excelExport.guideCustomFields')],
       [''],
-      ['GUID FORMAADID:'],
-      ['- GUID_IFC: 22 tähemärki (nt: 2O2Fr$t4X7Zf8NOew3FLOH)'],
-      ['- GUID_MS: UUID formaat (nt: 85ca28da-b297-4bdc-87df-fac7573fb32d)']
+      [t('organizer:excelExport.guideGuidFormats')],
+      [t('organizer:excelExport.guideGuidIfc')],
+      [t('organizer:excelExport.guideGuidMs')]
     ];
 
     // Add info about sample data
     if (sampleItems.length > 0) {
       instructionsData.push(['']);
-      instructionsData.push([`NÄIDISANDMED: Template sisaldab ${sampleItems.length} esimest detaili grupist`]);
-      instructionsData.push(['- Näidisread näitavad olemasolevate detailide andmeid']);
-      instructionsData.push(['- Võid muuta lisaväljase väärtusi ja importida uuesti']);
+      instructionsData.push([t('organizer:excelExport.guideSampleData', { count: sampleItems.length })]);
+      instructionsData.push([t('organizer:excelExport.guideSampleRows')]);
+      instructionsData.push([t('organizer:excelExport.guideSampleModify')]);
     }
 
     // Add custom fields info
     if (customFields.length > 0) {
       instructionsData.push(['']);
-      instructionsData.push(['LISAVÄLJAD GRUPIS:']);
+      instructionsData.push([t('organizer:excelExport.guideCustomFieldsInGroup')]);
       customFields.forEach(f => {
         let fieldInfo = `- ${f.name} (${f.type})`;
-        if (f.required) fieldInfo += ' [KOHUSTUSLIK]';
+        if (f.required) fieldInfo += ` ${t('organizer:excelExport.guideRequired')}`;
         if (f.type === 'dropdown' && f.options?.dropdownOptions?.length) {
           fieldInfo += `: ${f.options.dropdownOptions.join(', ')}`;
         }
@@ -7119,26 +7118,26 @@ export default function OrganizerScreen({
     // Add group-specific instructions
     if (isNonAssemblyGroup && displayProps.length > 0) {
       instructionsData.push(['']);
-      instructionsData.push(['MÄRKUS: See on alamdetailide grupp (Assembly Selection väljas)']);
-      instructionsData.push(['- GUID-e otsitakse otse mudelist (mitte trimble_model_objects tabelist)']);
-      instructionsData.push(['- Kuvatavad veerud loetakse mudelist: ' + displayProps.map((dp: any) => dp.label || `${dp.set}.${dp.prop}`).join(', ')]);
+      instructionsData.push([t('organizer:excelExport.guideNonAssemblyNote')]);
+      instructionsData.push([t('organizer:excelExport.guideNonAssemblySearch')]);
+      instructionsData.push([t('organizer:excelExport.guideNonAssemblyColumns') + displayProps.map((dp: any) => dp.label || `${dp.set}.${dp.prop}`).join(', ')]);
     }
 
     instructionsData.push(['']);
-    instructionsData.push(['NÄPUNÄITED:']);
+    instructionsData.push([t('organizer:excelExport.guideTips')]);
     if (sampleItems.length > 0) {
-      instructionsData.push(['- Näidisread on juba olemasolevad detailid - muuda lisaväljasid ja impordi']);
+      instructionsData.push([t('organizer:excelExport.guideTipSample')]);
     } else {
-      instructionsData.push(['- Kustuta näidisrida enne importimist']);
+      instructionsData.push([t('organizer:excelExport.guideTipDeleteSample')]);
     }
-    instructionsData.push(['- Dropdown väärtused peavad vastama täpselt seadistatud valikutele']);
-    instructionsData.push(['- Tags veerus eraldage väärtused komaga']);
+    instructionsData.push([t('organizer:excelExport.guideTipDropdown')]);
+    instructionsData.push([t('organizer:excelExport.guideTipTags')]);
 
     const wsInstructions = XLSX.utils.aoa_to_sheet(instructionsData);
     wsInstructions['!cols'] = [{ wch: 60 }];
 
-    XLSX.utils.book_append_sheet(wb, ws, 'Andmed');
-    XLSX.utils.book_append_sheet(wb, wsInstructions, 'Juhend');
+    XLSX.utils.book_append_sheet(wb, ws, t('organizer:excelExport.dataSheet'));
+    XLSX.utils.book_append_sheet(wb, wsInstructions, t('organizer:excelExport.guideSheet'));
 
     XLSX.writeFile(wb, `${group.name.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ]/g, '_')}_import_template.xlsx`);
     showToast(t('organizer:toast.templateDownloaded'));
@@ -7590,7 +7589,7 @@ export default function OrganizerScreen({
 
       // ============ GRUPID SHEET ============
       // First column is narrow color indicator (no header text), rest are normal headers
-      const groupHeaders = ['', 'Grupp', 'Kirjeldus', 'Detaile', 'Kaal (t)'];
+      const groupHeaders = ['', t('organizer:excelExport.groupHeader'), t('organizer:excel.descriptionHeader'), t('organizer:excelExport.itemsHeader'), t('organizer:excelExport.weightTonsHeader')];
       const groupData: any[][] = [groupHeaders.map((h, idx) => idx === 0 ? { v: '', s: headerStyle } : { v: h, s: headerStyle })];
 
       // Sort groups hierarchically (parents before children, then by sort_order)
@@ -7668,7 +7667,7 @@ export default function OrganizerScreen({
       const customFieldsList = Array.from(allCustomFields.values());
 
       // Build headers: base columns + custom fields
-      const baseHeaders = ['Grupp', 'Mark', 'Toode', 'Kaal', 'Positsioon', 'Märkused', 'GUID_IFC', 'GUID_MS', 'Lisatud', 'Lisaja'];
+      const baseHeaders = [t('organizer:excelExport.groupHeader'), t('organizer:excelExport.markHeader'), t('organizer:excelExport.productHeader'), t('organizer:excelExport.weightHeader'), t('organizer:excelExport.positionHeader'), t('organizer:excelExport.notesHeader'), 'GUID_IFC', 'GUID_MS', t('organizer:excelExport.addedHeader'), t('organizer:excelExport.addedByHeader')];
       const customFieldHeaders = customFieldsList.map(f => f.name);
       const itemHeaders = [...baseHeaders, ...customFieldHeaders];
       const itemData: any[][] = [itemHeaders.map(h => ({ v: h, s: headerStyle }))];
@@ -7767,7 +7766,7 @@ export default function OrganizerScreen({
         if (i % 100 === 0) {
           const percent = 35 + Math.round((i / allItemsFlat.length) * 55);
           setGroupsImportProgress({
-            phase: `Töötlen detaile... (${i}/${allItemsFlat.length})`,
+            phase: t('organizer:importProgress.processingItemsExport', { current: i, total: allItemsFlat.length }),
             current: i,
             total: allItemsFlat.length,
             percent
@@ -7783,59 +7782,59 @@ export default function OrganizerScreen({
         f.type === 'photo' || f.type === 'attachment' ? { wch: 40 } : { wch: 20 }
       );
       wsItems['!cols'] = [...baseColWidths, ...customColWidths];
-      XLSX.utils.book_append_sheet(wb, wsItems, 'Detailid');
+      XLSX.utils.book_append_sheet(wb, wsItems, t('organizer:excelExport.detailsSheet'));
 
-      // ============ JUHEND SHEET ============
-      setGroupsImportProgress({ phase: 'Loon faili...', current: 90, total: 100, percent: 92 });
+      // ============ GUIDE SHEET ============
+      setGroupsImportProgress({ phase: t('organizer:importProgress.creatingFile'), current: 90, total: 100, percent: 92 });
       await new Promise(resolve => setTimeout(resolve, 0));
 
       const guideData = [
-        ['GRUPPIDE EKSPORT'],
+        [t('organizer:excelExport.exportTitle')],
         [''],
-        ['GRUPID leht:'],
-        ['- Grupp: Grupi nimi (taandega hierarhia näitamiseks)'],
-        ['- Kirjeldus: Grupi kirjeldus'],
-        ['- Detaile: Grupis olevate detailide arv'],
-        ['- Kaal (t): Grupi detailide kogukaal tonnides'],
-        ['- Grupi värv on näidatud grupi nime lahtri taustavärviga'],
+        [t('organizer:excelExport.exportGroupsSheet')],
+        [t('organizer:excelExport.exportGroupName')],
+        [t('organizer:excelExport.exportGroupDesc')],
+        [t('organizer:excelExport.exportGroupItems')],
+        [t('organizer:excelExport.exportGroupWeight')],
+        [t('organizer:excelExport.exportGroupColor')],
         [''],
-        ['DETAILID leht:'],
-        ['- Grupp: Grupi nimi kuhu detail kuulub'],
-        ['- Mark: Assembly mark'],
-        ['- Toode: Toote nimetus'],
-        ['- Kaal: Detaili kaal'],
-        ['- Positsioon: Positsiooni kood'],
-        ['- Märkused: Märkused'],
-        ['- GUID_IFC: 22-kohaline IFC GUID'],
-        ['- GUID_MS: 36-kohaline MS GUID'],
-        ['- Lisatud: Millal detail gruppi lisati'],
-        ['- Lisaja: Kes detaili gruppi lisas'],
+        [t('organizer:excelExport.exportDetailsSheet')],
+        [t('organizer:excelExport.exportDetailGroup')],
+        [t('organizer:excelExport.exportDetailMark')],
+        [t('organizer:excelExport.exportDetailProduct')],
+        [t('organizer:excelExport.exportDetailWeight')],
+        [t('organizer:excelExport.exportDetailPosition')],
+        [t('organizer:excelExport.exportDetailNotes')],
+        [t('organizer:excelExport.exportDetailGuidIfc')],
+        [t('organizer:excelExport.exportDetailGuidMs')],
+        [t('organizer:excelExport.exportDetailAdded')],
+        [t('organizer:excelExport.exportDetailAddedBy')],
         ...(customFieldsList.length > 0 ? [
           [''],
-          ['LISAVÄLJAD:'],
+          [t('organizer:excelExport.exportCustomFields')],
           ...customFieldsList.map(f => {
             let typeDesc = '';
             switch (f.type) {
-              case 'photo': typeDesc = ' (fotod - lingid failidele)'; break;
-              case 'attachment': typeDesc = ' (manused - lingid failidele)'; break;
-              case 'currency': typeDesc = ' (valuuta)'; break;
-              case 'number': typeDesc = ' (number)'; break;
-              case 'date': typeDesc = ' (kuupäev)'; break;
-              case 'tags': typeDesc = ' (sildid)'; break;
-              case 'dropdown': typeDesc = ' (valik)'; break;
-              default: typeDesc = ' (tekst)';
+              case 'photo': typeDesc = t('organizer:excelExport.exportTypePhoto'); break;
+              case 'attachment': typeDesc = t('organizer:excelExport.exportTypeAttachment'); break;
+              case 'currency': typeDesc = t('organizer:excelExport.exportTypeCurrency'); break;
+              case 'number': typeDesc = t('organizer:excelExport.exportTypeNumber'); break;
+              case 'date': typeDesc = t('organizer:excelExport.exportTypeDate'); break;
+              case 'tags': typeDesc = t('organizer:excelExport.exportTypeTags'); break;
+              case 'dropdown': typeDesc = t('organizer:excelExport.exportTypeDropdown'); break;
+              default: typeDesc = t('organizer:excelExport.exportTypeText');
             }
             return [`- ${f.name}${typeDesc}`];
           })
         ] : []),
         [''],
-        ['Eksporditud:', new Date().toLocaleString('et-EE')],
-        ['Kasutaja:', tcUserEmail]
+        [t('organizer:excelExport.exportedAt'), new Date().toLocaleString('et-EE')],
+        [t('organizer:excelExport.exportedBy'), tcUserEmail]
       ];
 
       const wsGuide = XLSX.utils.aoa_to_sheet(guideData);
       wsGuide['!cols'] = [{ wch: 60 }, { wch: 30 }];
-      XLSX.utils.book_append_sheet(wb, wsGuide, 'Juhend');
+      XLSX.utils.book_append_sheet(wb, wsGuide, t('organizer:excelExport.guideSheet'));
 
       // Download file
       XLSX.writeFile(wb, `grupid_eksport_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -7875,7 +7874,7 @@ export default function OrganizerScreen({
     };
 
     // GRUPID sheet - existing groups with hierarchy info
-    const groupHeaders = ['Grupp', 'Ülemgrupp', 'Kirjeldus'];
+    const groupHeaders = [t('organizer:excel.groupHeader'), t('organizer:excel.parentGroupHeader'), t('organizer:excel.descriptionHeader')];
     const groupData: any[][] = [groupHeaders.map(h => ({ v: h, s: headerStyle }))];
 
     // Sort groups hierarchically
@@ -7896,10 +7895,10 @@ export default function OrganizerScreen({
 
     const wsGroups = XLSX.utils.aoa_to_sheet(groupData);
     wsGroups['!cols'] = [{ wch: 30 }, { wch: 30 }, { wch: 40 }];
-    XLSX.utils.book_append_sheet(wb, wsGroups, 'Grupid');
+    XLSX.utils.book_append_sheet(wb, wsGroups, t('organizer:excelExport.groupsSheet'));
 
     // DETAILID sheet - only group and GUIDs (properties read from model)
-    const itemHeaders = ['Grupp', 'GUID_IFC', 'GUID_MS'];
+    const itemHeaders = [t('organizer:excel.groupHeader'), 'GUID_IFC', 'GUID_MS'];
     const itemData: any[][] = [
       itemHeaders.map(h => ({ v: h, s: headerStyle })),
       ['', '', '']
@@ -7907,35 +7906,35 @@ export default function OrganizerScreen({
 
     const wsItems = XLSX.utils.aoa_to_sheet(itemData);
     wsItems['!cols'] = [{ wch: 30 }, { wch: 24 }, { wch: 38 }];
-    XLSX.utils.book_append_sheet(wb, wsItems, 'Detailid');
+    XLSX.utils.book_append_sheet(wb, wsItems, t('organizer:excelExport.detailsSheet'));
 
-    // JUHEND sheet
+    // GUIDE sheet
     const guideData = [
-      ['DETAILIDE IMPORT JUHEND'],
+      [t('organizer:excelExport.importGuideTitle')],
       [''],
-      ['GRUPID leht (ainult info):'],
-      ['- Sisaldab olemasolevaid gruppe'],
-      ['- Grupp: Grupi nimi'],
-      ['- Ülemgrupp: Ülemgrupi nimi (tühi = peagrupp)'],
-      ['- Kasuta neid nimesid Detailid lehel'],
+      [t('organizer:excelExport.importGroupsSheet')],
+      [t('organizer:excelExport.importGroupsContains')],
+      [t('organizer:excelExport.importGroupsName')],
+      [t('organizer:excelExport.importGroupsParent')],
+      [t('organizer:excelExport.importGroupsUseNames')],
       [''],
-      ['DETAILID leht:'],
-      ['- Grupp: Grupi nimi kuhu detail lisada'],
-      ['  * Kui gruppi ei ole olemas, luuakse automaatselt'],
-      ['  * Hierarhia: "Ülemgrupp > Alamgrupp > Alamalamgrupp"'],
-      ['- GUID_IFC: 22-kohaline IFC GUID'],
-      ['- GUID_MS: 36-kohaline MS GUID (teisendatakse automaatselt)'],
+      [t('organizer:excelExport.importDetailsSheet')],
+      [t('organizer:excelExport.importDetailGroup')],
+      [t('organizer:excelExport.importDetailAutoCreate')],
+      [t('organizer:excelExport.importDetailHierarchy')],
+      [t('organizer:excelExport.importDetailGuidIfc')],
+      [t('organizer:excelExport.importDetailGuidMs')],
       [''],
-      ['NB! Mark, Toode, Kaal jm loetakse mudelist automaatselt.'],
+      [t('organizer:excelExport.importAutoNote')],
       [''],
-      ['NÄITED:'],
-      ['Grupp: "Seinad" - lisab peagruppi "Seinad"'],
-      ['Grupp: "Seinad > 1. korrus" - lisab alamgruppi "1. korrus"'],
+      [t('organizer:excelExport.importExamples')],
+      [t('organizer:excelExport.importExample1')],
+      [t('organizer:excelExport.importExample2')],
     ];
 
     const wsGuide = XLSX.utils.aoa_to_sheet(guideData);
     wsGuide['!cols'] = [{ wch: 60 }];
-    XLSX.utils.book_append_sheet(wb, wsGuide, 'Juhend');
+    XLSX.utils.book_append_sheet(wb, wsGuide, t('organizer:excelExport.guideSheet'));
 
     XLSX.writeFile(wb, 'detailid_import_mall.xlsx');
     showToast(t('organizer:toast.templateDownloaded'));
@@ -7958,7 +7957,7 @@ export default function OrganizerScreen({
         workbook.SheetNames.includes('Elemendid') ? 'Elemendid' : null;
 
       if (!detailsSheetName) {
-        errors.push('Failis puudub "Detailid" leht');
+        errors.push(t('organizer:excel.missingDetailsSheet'));
         setGroupsImportPreview({ groupCount: 0, itemCount: 0, errors, warnings });
         return;
       }
@@ -8025,7 +8024,7 @@ export default function OrganizerScreen({
       setGroupsImportPreview({
         groupCount: 0,
         itemCount: 0,
-        errors: ['Vigane Excel fail - kontrolli faili formaati'],
+        errors: [t('organizer:toast.invalidExcelFormat')],
         warnings: []
       });
     }
@@ -8049,7 +8048,7 @@ export default function OrganizerScreen({
         workbook.SheetNames.includes('Elemendid') ? 'Elemendid' : null;
 
       if (!detailsSheetName) {
-        throw new Error('Failis puudub "Detailid" leht');
+        throw new Error(t('organizer:importProgress.missingDetailsSheet'));
       }
 
       const itemsSheet = workbook.Sheets[detailsSheetName];
@@ -8132,7 +8131,7 @@ export default function OrganizerScreen({
           const { error } = await supabase.from('organizer_groups').insert(groupToInsert);
           if (error) {
             console.error('Error creating group:', error);
-            throw new Error(`Viga grupi "${name}" loomisel: ${error.message}`);
+            throw new Error(t('organizer:importProgress.errorCreatingGroup', { name, error: error.message }));
           }
 
           createdGroupIds.set(currentPath.toLowerCase(), newId);
@@ -8145,7 +8144,7 @@ export default function OrganizerScreen({
       };
 
       setGroupsImportProgress({
-        phase: 'Töötlen detaile...',
+        phase: t('organizer:importProgress.processingItems'),
         current: 0,
         total: totalItems,
         percent: 0
@@ -8190,7 +8189,7 @@ export default function OrganizerScreen({
         if (i % 50 === 0) {
           const percent = Math.round((i / totalItems) * 50);
           setGroupsImportProgress({
-            phase: `Töötlen detaile... (${i}/${totalItems})`,
+            phase: t('organizer:importProgress.processingItemsCount', { current: i, total: totalItems }),
             current: i,
             total: totalItems,
             percent
@@ -8201,7 +8200,7 @@ export default function OrganizerScreen({
 
       // Phase 2: Insert items (only GUIDs - properties read from model later)
       setGroupsImportProgress({
-        phase: 'Lisan detaile gruppidesse...',
+        phase: t('organizer:importProgress.addingItems'),
         current: 0,
         total: totalItems,
         percent: 50
@@ -8251,7 +8250,7 @@ export default function OrganizerScreen({
 
           const percent = 50 + Math.round((processedItems / totalItems) * 50);
           setGroupsImportProgress({
-            phase: `Lisan detaile... (${processedItems}/${totalItems})`,
+            phase: t('organizer:importProgress.addingItemsCount', { current: processedItems, total: totalItems }),
             current: processedItems,
             total: totalItems,
             percent
@@ -8274,15 +8273,15 @@ export default function OrganizerScreen({
         }
       }
 
-      let message = `Imporditud ${processedItems} detaili`;
+      let message = t('organizer:importProgress.importedDetails', { count: processedItems });
       if (createdGroups > 0) {
-        message += `, loodud ${createdGroups} gruppi`;
+        message += t('organizer:importProgress.createdGroups', { count: createdGroups });
       }
       if (skippedItems > 0) {
-        message += `, ${skippedItems} vahele jäetud`;
+        message += t('organizer:importProgress.skippedItems', { count: skippedItems });
       }
       if (groupsWithRequiredFields > 0) {
-        message += ` (${groupsWithRequiredFields} grupil kohustuslikud väljad täitmata)`;
+        message += t('organizer:importProgress.requiredFieldsNotFilled', { count: groupsWithRequiredFields });
       }
 
       showToast(message);
@@ -8293,7 +8292,7 @@ export default function OrganizerScreen({
 
     } catch (err) {
       console.error('Error importing:', err);
-      showToast(err instanceof Error ? err.message : 'Viga importimisel');
+      showToast(err instanceof Error ? err.message : t('organizer:importProgress.importGenericError'));
       setGroupsImportProgress(null);
     } finally {
       setSaving(false);
@@ -9020,7 +9019,7 @@ export default function OrganizerScreen({
                 e.stopPropagation();
                 if (isEffectivelyLocked) {
                   const lockInfo = getGroupLockInfo(node.id);
-                  showToast(`🔒 Grupi värvi ei saa muuta - grupp on lukustatud${lockInfo?.locked_by ? ` (${lockInfo.locked_by})` : ''}`);
+                  showToast(t('organizer:groupsManagement.colorLockedToast') + (lockInfo?.locked_by ? ` (${lockInfo.locked_by})` : ''));
                   return;
                 }
                 setColorPickerGroupId(colorPickerGroupId === node.id ? null : node.id);
@@ -9029,7 +9028,7 @@ export default function OrganizerScreen({
               <span
                 className="org-color-dot"
                 style={{ backgroundColor: `rgb(${node.color.r}, ${node.color.g}, ${node.color.b})`, cursor: isEffectivelyLocked ? 'not-allowed' : 'pointer', opacity: isEffectivelyLocked ? 0.6 : 1 }}
-                title={isEffectivelyLocked ? '🔒 Grupp on lukustatud - värvi muutmine keelatud' : 'Klõpsa värvi muutmiseks'}
+                title={isEffectivelyLocked ? t('organizer:group.colorLocked') : t('organizer:groupsManagement.changeColor')}
               />
               {colorPickerGroupId === node.id && !isEffectivelyLocked && (
                 <div className="org-color-picker-popup" onClick={(e) => e.stopPropagation()}>
@@ -9052,8 +9051,8 @@ export default function OrganizerScreen({
               <span className="org-group-name" title={node.description ? `${node.name}\n${node.description}` : node.name}>
                 {node.name}
               </span>
-              {node.assembly_selection_on === false && <FiGrid size={10} className="org-element-icon" title="Assembly selection välja lülitatud selles grupis" style={{ color: '#6366f1', marginLeft: '4px' }} />}
-              {node.is_private && <FiLock size={10} className="org-lock-icon" title="Privaatne grupp" />}
+              {node.assembly_selection_on === false && <FiGrid size={10} className="org-element-icon" title={t('organizer:assemblyModal.cannotContinue')} style={{ color: '#6366f1', marginLeft: '4px' }} />}
+              {node.is_private && <FiLock size={10} className="org-lock-icon" title={t('organizer:groupInfoModal.private')} />}
               {(() => {
                 const effectiveLockInfo = getGroupLockInfo(node.id);
                 const isEffectivelyLocked = isGroupLocked(node.id);
@@ -9062,7 +9061,7 @@ export default function OrganizerScreen({
                   return (
                     <span
                       className={`org-locked-indicator${lockedByParent ? ' inherited' : ''}`}
-                      title={`🔒 ${lockedByParent ? 'Lukustatud ülemgrupi poolt' : 'Lukustatud'}\n👤 ${effectiveLockInfo?.locked_by || 'Tundmatu'}\n📅 ${effectiveLockInfo?.locked_at ? new Date(effectiveLockInfo.locked_at).toLocaleString('et-EE') : ''}`}
+                      title={`🔒 ${lockedByParent ? t('organizer:groupsManagement.lockedTooltip', { user: effectiveLockInfo?.locked_by || t('organizer:groupInfoModal.lockedByUnknown') }) : t('organizer:group.locked')}\n👤 ${effectiveLockInfo?.locked_by || t('organizer:groupInfoModal.lockedByUnknown')}\n📅 ${effectiveLockInfo?.locked_at ? new Date(effectiveLockInfo.locked_at).toLocaleString('et-EE') : ''}`}
                     >
                       <FiLock size={10} />
                     </span>
@@ -9074,7 +9073,7 @@ export default function OrganizerScreen({
                   return (
                     <span
                       className="org-no-edit-indicator"
-                      title="Sul pole õigust seda gruppi muuta"
+                      title={t('organizer:toast.noPermissionAdd')}
                     >
                       <FiLock size={9} />
                     </span>
@@ -9171,7 +9170,7 @@ export default function OrganizerScreen({
             <div className="org-group-menu" onClick={(e) => e.stopPropagation()}>
               {node.level < 2 && !isEffectivelyLocked && (
                 <button onClick={() => openAddSubgroupForm(node.id)}>
-                  <FiFolderPlus size={12} /> Lisa alamgrupp
+                  <FiFolderPlus size={12} /> {t('organizer:contextMenu.addSubgroup')}
                 </button>
               )}
               {node.level < 2 && selectedObjects.length > 0 && !isEffectivelyLocked && isSelectionEnabled(node.id) === assemblySelectionEnabled && (
@@ -9179,52 +9178,52 @@ export default function OrganizerScreen({
                   setAddItemsAfterGroupCreate([...selectedObjects]);
                   openAddSubgroupForm(node.id);
                 }}>
-                  <FiFolderPlus size={12} /> Lisa alamgrupp ({selectedObjects.length} detailiga)
+                  <FiFolderPlus size={12} /> {t('organizer:contextMenu.addSubgroupWithItems', { count: selectedObjects.length })}
                 </button>
               )}
               {isEffectivelyLocked ? (
-                <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title="Lukustatud gruppi ei saa muuta">
-                  <FiLock size={12} /> Muuda gruppi
+                <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title={t('organizer:contextMenu.lockedCannotEdit')}>
+                  <FiLock size={12} /> {t('organizer:contextMenu.editGroup')}
                 </button>
               ) : (
                 <button onClick={() => openEditGroupForm(node)}>
-                  <FiEdit2 size={12} /> Muuda gruppi
+                  <FiEdit2 size={12} /> {t('organizer:contextMenu.editGroup')}
                 </button>
               )}
               <button onClick={() => cloneGroup(node.id)}>
-                <FiCopy size={12} /> Klooni grupp
+                <FiCopy size={12} /> {t('organizer:contextMenu.cloneGroup')}
               </button>
               {isEffectivelyLocked ? (
-                <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title="Lukustatud gruppi ei saa välju muuta">
-                  <FiLock size={12} /> Lisa väljad
+                <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title={t('organizer:contextMenu.lockedCannotEditFields')}>
+                  <FiLock size={12} /> {t('organizer:contextMenu.manageFields')}
                 </button>
               ) : (
                 <button onClick={() => { setFieldsManagementGroupId(node.id); setShowFieldsManagementModal(true); setGroupMenuId(null); }}>
-                  <FiList size={12} /> Lisa väljad
+                  <FiList size={12} /> {t('organizer:contextMenu.manageFields')}
                 </button>
               )}
               <button onClick={() => { setGroupMenuId(null); colorModelByGroups(node.id); }}>
-                <FiDroplet size={12} /> Värvi see grupp
+                <FiDroplet size={12} /> {t('organizer:contextMenu.colorThisGroup')}
               </button>
               <button onClick={() => openMarkupModal(node.id)}>
-                <FiTag size={12} /> Lisa markupid
+                <FiTag size={12} /> {t('organizer:contextMenu.addMarkups')}
               </button>
               <button
                 onClick={() => { if (hasMarkups) { setGroupMenuId(null); removeAllMarkups(); } }}
                 disabled={!hasMarkups}
                 style={!hasMarkups ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
-                title={!hasMarkups ? 'Markupe pole mudelis' : undefined}
+                title={!hasMarkups ? t('organizer:contextMenu.noMarkupsInModel') : undefined}
               >
-                <FiTag size={12} /> Eemalda markupid
+                <FiTag size={12} /> {t('organizer:contextMenu.removeMarkups')}
               </button>
               <button onClick={() => copyGroupDataToClipboard(node.id)}>
-                <FiCopy size={12} /> Kopeeri andmed
+                <FiCopy size={12} /> {t('organizer:contextMenu.copyData')}
               </button>
               <button onClick={() => copyGroupLink(node.id)}>
-                <FiLink size={12} /> Kopeeri link
+                <FiLink size={12} /> {t('organizer:contextMenu.copyLink')}
               </button>
               <button onClick={() => exportGroupToExcel(node.id)}>
-                <FiDownload size={12} /> Ekspordi Excel
+                <FiDownload size={12} /> {t('organizer:contextMenu.exportExcel')}
               </button>
               {(() => {
                 // Check if any selected objects are in this group (including subgroups)
@@ -9242,7 +9241,7 @@ export default function OrganizerScreen({
                 if (!hasSelectedInGroup) return null;
                 return (
                   <button onClick={() => { setGroupMenuId(null); exportGroupToExcel(node.id, true); }}>
-                    <FiDownload size={12} /> Ekspordi valitud
+                    <FiDownload size={12} /> {t('organizer:contextMenu.exportSelected')}
                     <span style={{ marginLeft: '4px', background: '#3b82f6', color: 'white', padding: '1px 5px', borderRadius: '8px', fontSize: '10px' }}>
                       {selectedObjects.filter(o => {
                         if (!o.guidIfc) return false;
@@ -9258,21 +9257,21 @@ export default function OrganizerScreen({
                 );
               })()}
               {isEffectivelyLocked ? (
-                <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title="Lukustatud gruppi ei saa importida">
-                  <FiLock size={12} /> Impordi GUID
+                <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title={t('organizer:contextMenu.lockedCannotImport')}>
+                  <FiLock size={12} /> {t('organizer:contextMenu.importGuid')}
                 </button>
               ) : (
                 <button onClick={() => openImportModal(node.id)}>
-                  <FiUpload size={12} /> Impordi GUID
+                  <FiUpload size={12} /> {t('organizer:contextMenu.importGuid')}
                 </button>
               )}
               {isEffectivelyLocked ? (
-                <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title="Lukustatud gruppi ei saa importida">
-                  <FiLock size={12} /> Impordi Excelist
+                <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title={t('organizer:contextMenu.lockedCannotImport')}>
+                  <FiLock size={12} /> {t('organizer:contextMenu.importExcel')}
                 </button>
               ) : (
                 <button onClick={() => openExcelImportModal(node.id)}>
-                  <FiUpload size={12} /> Impordi Excelist
+                  <FiUpload size={12} /> {t('organizer:contextMenu.importExcel')}
                 </button>
               )}
               {(() => {
@@ -9280,22 +9279,22 @@ export default function OrganizerScreen({
                 if (parentLocked) {
                   return (
                     <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
-                      <FiLock size={12} /> Lukust. ülemgrupi poolt
+                      <FiLock size={12} /> {t('organizer:contextMenu.lockedByParent')}
                     </button>
                   );
                 }
                 return (
                   <button onClick={() => toggleGroupLock(node.id)}>
                     {node.is_locked ? <FiUnlock size={12} /> : <FiLock size={12} />}
-                    {node.is_locked ? ' Ava lukust' : ' Lukusta'}
+                    {node.is_locked ? ` ${t('organizer:contextMenu.unlock')}` : ` ${t('organizer:contextMenu.lock')}`}
                   </button>
                 );
               })()}
               <button onClick={() => openGroupInfoModal(node.id)}>
-                <FiInfo size={12} /> Grupi info
+                <FiInfo size={12} /> {t('organizer:contextMenu.groupInfo')}
               </button>
               <button className="delete" onClick={() => openDeleteConfirm(node)}>
-                <FiTrash2 size={12} /> Kustuta
+                <FiTrash2 size={12} /> {t('common:buttons.delete')}
               </button>
             </div>
           )}
@@ -9363,7 +9362,7 @@ export default function OrganizerScreen({
                     <span className="org-item-index sortable" onClick={() => {
                       if (itemSortField === 'sort_order') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
                       else { setItemSortField('sort_order'); setItemSortDir('asc'); }
-                    }} title="Sorteeri järjekorra järgi">
+                    }} title={t('organizer:toolbar.sortByOrder')}>
                       # {itemSortField === 'sort_order' && (itemSortDir === 'asc' ? '↑' : '↓')}
                     </span>
                     <span className="org-header-spacer" /> {/* For drag handle */}
@@ -9442,7 +9441,7 @@ export default function OrganizerScreen({
                     const isModelSelected = item.guid_ifc && selectedGuidsInGroups.has(item.guid_ifc.toLowerCase());
                     const isDragTarget = dragReorderTarget?.groupId === node.id && dragReorderTarget?.targetIndex === idx;
                     const addedInfo = item.added_at
-                      ? `Lisatud: ${new Date(item.added_at).toLocaleDateString('et-EE')} ${new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}\nLisaja: ${item.added_by || 'Tundmatu'}`
+                      ? t('organizer:item.addedTooltip', { date: `${new Date(item.added_at).toLocaleDateString('et-EE')} ${new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}`, user: item.added_by || t('organizer:item.unknownUser') })
                       : '';
                     return (
                       <div
@@ -9494,10 +9493,10 @@ export default function OrganizerScreen({
                                 e.stopPropagation();
                                 if (item.assembly_mark) {
                                   navigator.clipboard.writeText(item.assembly_mark);
-                                  showToast(`Kopeeritud: ${item.assembly_mark}`);
+                                  showToast(t('organizer:toast.copiedMark', { mark: item.assembly_mark }));
                                 }
                               }}
-                            >{item.assembly_mark || 'Tundmatu'}</span>
+                            >{item.assembly_mark || t('organizer:item.unknownUser')}</span>
                             <span className="org-item-product" title={item.product_name || ''}>{item.product_name || ''}</span>
                             <span className="org-item-weight" title={`${formatWeight(item.cast_unit_weight)} kg`}>{formatWeight(item.cast_unit_weight)}</span>
                           </>
@@ -9640,7 +9639,7 @@ export default function OrganizerScreen({
                                       position: 'relative',
                                       overflow: 'hidden'
                                     }}
-                                    title={isUploading ? uploadProgress : 'Lisa foto'}
+                                    title={isUploading ? uploadProgress : t('organizer:addPhoto')}
                                     disabled={isUploading}
                                     onClick={() => openPhotoPicker(item, field)}
                                   >
@@ -9680,7 +9679,7 @@ export default function OrganizerScreen({
                                       position: 'relative',
                                       overflow: 'hidden'
                                     }}
-                                    title={isUploading ? uploadProgress : 'Lisa foto'}
+                                    title={isUploading ? uploadProgress : t('organizer:addPhoto')}
                                   >
                                     {isUploading && currentProgress ? (
                                       <>
@@ -9808,7 +9807,7 @@ export default function OrganizerScreen({
                                     color: '#6b7280',
                                     flexShrink: 0
                                   }}
-                                  title={isUploading ? uploadProgress : 'Lisa manus'}
+                                  title={isUploading ? uploadProgress : t('organizer:addAttachment')}
                                 >
                                   {isUploading ? (
                                     <span style={{ fontSize: '8px' }}>{uploadProgress}</span>
@@ -9859,7 +9858,7 @@ export default function OrganizerScreen({
                                   ? handleTagFieldDoubleClick(item.id, field.id, val)
                                   : handleFieldDoubleClick(item.id, field.id, String(val || ''));
                               }}
-                              title={isLongText ? (isTextExpanded ? 'Klõpsa kokku tõmbamiseks' : textValue) : 'Topeltklõps muutmiseks'}
+                              title={isLongText ? (isTextExpanded ? t('organizer:toolbar.clickToCollapse') : textValue) : t('organizer:toolbar.doubleClickToEdit')}
                             >
                               {isLongText && !isTextExpanded
                                 ? textValue.substring(0, 30) + '...'
@@ -9895,7 +9894,7 @@ export default function OrganizerScreen({
                         });
                       }}
                     >
-                      {`Näita veel ${Math.min(VIRTUAL_PAGE_SIZE, sortedItems.length - displayItems.length)} (kokku ${sortedItems.length})`}
+                      {t('organizer:toolbar.showMoreItems', { count: Math.min(VIRTUAL_PAGE_SIZE, sortedItems.length - displayItems.length), total: sortedItems.length })}
                     </button>
                     <button
                       className="org-load-more-btn org-show-all-btn"
@@ -9909,7 +9908,7 @@ export default function OrganizerScreen({
                         });
                       }}
                     >
-                      Näita kõike
+                      {t('organizer:toolbar.showAll')}
                     </button>
                   </div>
                 )}
@@ -9992,7 +9991,7 @@ export default function OrganizerScreen({
         <button
           className="org-icon-btn"
           onClick={toggleAllExpanded}
-          title={allExpanded ? 'Voldi kokku' : 'Voldi lahti'}
+          title={allExpanded ? t('organizer:toolbar.collapseAll') : t('organizer:toolbar.expandAll')}
         >
           {allExpanded ? <FiChevronsUp size={16} /> : <FiChevronsDown size={16} />}
         </button>
@@ -10024,14 +10023,14 @@ export default function OrganizerScreen({
               className={`org-icon-btn color-btn ${colorByGroup ? 'active' : ''}`}
               onClick={() => colorByGroup ? resetColors() : colorModelByGroups()}
               disabled={coloringInProgress || groups.length === 0}
-              title={colorByGroup ? 'Lähtesta värvid' : 'Värvi gruppide kaupa'}
+              title={colorByGroup ? t('organizer:toolbar.resetColors') : t('organizer:toolbar.colorByGroups')}
             >
               {colorByGroup ? <FiRefreshCw size={15} /> : <FiDroplet size={15} />}
             </button>
             <button
               className="org-color-mode-btn"
               onClick={(e) => { e.stopPropagation(); setShowColorModeMenu(!showColorModeMenu); }}
-              title="Värvimise režiim"
+              title={t('organizer:toolbar.coloringMode')}
             >
               <FiChevronDown size={12} />
             </button>
@@ -10042,14 +10041,14 @@ export default function OrganizerScreen({
                   onClick={() => { setColorMode('all'); setShowColorModeMenu(false); }}
                 >
                   <span className="menu-check">{colorMode === 'all' ? '✓' : ''}</span>
-                  Kõik grupid
+                  {t('organizer:toolbar.allGroups')}
                 </button>
                 <button
                   className={colorMode === 'parents-only' ? 'active' : ''}
                   onClick={() => { setColorMode('parents-only'); setShowColorModeMenu(false); }}
                 >
                   <span className="menu-check">{colorMode === 'parents-only' ? '✓' : ''}</span>
-                  Ainult peagrupid
+                  {t('organizer:toolbar.parentsOnly')}
                 </button>
               </div>
             )}
@@ -10062,7 +10061,7 @@ export default function OrganizerScreen({
         <div className="org-search-group">
           <div className="org-search">
             <FiSearch size={14} />
-            <input type="text" placeholder="Otsi kõikidest gruppidest..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            <input type="text" placeholder={t('organizer:toolbar.searchPlaceholder')} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             {searchQuery && <button onClick={() => setSearchQuery('')}><FiX size={14} /></button>}
           </div>
 
@@ -10083,7 +10082,7 @@ export default function OrganizerScreen({
                     value={searchFilterGroup}
                     onChange={(e) => setSearchFilterGroup(e.target.value)}
                   >
-                    <option value="all">Kõik grupid</option>
+                    <option value="all">{t('organizer:toolbar.allGroups')}</option>
                     {groups.map(g => (
                       <option key={g.id} value={g.id}>{'—'.repeat(g.level)} {g.name}</option>
                     ))}
@@ -10095,7 +10094,7 @@ export default function OrganizerScreen({
                     value={searchFilterColumn}
                     onChange={(e) => setSearchFilterColumn(e.target.value)}
                   >
-                    <option value="all">Kõik veerud</option>
+                    <option value="all">{t('organizer:toolbar.allColumns')}</option>
                     <option value="mark">Mark</option>
                     <option value="product">Toode</option>
                     <option value="weight">Kaal</option>
@@ -10109,7 +10108,7 @@ export default function OrganizerScreen({
                     className="org-filter-clear-btn"
                     onClick={() => { setSearchFilterGroup('all'); setSearchFilterColumn('all'); }}
                   >
-                    Tühista filtrid
+                    {t('organizer:toolbar.clearFilters')}
                   </button>
                 )}
               </div>
@@ -10127,40 +10126,40 @@ export default function OrganizerScreen({
             </button>
             {showSortMenu && (
               <div className="org-sort-dropdown" onClick={(e) => e.stopPropagation()}>
-                <div className="org-sort-dropdown-header">Gruppide sortimine</div>
+                <div className="org-sort-dropdown-header">{t('organizer:toolbar.groupSorting')}</div>
                 <button
                   className={groupSortField === 'sort_order' ? 'active' : ''}
                   onClick={() => { setGroupSortField('sort_order'); }}
                 >
-                  Järjekord {groupSortField === 'sort_order' && (groupSortDir === 'asc' ? '↑' : '↓')}
+                  {t('organizer:toolbar.order')} {groupSortField === 'sort_order' && (groupSortDir === 'asc' ? '↑' : '↓')}
                 </button>
                 <button
                   className={groupSortField === 'name' ? 'active' : ''}
                   onClick={() => { setGroupSortField('name'); }}
                 >
-                  Nimi {groupSortField === 'name' && (groupSortDir === 'asc' ? '↑' : '↓')}
+                  {t('organizer:toolbar.sortName')} {groupSortField === 'name' && (groupSortDir === 'asc' ? '↑' : '↓')}
                 </button>
                 <button
                   className={groupSortField === 'itemCount' ? 'active' : ''}
                   onClick={() => { setGroupSortField('itemCount'); }}
                 >
-                  Kogus {groupSortField === 'itemCount' && (groupSortDir === 'asc' ? '↑' : '↓')}
+                  {t('organizer:toolbar.sortCount')} {groupSortField === 'itemCount' && (groupSortDir === 'asc' ? '↑' : '↓')}
                 </button>
                 <button
                   className={groupSortField === 'totalWeight' ? 'active' : ''}
                   onClick={() => { setGroupSortField('totalWeight'); }}
                 >
-                  Kaal {groupSortField === 'totalWeight' && (groupSortDir === 'asc' ? '↑' : '↓')}
+                  {t('organizer:toolbar.sortWeight')} {groupSortField === 'totalWeight' && (groupSortDir === 'asc' ? '↑' : '↓')}
                 </button>
                 <button
                   className={groupSortField === 'created_at' ? 'active' : ''}
                   onClick={() => { setGroupSortField('created_at'); }}
                 >
-                  Loodud {groupSortField === 'created_at' && (groupSortDir === 'asc' ? '↑' : '↓')}
+                  {t('organizer:toolbar.sortCreated')} {groupSortField === 'created_at' && (groupSortDir === 'asc' ? '↑' : '↓')}
                 </button>
                 <div className="org-sort-dropdown-divider" />
                 <button onClick={() => setGroupSortDir(groupSortDir === 'asc' ? 'desc' : 'asc')}>
-                  {groupSortDir === 'asc' ? '↑ Kasvav' : '↓ Kahanev'}
+                  {groupSortDir === 'asc' ? `↑ ${t('organizer:toolbar.ascending')}` : `↓ ${t('organizer:toolbar.descending')}`}
                 </button>
               </div>
             )}
@@ -10168,21 +10167,21 @@ export default function OrganizerScreen({
         </div>
 
         <div className="org-toolbar-stats">
-          <span>{groups.length} gruppi</span>
+          <span>{t('organizer:toolbar.groupsCount', { count: groups.length })}</span>
           <span className="separator">|</span>
-          <span>{Array.from(groupItems.values()).flat().length} detaili</span>
+          <span>{t('organizer:toolbar.itemsCount', { count: Array.from(groupItems.values()).flat().length })}</span>
         </div>
         {selectedItemIds.size > 0 && selectedGroup && !isGroupLocked(selectedGroup.id) && (
           <div className="org-bulk-actions">
-            <span className="bulk-count">{selectedItemIds.size} valitud</span>
+            <span className="bulk-count">{t('organizer:toolbar.selectedCount', { count: selectedItemIds.size })}</span>
             <div className="bulk-actions-left">
-              <button onClick={() => { setBulkFieldValues({}); setShowBulkEdit(true); }}><FiEdit2 size={12} /> Muuda</button>
+              <button onClick={() => { setBulkFieldValues({}); setShowBulkEdit(true); }}><FiEdit2 size={12} /> {t('organizer:toolbar.editSelected')}</button>
               {/* Color/mark dropdown - icon only */}
               <div style={{ position: 'relative' }}>
                 <button
                   onClick={() => setShowColorMarkMenu(prev => !prev)}
                   style={{ display: 'flex', alignItems: 'center', gap: '2px', padding: '4px 8px' }}
-                  title="Värvimine ja markupid"
+                  title={t('organizer:toolbar.coloringAndMarkups')}
                 >
                   <FiDroplet size={14} /> <FiChevronDown size={10} />
                 </button>
@@ -10220,7 +10219,7 @@ export default function OrganizerScreen({
                       className="org-dropdown-item"
                     >
                       <FiDroplet size={14} />
-                      Värvi mudelis ainult valitud detailid
+                      {t('organizer:toolbar.colorSelectedOnly')}
                     </button>
                     <button
                       onClick={addMarkupsToSelectedItems}
@@ -10269,7 +10268,7 @@ export default function OrganizerScreen({
                   </div>
                 )}
               </div>
-              <button className="cancel" onClick={() => setSelectedItemIds(new Set())}><FiX size={12} /> Tühista</button>
+              <button className="cancel" onClick={() => setSelectedItemIds(new Set())}><FiX size={12} /> {t('organizer:toolbar.cancel')}</button>
             </div>
             <div className="bulk-actions-right">
               <button className="delete" onClick={() => removeItemsFromGroup(Array.from(selectedItemIds))}><FiTrash2 size={12} /></button>
@@ -10362,7 +10361,7 @@ export default function OrganizerScreen({
               {/* Parent group selector - show when creating subgroup */}
               {!editingGroup && formParentId && groups.length > 0 && (
                 <div className="org-field">
-                  <label>Ülemgrupp *</label>
+                  <label>{t('organizer:toolbar.parentGroup')}</label>
                   <select value={formParentId || ''} onChange={(e) => setFormParentId(e.target.value || null)}>
                     {groups.filter(g => g.level < 2).map(g => (
                       <option key={g.id} value={g.id}>{'—'.repeat(g.level)} {g.name}</option>
@@ -10379,7 +10378,7 @@ export default function OrganizerScreen({
                 <textarea value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder="Valikuline kirjeldus" rows={2} />
               </div>
               <div className="org-field">
-                <label>Värv</label>
+                <label>{t('organizer:toolbar.color')}</label>
                 <div className="org-color-picker">
                   {PRESET_COLORS.map((c, i) => (
                     <button
@@ -10404,8 +10403,8 @@ export default function OrganizerScreen({
                       />
                       <span className="option-icon">🌐</span>
                       <span className="option-text">
-                        <strong>Kogu projekt</strong>
-                        <small>Kõik projekti liikmed näevad</small>
+                        <strong>{t('organizer:groupInfoModal.wholeProject')}</strong>
+                        <small>{t('organizer:toolbar.wholeProject')}</small>
                       </span>
                     </label>
                     <label className={`org-sharing-option ${formSharingMode === 'shared' ? 'selected' : ''}`}>
@@ -10417,8 +10416,8 @@ export default function OrganizerScreen({
                       />
                       <span className="option-icon">👥</span>
                       <span className="option-text">
-                        <strong>Valitud kasutajad</strong>
-                        <small>Ainult valitud liikmed näevad</small>
+                        <strong>{t('organizer:groupInfoModal.selectedUsers')}</strong>
+                        <small>{t('organizer:toolbar.selectedMembers')}</small>
                       </span>
                     </label>
                     <label className={`org-sharing-option ${formSharingMode === 'private' ? 'selected' : ''}`}>
@@ -10430,8 +10429,8 @@ export default function OrganizerScreen({
                       />
                       <span className="option-icon">🔒</span>
                       <span className="option-text">
-                        <strong>Privaatne</strong>
-                        <small>Ainult mina näen</small>
+                        <strong>{t('organizer:groupInfoModal.private')}</strong>
+                        <small>{t('organizer:toolbar.onlyMe')}</small>
                       </span>
                     </label>
                   </div>
@@ -10486,14 +10485,14 @@ export default function OrganizerScreen({
               {formSharingMode !== 'private' && (
                 <div className="org-field">
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    Õigused teistele kasutajatele
+                    {t('organizer:toolbar.permissionsForOthers')}
                   </label>
 
                   {/* Default permissions for all project members */}
                   {formSharingMode === 'project' && (
                     <div style={{ background: '#f9fafb', padding: '12px', borderRadius: '6px', marginTop: '8px' }}>
                       <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '10px' }}>
-                        Vaikimisi õigused kõigile projekti liikmetele:
+                        {t('organizer:toolbar.defaultPermissions')}
                       </p>
 
                       <div className="org-field checkbox" style={{ marginBottom: '6px' }}>
@@ -10503,7 +10502,7 @@ export default function OrganizerScreen({
                             checked={formDefaultPermissions.can_add}
                             onChange={(e) => setFormDefaultPermissions(prev => ({ ...prev, can_add: e.target.checked }))}
                           />
-                          Saavad lisada detaile
+                          {t('organizer:toolbar.canAddItems')}
                         </label>
                       </div>
 
@@ -10514,7 +10513,7 @@ export default function OrganizerScreen({
                             checked={formDefaultPermissions.can_delete_own}
                             onChange={(e) => setFormDefaultPermissions(prev => ({ ...prev, can_delete_own: e.target.checked }))}
                           />
-                          Saavad kustutada enda lisatud detaile
+                          {t('organizer:toolbar.canDeleteOwnItems')}
                         </label>
                       </div>
 
@@ -10525,7 +10524,7 @@ export default function OrganizerScreen({
                             checked={formDefaultPermissions.can_delete_all}
                             onChange={(e) => setFormDefaultPermissions(prev => ({ ...prev, can_delete_all: e.target.checked }))}
                           />
-                          Saavad kustutada kõiki detaile
+                          {t('organizer:toolbar.canDeleteAllItems')}
                         </label>
                       </div>
 
@@ -10536,7 +10535,7 @@ export default function OrganizerScreen({
                             checked={formDefaultPermissions.can_edit_group}
                             onChange={(e) => setFormDefaultPermissions(prev => ({ ...prev, can_edit_group: e.target.checked }))}
                           />
-                          Saavad muuta grupi nime ja kirjeldust
+                          {t('organizer:toolbar.canEditGroupName')}
                         </label>
                       </div>
 
@@ -10547,7 +10546,7 @@ export default function OrganizerScreen({
                             checked={formDefaultPermissions.can_manage_fields}
                             onChange={(e) => setFormDefaultPermissions(prev => ({ ...prev, can_manage_fields: e.target.checked }))}
                           />
-                          Saavad luua ja muuta lisaveerge
+                          {t('organizer:toolbar.canCreateAndEditFields')}
                         </label>
                       </div>
                     </div>
@@ -10557,7 +10556,7 @@ export default function OrganizerScreen({
                   {formSharingMode === 'shared' && formAllowedUsers.length > 0 && (
                     <div style={{ background: '#f9fafb', padding: '12px', borderRadius: '6px', marginTop: '8px' }}>
                       <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '10px' }}>
-                        Kasutajapõhised õigused:
+                        {t('organizer:toolbar.userPermissions')}
                       </p>
 
                       {formAllowedUsers.map(email => {
@@ -10604,7 +10603,7 @@ export default function OrganizerScreen({
                                     [email]: { ...userPerms, can_delete_all: e.target.checked }
                                   }))}
                                 />
-                                Kustuta kõiki
+                                {t('organizer:toolbar.deleteAll')}
                               </label>
 
                               <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -10642,11 +10641,11 @@ export default function OrganizerScreen({
               {/* Assembly Selection and Unique Items settings - available for ALL groups */}
               <div className="org-toggle-field">
                 <div className="org-toggle-label">
-                  <div className="title">Assembly Selection nõutud</div>
+                  <div className="title">{t('organizer:toolbar.assemblySelectionRequired')}</div>
                   <div className="description">
                     {formParentId
-                      ? 'Kas sellesse alamgruppi lisamiseks peab Assembly Selection olema sees'
-                      : 'Kas sellesse gruppi ja alamgruppidesse lisamiseks peab Assembly Selection olema sees'
+                      ? t('organizer:toolbar.assemblyDescSubgroup')
+                      : t('organizer:toolbar.assemblyDescGroup')
                     }
                   </div>
                 </div>
@@ -10749,7 +10748,7 @@ export default function OrganizerScreen({
                                       Komakohad
                                     </div>
                                     {[
-                                      { value: undefined, label: 'Kõik' },
+                                      { value: undefined, label: t('organizer:toolbar.all') },
                                       { value: 0, label: '0' },
                                       { value: 1, label: '1' },
                                       { value: 2, label: '2' },
@@ -10891,7 +10890,7 @@ export default function OrganizerScreen({
                 <div className="org-toggle-field">
                   <div className="org-toggle-label">
                     <div className="title">Unikaalsed detailid</div>
-                    <div className="description">Sama detaili ei saa lisada mitu korda sellesse gruppi või alamgruppidesse.</div>
+                    <div className="description">{t('organizer:toolbar.uniqueItemsDesc')}</div>
                   </div>
                   <div className={`org-toggle ${formUniqueItems ? 'active' : ''}`} onClick={() => setFormUniqueItems(!formUniqueItems)} />
                 </div>
@@ -10900,13 +10899,13 @@ export default function OrganizerScreen({
               {/* Show custom fields section - visible for main groups (editing or creating) */}
               {!formParentId && (
                 <div className="org-field">
-                  <label>Lisaväljad ({editingGroup ? (editingGroup.custom_fields || []).length : formCustomFields.length})</label>
+                  <label>{t('organizer:toolbar.customFields')} ({editingGroup ? (editingGroup.custom_fields || []).length : formCustomFields.length})</label>
                   <div className="org-custom-fields-list">
                     {editingGroup ? (
                       // Editing existing group
                       <>
                         {(editingGroup.custom_fields || []).length === 0 ? (
-                          <p className="org-empty-hint">Lisavälju pole veel lisatud</p>
+                          <p className="org-empty-hint">{t('organizer:toolbar.noFieldsYet')}</p>
                         ) : (
                           editingGroup.custom_fields.map(f => (
                             <div key={f.id} className="custom-field-item">
@@ -10941,7 +10940,7 @@ export default function OrganizerScreen({
                           ))
                         )}
                         <button className="org-add-field-btn" onClick={() => { resetFieldForm(); setShowFieldForm(true); }}>
-                          <FiPlus size={14} /> Lisa väli
+                          <FiPlus size={14} /> {t('organizer:toolbar.addField')}
                         </button>
                       </>
                     )}
@@ -10956,9 +10955,9 @@ export default function OrganizerScreen({
                   setReturnToGroupsManagement(false);
                   setShowGroupsManagementModal(true);
                 }
-              }}>Tühista</button>
+              }}>{t('common:buttons.cancel')}</button>
               <button className="save" onClick={editingGroup ? updateGroup : createGroup} disabled={saving || !formName.trim()}>
-                {saving ? 'Salvestan...' : (editingGroup ? 'Salvesta' : 'Loo grupp')}
+                {saving ? t('organizer:group.saving') : (editingGroup ? t('organizer:group.save') : t('organizer:group.create'))}
               </button>
             </div>
           </div>
@@ -10970,12 +10969,12 @@ export default function OrganizerScreen({
         <div className="org-modal-overlay" onClick={() => { setShowFieldForm(false); setEditingField(null); }}>
           <div className="org-modal" onClick={e => e.stopPropagation()}>
             <div className="org-modal-header">
-              <h2>{editingField ? 'Muuda välja' : 'Lisa väli'}</h2>
+              <h2>{editingField ? t('organizer:toolbar.editField') : t('organizer:toolbar.addField')}</h2>
               <button onClick={() => { setShowFieldForm(false); setEditingField(null); }}><FiX size={18} /></button>
             </div>
             <div className="org-modal-body">
               <div className="org-field">
-                <label>Välja nimi *</label>
+                <label>{t('organizer:toolbar.fieldName')}</label>
                 <input type="text" value={fieldName} onChange={(e) => setFieldName(e.target.value)} placeholder="nt. Kommentaarid, Hind" autoFocus />
               </div>
               <div className="org-field">
@@ -10999,14 +10998,14 @@ export default function OrganizerScreen({
                 </div>
               )}
               <div className="org-field checkbox">
-                <label><input type="checkbox" checked={fieldShowInList} onChange={(e) => setFieldShowInList(e.target.checked)} /> Näita listis</label>
+                <label><input type="checkbox" checked={fieldShowInList} onChange={(e) => setFieldShowInList(e.target.checked)} /> {t('organizer:toolbar.showInList')}</label>
               </div>
               <div className="org-field checkbox">
                 <label><input type="checkbox" checked={fieldRequired} onChange={(e) => setFieldRequired(e.target.checked)} /> Kohustuslik</label>
               </div>
             </div>
             <div className="org-modal-footer">
-              <button className="cancel" onClick={() => { setShowFieldForm(false); setEditingField(null); resetFieldForm(); }}>Tühista</button>
+              <button className="cancel" onClick={() => { setShowFieldForm(false); setEditingField(null); resetFieldForm(); }}>{t('common:buttons.cancel')}</button>
               <button
                 className="save"
                 onClick={() => {
@@ -11021,7 +11020,7 @@ export default function OrganizerScreen({
                 }}
                 disabled={saving || !fieldName.trim()}
               >
-                {saving ? 'Salvestan...' : (editingField ? 'Salvesta' : 'Lisa väli')}
+                {saving ? t('organizer:toolbar.savingField') : (editingField ? t('organizer:toolbar.saveField') : t('organizer:toolbar.addField'))}
               </button>
             </div>
           </div>
@@ -11040,18 +11039,18 @@ export default function OrganizerScreen({
           <div className="org-modal-overlay" onClick={() => setShowFieldsManagementModal(false)}>
             <div className="org-modal" onClick={e => e.stopPropagation()}>
               <div className="org-modal-header">
-                <h2>Halda välju: {group.name}</h2>
+                <h2>{t('organizer:toolbar.manageFieldsFor')} {group.name}</h2>
                 <button onClick={() => setShowFieldsManagementModal(false)}><FiX size={18} /></button>
               </div>
               <div className="org-modal-body">
                 {rootParent && rootParent.id !== group.id && (
                   <p className="org-note" style={{ marginBottom: 12, fontSize: 12, color: '#888' }}>
-                    Väljad päritakse grupist: <strong>{rootParent.name}</strong>
+                    {t('organizer:toolbar.fieldsInherited')} <strong>{rootParent.name}</strong>
                   </p>
                 )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   {customFields.length === 0 ? (
-                    <p className="org-empty-hint">Lisavälju pole veel lisatud</p>
+                    <p className="org-empty-hint">{t('organizer:toolbar.noFieldsYet')}</p>
                   ) : (
                     customFields.map((f, idx) => (
                       <div
@@ -11070,7 +11069,7 @@ export default function OrganizerScreen({
                           <button
                             onClick={() => moveCustomField(f.id, effectiveGroup.id, 'up')}
                             disabled={idx === 0}
-                            title="Liiguta üles"
+                            title={t('organizer:toolbar.moveUp')}
                             style={{
                               background: 'none',
                               border: 'none',
@@ -11163,7 +11162,7 @@ export default function OrganizerScreen({
                     setShowFieldsManagementModal(false);
                   }}
                 >
-                  <FiPlus size={14} /> Lisa väli
+                  <FiPlus size={14} /> {t('organizer:toolbar.addField')}
                 </button>
               </div>
             </div>
@@ -11214,12 +11213,12 @@ export default function OrganizerScreen({
           <div className="org-modal-overlay" onClick={handleCancel}>
             <div className="org-modal" onClick={e => e.stopPropagation()}>
               <div className="org-modal-header">
-                <h2>Täida kohustuslikud väljad</h2>
+                <h2>{t('organizer:requiredFieldsModal.title')}</h2>
                 <button onClick={handleCancel}><FiX size={18} /></button>
               </div>
               <div className="org-modal-body">
                 <p style={{ marginBottom: 16, fontSize: 13, color: '#666' }}>
-                  Grupil <strong>{group.name}</strong> on kohustuslikud väljad. Täida need enne {itemCount} detaili lisamist.
+                  {t('organizer:requiredFieldsModal.description', { group: group.name, count: itemCount })}
                 </p>
                 {requiredFields.map(field => (
                   <div key={field.id} className="org-field">
@@ -11271,7 +11270,7 @@ export default function OrganizerScreen({
                     {field.type === 'tags' && (
                       <input
                         type="text"
-                        placeholder="märksõnad, komaga eraldatud"
+                        placeholder={t('organizer:keywordsPlaceholder')}
                         value={requiredFieldValues[field.id] || ''}
                         onChange={(e) => setRequiredFieldValues(prev => ({ ...prev, [field.id]: e.target.value }))}
                       />
@@ -11361,7 +11360,7 @@ export default function OrganizerScreen({
                                   />
                                 </label>
                                 <span style={{ color: '#6b7280', fontSize: '12px', alignSelf: 'center' }}>
-                                  või lohista pildid siia • Ctrl+V kleebi
+                                  {t('organizer:requiredFieldsPhoto.dragOrPaste')}
                                 </span>
                               </>
                             )}
@@ -11405,13 +11404,13 @@ export default function OrganizerScreen({
                 ))}
               </div>
               <div className="org-modal-footer">
-                <button className="cancel" onClick={handleCancel}>Tühista</button>
+                <button className="cancel" onClick={handleCancel}>{t('common:buttons.cancel')}</button>
                 <button
                   className="save"
                   disabled={!allFieldsFilled || saving}
                   onClick={handleSave}
                 >
-                  {saving ? 'Lisan...' : `Lisa ${itemCount} detaili`}
+                  {saving ? t('organizer:requiredFieldsModal.adding') : t('organizer:requiredFieldsModal.addItems', { count: itemCount })}
                 </button>
               </div>
             </div>
@@ -11452,7 +11451,7 @@ export default function OrganizerScreen({
                           }}
                         >
                           <FiUpload size={14} />
-                          {f.type === 'photo' ? 'Vali fotod' : 'Vali failid'}
+                          {f.type === 'photo' ? t('organizer:selectPhotos') : t('organizer:selectFiles')}
                           <input
                             type="file"
                             multiple
@@ -11493,7 +11492,7 @@ export default function OrganizerScreen({
                         </div>
                       )}
                       <p style={{ fontSize: '11px', color: '#6b7280', margin: 0 }}>
-                        Failid lisatakse kõigile {selectedItemIds.size} detailile
+                        {t('organizer:bulkEditModal.filesAddedToAll', { count: selectedItemIds.size })}
                       </p>
                     </div>
                   ) : (
@@ -11501,19 +11500,19 @@ export default function OrganizerScreen({
                       type={f.type === 'date' ? 'date' : f.type === 'number' || f.type === 'currency' ? 'number' : 'text'}
                       value={bulkFieldValues[f.id] || ''}
                       onChange={(e) => setBulkFieldValues(prev => ({ ...prev, [f.id]: e.target.value }))}
-                      placeholder={f.type === 'date' ? '' : 'Jäta tühjaks, et mitte muuta'}
+                      placeholder={f.type === 'date' ? '' : t('organizer:bulkEditModal.leaveEmptyHint')}
                     />
                   )}
                 </div>
               ))}
               {effectiveCustomFields.length === 0 && (
-                <p className="org-empty-hint">Sellel grupil pole lisavälju. Lisa esmalt väli grupi menüüst.</p>
+                <p className="org-empty-hint">{t('organizer:bulkEditModal.noFieldsHint')}</p>
               )}
               {bulkUploadProgress && (
                 <div style={{ marginTop: '12px', padding: '12px', background: '#f0fdf4', borderRadius: '6px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
                     <span style={{ fontSize: '12px', color: '#059669' }}>
-                      Laadin üles: {bulkUploadProgress.fieldName}
+                      {t('organizer:bulkEditModal.uploadingField', { fieldName: bulkUploadProgress.fieldName })}
                     </span>
                   </div>
                   <div style={{ height: '6px', background: '#d1fae5', borderRadius: '3px', overflow: 'hidden' }}>
@@ -11533,13 +11532,13 @@ export default function OrganizerScreen({
               )}
             </div>
             <div className="org-modal-footer">
-              <button className="cancel" onClick={() => { setShowBulkEdit(false); setBulkUploadFiles({}); }}>Tühista</button>
+              <button className="cancel" onClick={() => { setShowBulkEdit(false); setBulkUploadFiles({}); }}>{t('common:buttons.cancel')}</button>
               <button
                 className="save"
                 onClick={bulkUpdateItems}
                 disabled={saving || bulkUploadProgress !== null || effectiveCustomFields.length === 0}
               >
-                {saving ? 'Salvestan...' : bulkUploadProgress ? 'Laadin...' : 'Uuenda kõik'}
+                {saving ? t('organizer:bulkEditModal.saving') : bulkUploadProgress ? t('organizer:bulkEditModal.uploading') : t('organizer:bulkEditModal.updateAll')}
               </button>
             </div>
           </div>
@@ -11574,23 +11573,23 @@ export default function OrganizerScreen({
                 </div>
               )}
               {deleteGroupData.childCount === 0 && deleteGroupData.itemCount === 0 && (
-                <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>Grupp on tühi.</p>
+                <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>{t('organizer:deleteModal.groupEmpty')}</p>
               )}
               {(deleteGroupData.childCount > 0 || deleteGroupData.itemCount > 0) && (
                 <p style={{ margin: 0, fontSize: 11, color: '#ef4444', fontWeight: 500 }}>
-                  Andmed, fotod ja failid kustutatakse jäädavalt!
+                  {t('organizer:deleteModal.permanentWarning')}
                 </p>
               )}
             </div>
             <div className="org-modal-footer" style={{ padding: '10px 16px', gap: 8 }}>
-              <button className="cancel" onClick={() => setShowDeleteConfirm(false)} style={{ padding: '6px 12px', fontSize: 12 }}>Tühista</button>
+              <button className="cancel" onClick={() => setShowDeleteConfirm(false)} style={{ padding: '6px 12px', fontSize: 12 }}>{t('common:buttons.cancel')}</button>
               <button
                 className="save"
                 style={{ background: '#dc2626', padding: '6px 12px', fontSize: 12 }}
                 onClick={deleteGroup}
                 disabled={saving}
               >
-                {saving ? 'Kustutan...' : 'Kustuta'}
+                {saving ? t('organizer:deleteModal.deleting') : t('organizer:deleteModal.delete')}
               </button>
             </div>
           </div>
@@ -11653,15 +11652,15 @@ export default function OrganizerScreen({
 
         // Available fields for insertion
         const allFields = [
-          { id: 'groupName', label: 'Grupi nimi', placeholder: '{groupName}', preview: markupGroup?.name || 'Grupp' },
+          { id: 'groupName', label: t('organizer:markupModal.groupNameField'), placeholder: '{groupName}', preview: markupGroup?.name || t('organizer:markupModal.groupNameField') },
           { id: 'assemblyMark', label: 'Assembly Mark', placeholder: '{assemblyMark}', preview: firstItem?.assembly_mark?.startsWith('Object_') ? 'W-101' : (firstItem?.assembly_mark || 'W-101') },
-          { id: 'weight', label: 'Kaal', placeholder: '{weight}', preview: `${(parseFloat(firstItem?.cast_unit_weight || '1234.5')).toFixed(1)} kg` },
+          { id: 'weight', label: t('organizer:markupModal.weightField'), placeholder: '{weight}', preview: `${(parseFloat(firstItem?.cast_unit_weight || '1234.5')).toFixed(1)} kg` },
           { id: 'productName', label: 'Product Name', placeholder: '{productName}', preview: firstItem?.product_name || 'BEAM' },
           ...customFields.map(f => ({
             id: `customField_${f.id}`,
             label: f.name,
             placeholder: `{customField_${f.id}}`,
-            preview: firstItem?.custom_properties?.[f.id] || 'Näidis'
+            preview: firstItem?.custom_properties?.[f.id] || t('organizer:markupModal.sampleValue')
           }))
         ];
 
@@ -11679,7 +11678,7 @@ export default function OrganizerScreen({
 
         // Generate preview from templates
         const generatePreview = (): string => {
-          if (!markupGroup) return 'Eelvaade pole saadaval';
+          if (!markupGroup) return t('organizer:markupModal.previewNotAvailable');
 
           const processTemplate = (template: string): string => {
             if (!template) return '';
@@ -11692,7 +11691,7 @@ export default function OrganizerScreen({
             result = result.replace(/\{productName\}/g, firstItem?.product_name || 'BEAM');
             for (const field of customFields) {
               const regex = new RegExp(`\\{customField_${field.id}\\}`, 'g');
-              result = result.replace(regex, firstItem?.custom_properties?.[field.id] || 'Näidis');
+              result = result.replace(regex, firstItem?.custom_properties?.[field.id] || t('organizer:markupModal.sampleValue'));
             }
             return result.replace(/\s+/g, ' ').trim();
           };
@@ -11703,7 +11702,7 @@ export default function OrganizerScreen({
             processTemplate(markupSettings.line3Template)
           ].filter(l => l.length > 0);
 
-          return lines.length > 0 ? lines.join(getSeparator(markupSettings.separator)) : 'Kirjuta tekst ja lisa veerge';
+          return lines.length > 0 ? lines.join(getSeparator(markupSettings.separator)) : t('organizer:markupModal.writeTextAndAddColumns');
         };
 
         // Parse template into chips and text segments
@@ -11921,7 +11920,7 @@ export default function OrganizerScreen({
                 onDrop={(e) => handleContentDrop(e, lineKey)}
                 onDragOver={handleDragOver}
                 dangerouslySetInnerHTML={{ __html: htmlContent || '<span class="template-placeholder-text"></span>' }}
-                data-placeholder="Lohista siia välju või kirjuta tekst..."
+                data-placeholder={t('organizer:dragFieldsPlaceholder')}
               />
             </div>
           );
@@ -11977,7 +11976,7 @@ export default function OrganizerScreen({
                       checked={markupSettings.useGroupColors}
                       onChange={(e) => setMarkupSettings(prev => ({ ...prev, useGroupColors: e.target.checked }))}
                     />
-                    <span>Grupi värv</span>
+                    <span>{t('organizer:markupModal.groupColor')}</span>
                   </label>
 
                   {/* Custom color picker when not using group colors */}
@@ -12021,7 +12020,7 @@ export default function OrganizerScreen({
                 <div className="markup-builder">
                   <div className="markup-builder-header">
                     <span>Koosta markup</span>
-                    <span className="markup-hint">Lohista välju või kliki, et lisada</span>
+                    <span className="markup-hint">{t('organizer:markupModal.dragHint')}</span>
                   </div>
 
                   {/* Available fields as draggable chips */}
@@ -12042,15 +12041,15 @@ export default function OrganizerScreen({
                         </button>
                       ))
                     ) : (
-                      <span className="markup-all-fields-used">Kõik väljad kasutatud</span>
+                      <span className="markup-all-fields-used">{t('organizer:markupModal.allFieldsUsed')}</span>
                     )}
                   </div>
 
                   {/* Template editors for each line */}
                   <div className="markup-templates">
-                    {renderTemplateEditor('line1Template', 'Rida 1', line1InputRef)}
-                    {renderTemplateEditor('line2Template', 'Rida 2', line2InputRef)}
-                    {renderTemplateEditor('line3Template', 'Rida 3', line3InputRef)}
+                    {renderTemplateEditor('line1Template', t('organizer:markupModal.line', { num: 1 }), line1InputRef)}
+                    {renderTemplateEditor('line2Template', t('organizer:markupModal.line', { num: 2 }), line2InputRef)}
+                    {renderTemplateEditor('line3Template', t('organizer:markupModal.line', { num: 3 }), line3InputRef)}
                   </div>
                 </div>
 
@@ -12060,11 +12059,11 @@ export default function OrganizerScreen({
                     <label>Eraldaja:</label>
                     <div className="separator-options">
                       {[
-                        { value: 'newline', label: '↵', title: 'Uus rida' },
-                        { value: 'space', label: '␣', title: 'Tühik' },
-                        { value: 'comma', label: ',', title: 'Koma' },
-                        { value: 'dash', label: '-', title: 'Kriips' },
-                        { value: 'pipe', label: '|', title: 'Püstkriips' }
+                        { value: 'newline', label: '↵', title: t('organizer:markupModal.separatorNewline') },
+                        { value: 'space', label: '␣', title: t('organizer:markupModal.separatorSpace') },
+                        { value: 'comma', label: ',', title: t('organizer:markupModal.separatorComma') },
+                        { value: 'dash', label: '-', title: t('organizer:markupModal.separatorDash') },
+                        { value: 'pipe', label: '|', title: t('organizer:markupModal.separatorPipe') }
                       ].map(opt => (
                         <button
                           key={opt.value}
@@ -12080,7 +12079,7 @@ export default function OrganizerScreen({
 
                   {/* Leader height input */}
                   <div className="markup-height-row">
-                    <label style={{ color: markupSettings.autoStaggerHeight ? '#9ca3af' : undefined }}>Kõrgus:</label>
+                    <label style={{ color: markupSettings.autoStaggerHeight ? '#9ca3af' : undefined }}>{t('organizer:markupModal.height')}</label>
                     <div className="height-input-wrapper">
                       <input
                         type="number"
@@ -12102,7 +12101,7 @@ export default function OrganizerScreen({
 
                   {/* Auto-stagger heights */}
                   <div className="markup-height-row" style={{ marginTop: '8px' }}>
-                    <label>Auto kõrgused:</label>
+                    <label>{t('organizer:markupModal.autoHeights')}</label>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
                       <input
                         type="checkbox"
@@ -12111,11 +12110,11 @@ export default function OrganizerScreen({
                         style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                       />
                       <span style={{ fontSize: '12px', color: markupSettings.autoStaggerHeight ? '#0891b2' : '#6b7280', fontWeight: markupSettings.autoStaggerHeight ? 500 : 400 }}>
-                        {markupSettings.autoStaggerHeight ? 'Sees' : 'Väljas'}
+                        {markupSettings.autoStaggerHeight ? t('organizer:markupModal.autoHeightsOn') : t('organizer:markupModal.autoHeightsOff')}
                       </span>
                     </label>
                     <button
-                      onClick={() => alert('Kui sisse lülitatud, siis lähestikku olevad markupid (< 4m vahe) saavad automaatselt erinevad kõrgused:\n\n• 1. markup: 20 cm\n• 2. markup: 140 cm\n• 3. markup: 280 cm\n• jne.\n\nSee aitab vältida markupite kattumist.')}
+                      onClick={() => alert(t('organizer:markupModal.autoHeightsInfo'))}
                       style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', color: '#9ca3af', marginLeft: 'auto' }}
                       title="Info"
                       type="button"
@@ -12148,19 +12147,19 @@ export default function OrganizerScreen({
                     <div className="progress-bar">
                       <div className="progress-fill" style={{ width: `${(markupProgress.current / markupProgress.total) * 100}%` }} />
                     </div>
-                    <span>{markupProgress.action === 'adding' ? 'Loon' : 'Eemaldan'} markupe: {markupProgress.current} / {markupProgress.total}</span>
+                    <span>{markupProgress.action === 'adding' ? t('organizer:markupModal.creatingMarkups') : t('organizer:markupModal.removingMarkups')} {t('organizer:markupModal.markupsProgress', { current: markupProgress.current, total: markupProgress.total })}</span>
                   </div>
                 )}
               </div>
 
               <div className="org-modal-footer">
-                <button className="cancel" onClick={() => { setShowMarkupModal(false); setMarkupGroupId(null); }}>Tühista</button>
+                <button className="cancel" onClick={() => { setShowMarkupModal(false); setMarkupGroupId(null); }}>{t('common:buttons.cancel')}</button>
                 <button
                   className="save"
                   onClick={addMarkupsToGroup}
                   disabled={saving || itemCount === 0}
                 >
-                  {saving ? 'Loon markupe...' : `Lisa ${itemCount} markupit`}
+                  {saving ? t('organizer:markupModal.creatingMarkupsBtn') : t('organizer:markupModal.addMarkups', { count: itemCount })}
                 </button>
               </div>
             </div>
@@ -12178,14 +12177,14 @@ export default function OrganizerScreen({
             </div>
             <div className="org-modal-body">
               <p style={{ marginBottom: 12, fontSize: 13, color: '#666' }}>
-                Vali, kui kaua link kehtib. Pärast aegumist link enam ei tööta.
+                {t('organizer:linkExpiryModal.description')}
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {[
-                  { days: 1, label: '1 päev' },
-                  { days: 5, label: '5 päeva' },
-                  { days: 14, label: '14 päeva (soovituslik)' },
-                  { days: 30, label: '30 päeva' }
+                  { days: 1, label: t('organizer:linkExpiryModal.day1') },
+                  { days: 5, label: t('organizer:linkExpiryModal.days5') },
+                  { days: 14, label: t('organizer:linkExpiryModal.days14') },
+                  { days: 30, label: t('organizer:linkExpiryModal.days30') }
                 ].map(opt => (
                   <label
                     key={opt.days}
@@ -12217,7 +12216,7 @@ export default function OrganizerScreen({
               </p>
             </div>
             <div className="org-modal-footer">
-              <button className="cancel" onClick={() => { setShowLinkExpiryModal(false); setPendingLinkData(null); }}>Tühista</button>
+              <button className="cancel" onClick={() => { setShowLinkExpiryModal(false); setPendingLinkData(null); }}>{t('common:buttons.cancel')}</button>
               <button className="save" onClick={confirmCopyLink}>
                 <FiLink size={14} /> Kopeeri link
               </button>
@@ -12236,7 +12235,7 @@ export default function OrganizerScreen({
           .map(v => v.trim())
           .filter(v => v.length > 0);
         const firstValue = previewValues[0] || '';
-        const detectedType = isMsGuid(firstValue) ? 'GUID_MS (konverteeritakse IFC-ks)' : isIfcGuid(firstValue) ? 'IFC GUID' : 'Assembly mark';
+        const detectedType = isMsGuid(firstValue) ? t('organizer:importGuidModal.detectedGuidMs') : isIfcGuid(firstValue) ? t('organizer:importGuidModal.detectedIfcGuid') : t('organizer:importGuidModal.detectedAssemblyMark');
 
         return (
           <div className="org-modal-overlay" onClick={() => { setShowImportModal(false); setImportGroupId(null); }}>
@@ -12252,14 +12251,14 @@ export default function OrganizerScreen({
 
                 <div className="org-field">
                   <label>
-                    Kleebi GUID või GUID_MS väärtused
+                    {t('organizer:importGuidModal.pasteLabel')}
                     <span style={{ fontSize: '11px', color: '#888', display: 'block' }}>
-                      (eraldajaks sobib reavahetus, koma, semikoolon või tabulaator)
+                      {t('organizer:importGuidModal.pasteHint')}
                     </span>
                   </label>
                   <textarea
                     className="org-import-textarea"
-                    placeholder="Näiteks:&#10;3f2504e0-4f89-11d3-9a0c-0305e82c3301&#10;3f2504e0-4f89-11d3-9a0c-0305e82c3302&#10;&#10;või&#10;&#10;W-101&#10;W-102&#10;W-103"
+                    placeholder={t('organizer:importGuidModal.placeholder')}
                     value={importText}
                     onChange={(e) => setImportText(e.target.value)}
                     rows={10}
@@ -12277,9 +12276,9 @@ export default function OrganizerScreen({
 
                 {previewValues.length > 0 && (
                   <div style={{ marginTop: '8px', padding: '8px', background: '#f5f5f5', borderRadius: '4px', fontSize: '12px' }}>
-                    <strong>Tuvastatud tüüp:</strong> {detectedType}
+                    <strong>{t('organizer:importGuidModal.detectedType')}</strong> {detectedType}
                     <br />
-                    <strong>Väärtusi:</strong> {previewValues.length}
+                    <strong>{t('organizer:importGuidModal.valuesCount')}</strong> {previewValues.length}
                   </div>
                 )}
 
@@ -12295,13 +12294,13 @@ export default function OrganizerScreen({
                 )}
               </div>
               <div className="org-modal-footer">
-                <button className="cancel" onClick={() => { setShowImportModal(false); setImportGroupId(null); }}>Tühista</button>
+                <button className="cancel" onClick={() => { setShowImportModal(false); setImportGroupId(null); }}>{t('common:buttons.cancel')}</button>
                 <button
                   className="save"
                   onClick={importItemsToGroup}
                   disabled={saving || previewValues.length === 0}
                 >
-                  {saving ? 'Impordin...' : `Impordi ${previewValues.length} väärtust`}
+                  {saving ? t('organizer:importGuidModal.importingBtn') : t('organizer:importGuidModal.importValues', { count: previewValues.length })}
                 </button>
               </div>
             </div>
@@ -12327,8 +12326,8 @@ export default function OrganizerScreen({
 
                 <div style={{ marginBottom: '16px', padding: '12px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
                   <p style={{ margin: 0, fontSize: '12px', color: '#166534' }}>
-                    <strong>Nõuded:</strong><br/>
-                    • GUID_IFC või GUID_MS veerg (vähemalt üks kohustuslik)<br/>
+                    <strong>{t('organizer:excelImportModal.requirements')}</strong><br/>
+                    • {t('organizer:excelImportModal.reqGuid')}<br/>
                     • GUID_MS konverteeritakse automaatselt IFC formaati<br/>
                     • Alamgrupp veerg loob uued alamgrupid automaatselt
                   </p>
@@ -12383,13 +12382,13 @@ export default function OrganizerScreen({
                 </button>
               </div>
               <div className="org-modal-footer">
-                <button className="cancel" onClick={() => { setShowExcelImportModal(false); setExcelImportGroupId(null); }}>Tühista</button>
+                <button className="cancel" onClick={() => { setShowExcelImportModal(false); setExcelImportGroupId(null); }}>{t('common:buttons.cancel')}</button>
                 <button
                   className="save"
                   onClick={importFromExcel}
                   disabled={saving || !excelImportFile}
                 >
-                  {saving ? 'Impordin...' : 'Impordi'}
+                  {saving ? t('organizer:excelImportModal.importingBtn') : t('organizer:excelImportModal.import')}
                 </button>
               </div>
             </div>
@@ -12431,7 +12430,7 @@ export default function OrganizerScreen({
                   onChange={(e) => setActivityLogFilter(prev => ({ ...prev, action: e.target.value }))}
                   style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' }}
                 >
-                  <option value="">Kõik tegevused</option>
+                  <option value="">{t('organizer:activityLogModal.allActions')}</option>
                   <option value="add_items">Detailide lisamine</option>
                   <option value="remove_items">Detailide eemaldamine</option>
                   <option value="update_item">Detaili muutmine</option>
@@ -12500,17 +12499,17 @@ export default function OrganizerScreen({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                     {activityLogs.map((log) => {
                       const actionLabels: Record<string, string> = {
-                        add_items: 'lisas gruppi',
-                        remove_items: 'eemaldas grupist',
-                        update_item: 'muutis detaili',
-                        create_group: 'lõi grupi',
-                        delete_group: 'kustutas grupi',
-                        update_group: 'muutis gruppi',
-                        add_photo: 'lisas foto',
-                        remove_photo: 'eemaldas foto',
-                        add_attachment: 'lisas manuse',
-                        add_field: 'lisas lisaveeru',
-                        remove_field: 'kustutas lisaveeru'
+                        add_items: t('organizer:activityLabels.add_items'),
+                        remove_items: t('organizer:activityLabels.remove_items'),
+                        update_item: t('organizer:activityLabels.update_item'),
+                        create_group: t('organizer:activityLabels.create_group'),
+                        delete_group: t('organizer:activityLabels.delete_group'),
+                        update_group: t('organizer:activityLabels.update_group'),
+                        add_photo: t('organizer:activityLabels.add_photo'),
+                        remove_photo: t('organizer:activityLabels.remove_photo'),
+                        add_attachment: t('organizer:activityLabels.add_attachment'),
+                        add_field: t('organizer:activityLabels.add_field'),
+                        remove_field: t('organizer:activityLabels.remove_field')
                       };
                       const actionColors: Record<string, string> = {
                         add_items: '#10b981',
@@ -12584,7 +12583,7 @@ export default function OrganizerScreen({
                                   textDecoration: 'underline'
                                 }}
                                 onClick={() => selectItemsFromActivity(log.item_guids!)}
-                                title="Klõpsa detailide valimiseks mudelis"
+                                title={t('organizer:activityLogModal.clickToSelect')}
                               >
                                 {log.item_count} {log.item_count === 1 ? 'detail' : 'detaili'}
                               </span>
@@ -12663,7 +12662,7 @@ export default function OrganizerScreen({
                         fontSize: '12px'
                       }}
                     >
-                      {activityLogsLoading ? 'Laadin...' : 'Laadi veel'}
+                      {activityLogsLoading ? t('organizer:activityLogModal.loading') : t('organizer:activityLogModal.loadMore')}
                     </button>
                   </div>
                 )}
@@ -12774,7 +12773,7 @@ export default function OrganizerScreen({
                     cursor: 'pointer'
                   }}
                 >
-                  Järgmine →
+                  {t('organizer:lightbox.next')} →
                 </button>
               </div>
             )}
@@ -12797,11 +12796,11 @@ export default function OrganizerScreen({
         // Permission helpers
         const getPermissionLabel = (perm: boolean) => perm ? '✓' : '—';
         const permLabels = {
-          can_add: 'Lisa detaile',
-          can_delete_own: 'Kustuta omi',
-          can_delete_all: 'Kustuta kõiki',
-          can_edit_group: 'Muuda gruppi',
-          can_manage_fields: 'Halda välju'
+          can_add: t('organizer:groupInfoModal.permAddItems'),
+          can_delete_own: t('organizer:groupInfoModal.permDeleteOwn'),
+          can_delete_all: t('organizer:groupInfoModal.permDeleteAll'),
+          can_edit_group: t('organizer:groupInfoModal.permEditGroup'),
+          can_manage_fields: t('organizer:groupInfoModal.permManageFields')
         };
 
         return (
@@ -12818,7 +12817,7 @@ export default function OrganizerScreen({
               <div className="org-modal-body" style={{ padding: '0', display: 'flex', flexDirection: 'column', gap: '0', maxHeight: 'calc(90vh - 120px)', overflowY: 'auto' }}>
                 {/* Basic Info Section */}
                 <div className="group-info-section">
-                  <h3><FiInfo size={14} /> Üldinfo</h3>
+                  <h3><FiInfo size={14} /> {t('organizer:groupInfoModal.generalInfo')}</h3>
                   <div className="group-info-grid">
                     <div className="group-info-item">
                       <span className="info-label">Looja</span>
@@ -12841,8 +12840,8 @@ export default function OrganizerScreen({
                     {group.is_locked && (
                       <>
                         <div className="group-info-item">
-                          <span className="info-label">Lukustaja</span>
-                          <span className="info-value">{group.locked_by || 'Tundmatu'}</span>
+                          <span className="info-label">{t('organizer:groupInfoModal.lockedBy')}</span>
+                          <span className="info-value">{group.locked_by || t('organizer:item.unknownUser')}</span>
                         </div>
                         <div className="group-info-item">
                           <span className="info-label">Lukustatud</span>
@@ -12861,26 +12860,26 @@ export default function OrganizerScreen({
 
                 {/* Permissions Section */}
                 <div className="group-info-section">
-                  <h3><FiLock size={14} /> Õigused</h3>
+                  <h3><FiLock size={14} /> {t('organizer:groupInfoModal.permissions')}</h3>
                   <div className="group-info-permissions">
                     <div className="permissions-mode">
                       <span className="info-label">Jagamise režiim:</span>
                       <span className="info-value">
-                        {group.is_private ? 'Privaatne' :
-                         Object.keys(group.user_permissions || {}).length > 0 ? 'Valitud kasutajad' : 'Kogu projekt'}
+                        {group.is_private ? t('organizer:groupInfoModal.private') :
+                         Object.keys(group.user_permissions || {}).length > 0 ? t('organizer:groupInfoModal.selectedUsers') : t('organizer:groupInfoModal.wholeProject')}
                       </span>
                     </div>
                     {!group.is_private && (
                       <div className="permissions-table">
                         <div className="permissions-header">
-                          <span>Kasutaja / Õigus</span>
+                          <span>{t('organizer:groupInfoModal.userPermission')}</span>
                           {Object.keys(permLabels).map(key => (
                             <span key={key} title={permLabels[key as keyof typeof permLabels]}>{permLabels[key as keyof typeof permLabels].split(' ')[0]}</span>
                           ))}
                         </div>
                         {/* Default permissions */}
                         <div className="permissions-row">
-                          <span className="perm-user">Vaikimisi (kõik)</span>
+                          <span className="perm-user">{t('organizer:groupInfoModal.defaultAll')}</span>
                           <span>{getPermissionLabel(group.default_permissions?.can_add)}</span>
                           <span>{getPermissionLabel(group.default_permissions?.can_delete_own)}</span>
                           <span>{getPermissionLabel(group.default_permissions?.can_delete_all)}</span>
@@ -12902,7 +12901,7 @@ export default function OrganizerScreen({
                     )}
                     {group.is_private && (
                       <div style={{ fontSize: '12px', color: '#6b7280', padding: '8px 0' }}>
-                        Ainult grupi looja näeb seda gruppi.
+                        {t('organizer:groupInfoModal.privateNote')}
                       </div>
                     )}
                   </div>
@@ -12976,17 +12975,17 @@ export default function OrganizerScreen({
                     <div className="group-info-activities">
                       {groupInfoActivities.map((log) => {
                         const actionLabels: Record<string, string> = {
-                          add_items: 'lisas detaile',
-                          remove_items: 'eemaldas detaile',
-                          update_item: 'muutis detaili',
-                          create_group: 'lõi grupi',
-                          delete_group: 'kustutas grupi',
-                          update_group: 'muutis gruppi',
-                          add_photo: 'lisas foto',
-                          remove_photo: 'eemaldas foto',
-                          add_attachment: 'lisas manuse',
-                          add_field: 'lisas lisaveeru',
-                          remove_field: 'kustutas lisaveeru'
+                          add_items: t('organizer:activityLabels.add_items'),
+                          remove_items: t('organizer:activityLabels.remove_items'),
+                          update_item: t('organizer:activityLabels.update_item'),
+                          create_group: t('organizer:activityLabels.create_group'),
+                          delete_group: t('organizer:activityLabels.delete_group'),
+                          update_group: t('organizer:activityLabels.update_group'),
+                          add_photo: t('organizer:activityLabels.add_photo'),
+                          remove_photo: t('organizer:activityLabels.remove_photo'),
+                          add_attachment: t('organizer:activityLabels.add_attachment'),
+                          add_field: t('organizer:activityLabels.add_field'),
+                          remove_field: t('organizer:activityLabels.remove_field')
                         };
                         const actionColors: Record<string, string> = {
                           add_items: '#10b981',
@@ -13116,7 +13115,7 @@ export default function OrganizerScreen({
                     cursor: 'pointer'
                   }}
                 >
-                  Järgmine →
+                  {t('organizer:lightbox.next')} →
                 </button>
               </div>
             )}
@@ -13146,8 +13145,8 @@ export default function OrganizerScreen({
 
                 <label className="settings-row" onClick={toggleHideItemOnAdd}>
                   <div className="settings-info">
-                    <span className="settings-title">Peida lisamisel</span>
-                    <span className="settings-desc">Gruppi lisatud detail peidetakse mudelist</span>
+                    <span className="settings-title">{t('organizer:settingsModal.hideOnAdd')}</span>
+                    <span className="settings-desc">{t('organizer:settingsModal.hideOnAddDesc')}</span>
                   </div>
                   <div className={`settings-toggle ${hideItemOnAdd ? 'active' : ''}`}>
                     <span className="toggle-knob" />
@@ -13190,7 +13189,7 @@ export default function OrganizerScreen({
               <div className="settings-section" style={{ marginTop: '12px', borderTop: '1px solid var(--modus-border)', paddingTop: '12px' }}>
                 <div style={{ marginBottom: '8px' }}>
                   <span className="settings-title">Eksport / Import</span>
-                  <span className="settings-desc">Ekspordi või impordi kõik grupid</span>
+                  <span className="settings-desc">{t('organizer:settingsModal.exportImportDesc')}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <button
@@ -13326,13 +13325,13 @@ export default function OrganizerScreen({
                     <ul style={{ margin: 0, paddingLeft: '20px', color: '#374151', fontSize: '13px' }}>
                       <li>{groups.length} gruppi</li>
                       <li>{Array.from(groupItems.values()).reduce((sum, items) => sum + items.length, 0)} elementi</li>
-                      <li>Grupi seaded (värvid, väljad, õigused)</li>
+                      <li>{t('organizer:exportImportModal.groupSettings')}</li>
                       <li>Grupi hierarhia (alamgrupid)</li>
                     </ul>
                   </div>
                   <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '0' }}>
                     Eksporditav Excel fail sisaldab "Grupid" ja "Elemendid" lehti.
-                    Seda faili saab kasutada gruppide taastamiseks või teise projekti importimiseks.
+                    {t('organizer:exportImportModal.exportDescription')}
                   </p>
                 </div>
               )}
@@ -13382,7 +13381,7 @@ export default function OrganizerScreen({
                           Kliki Excel faili valimiseks
                         </div>
                         <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                          või lohista fail siia
+                          {t('organizer:exportImportModal.orDragHere')}
                         </div>
                       </>
                     )}
@@ -13398,7 +13397,7 @@ export default function OrganizerScreen({
                       marginBottom: '16px'
                     }}>
                       <div style={{ fontWeight: 500, marginBottom: '8px', color: groupsImportPreview.errors.length > 0 ? '#991b1b' : '#166534' }}>
-                        {groupsImportPreview.errors.length > 0 ? 'Leiti vigu:' : 'Faili sisu:'}
+                        {groupsImportPreview.errors.length > 0 ? t('organizer:exportImportModal.errorsFound') : t('organizer:exportImportModal.fileContent')}
                       </div>
 
                       {groupsImportPreview.errors.length > 0 ? (
@@ -13451,7 +13450,7 @@ export default function OrganizerScreen({
                       color: '#374151'
                     }}
                   >
-                    <FiDownload size={14} /> Lae alla näidistemplate
+                    <FiDownload size={14} /> {t('organizer:exportImportModal.downloadTemplate')}
                   </button>
                 </div>
               )}
@@ -13467,7 +13466,7 @@ export default function OrganizerScreen({
                 }}
                 disabled={saving || !!groupsImportProgress}
               >
-                Tühista
+                {t('common:buttons.cancel')}
               </button>
               {groupsExportImportMode === 'export' ? (
                 <button
@@ -13475,7 +13474,7 @@ export default function OrganizerScreen({
                   onClick={exportAllGroups}
                   disabled={groups.length === 0 || !!groupsImportProgress}
                 >
-                  {groupsImportProgress ? 'Ekspordin...' : 'Ekspordi'}
+                  {groupsImportProgress ? t('organizer:exportImportModal.exportingBtn') : t('organizer:exportImportModal.exportBtn')}
                 </button>
               ) : (
                 <button
@@ -13483,7 +13482,7 @@ export default function OrganizerScreen({
                   onClick={importAllGroups}
                   disabled={saving || !groupsImportFile || !groupsImportPreview || groupsImportPreview.errors.length > 0}
                 >
-                  {saving ? 'Impordin...' : 'Impordi'}
+                  {saving ? t('organizer:exportImportModal.importingBtn') : t('organizer:exportImportModal.importBtn')}
                 </button>
               )}
             </div>
@@ -13531,7 +13530,7 @@ export default function OrganizerScreen({
                   </span>
                 )}
                 {lightboxMeta.dimensions && (
-                  <span title="Mõõtmed">
+                  <span title={t('organizer:lightbox.dimensions')}>
                     {lightboxMeta.dimensions.width}x{lightboxMeta.dimensions.height}px
                   </span>
                 )}
@@ -13679,7 +13678,7 @@ export default function OrganizerScreen({
                     cursor: 'pointer'
                   }}
                 >
-                  Järgmine →
+                  {t('organizer:lightbox.next')} →
                 </button>
               </div>
             )}
@@ -13899,7 +13898,7 @@ export default function OrganizerScreen({
                     fontWeight: 500
                   }}
                 >
-                  Tühista
+                  {t('common:buttons.cancel')}
                 </button>
                 <button
                   onClick={confirmAndUploadPhotos}
@@ -14023,12 +14022,12 @@ export default function OrganizerScreen({
                                 onClick={() => {
                                   if (isGroupLocked(group.id)) {
                                     const lockInfo = getGroupLockInfo(group.id);
-                                    showToast(`🔒 Grupi värvi ei saa muuta - grupp on lukustatud${lockInfo?.locked_by ? ` (${lockInfo.locked_by})` : ''}`);
+                                    showToast(`🔒 ${t('organizer:group.colorLocked')}${lockInfo?.locked_by ? ` (${lockInfo.locked_by})` : ''}`);
                                     return;
                                   }
                                   setManagementColorPickerGroupId(showColorPicker ? null : group.id);
                                 }}
-                                title={isGroupLocked(group.id) ? '🔒 Grupp on lukustatud - värvi muutmine keelatud' : 'Muuda värvi'}
+                                title={isGroupLocked(group.id) ? `🔒 ${t('organizer:group.colorLocked')}` : t('organizer:groupsManagement.changeColor')}
                               />
 
                               {/* Color picker dropdown */}
@@ -14203,9 +14202,9 @@ export default function OrganizerScreen({
                                       setManagementEditingDescGroupId(group.id);
                                       setManagementEditDesc(group.description || '');
                                     }}
-                                    title="Kliki kirjelduse muutmiseks"
+                                    title={t('organizer:groupsManagement.clickToEditDesc')}
                                   >
-                                    {group.description || 'Lisa kirjeldus...'}
+                                    {group.description || t('organizer:groupsManagement.addDescription')}
                                   </span>
                                 )}
                               </div>
@@ -14280,7 +14279,7 @@ export default function OrganizerScreen({
                                     color: group.is_locked ? '#d1d5db' : '#d1d5db',
                                     borderRadius: '3px'
                                   }}
-                                  title={group.is_locked ? 'Grupp on lukustatud' : 'Kustuta grupp'}
+                                  title={group.is_locked ? t('organizer:groupsManagement.groupLockedDelete') : t('organizer:groupsManagement.deleteGroup')}
                                   disabled={group.is_locked}
                                   onMouseOver={(e) => { if (!group.is_locked) { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444'; }}}
                                   onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#d1d5db'; }}
@@ -14321,10 +14320,10 @@ export default function OrganizerScreen({
             <div className="org-modal-body" style={{ textAlign: 'center', padding: '24px' }}>
               <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
               <p style={{ marginBottom: '16px', color: '#374151', fontWeight: 500 }}>
-                Jätkamine pole võimalik, kuna lülitasid Assembly valiku välja.
+                {t('organizer:assemblyModal.cannotContinue')}
               </p>
               <p style={{ marginBottom: '20px', color: '#6b7280', fontSize: '13px' }}>
-                Sellesse gruppi detailide lisamiseks peab Assembly Selection olema sisse lülitatud.
+                {t('organizer:assemblyModal.needAssembly')}
               </p>
               <button
                 onClick={enableAssemblySelection}
@@ -14340,7 +14339,7 @@ export default function OrganizerScreen({
                   width: '100%'
                 }}
               >
-                Lülita Assembly Selection sisse
+                {t('organizer:assemblyModal.enableAssembly')}
               </button>
               <button
                 onClick={() => { setShowAssemblyModal(false); setPendingAddGroupId(null); }}
@@ -14354,7 +14353,7 @@ export default function OrganizerScreen({
                   cursor: 'pointer'
                 }}
               >
-                Tühista
+                {t('organizer:assemblyModal.cancel')}
               </button>
             </div>
           </div>
