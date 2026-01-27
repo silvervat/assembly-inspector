@@ -131,6 +131,7 @@ function getMonthKey(dateStr: string): string {
 
 function getMonthLabel(dateStr: string): string {
   const date = new Date(dateStr);
+  // Month labels are generated at call site using t() - this is a fallback
   const months = ['Jaan', 'Veebr', 'Märts', 'Apr', 'Mai', 'Juuni', 'Juuli', 'Aug', 'Sept', 'Okt', 'Nov', 'Dets'];
   return `${months[date.getMonth()]} ${date.getFullYear()}`;
 }
@@ -232,8 +233,8 @@ const generateMonthColors = (months: string[]): Record<string, { r: number; g: n
   return colors;
 };
 
-// Estonian weekday short names for calendar
-const DAY_NAMES = ['E', 'T', 'K', 'N', 'R', 'L', 'P'];
+// Weekday short names for calendar - translated at render time via t()
+const DAY_NAMES_FALLBACK = ['E', 'T', 'K', 'N', 'R', 'L', 'P'];
 
 // Playback speed options
 const PLAYBACK_SPEEDS = [
@@ -2045,23 +2046,23 @@ export default function InstallationsScreen({
 
     // Main data sheet
     const mainData = month.allItems.map(inst => ({
-      'Assembly Mark': inst.assembly_mark || '',
-      'Product Name': inst.product_name || '',
+      [t('installation:excelExport.assemblyMark')]: inst.assembly_mark || '',
+      [t('installation:excelExport.productName')]: inst.product_name || '',
       'GUID': inst.guid || '',
       'GUID IFC': inst.guid_ifc || '',
-      'Kaal (kg)': inst.cast_unit_weight || '',
-      'Paigaldatud': new Date(inst.installed_at).toLocaleString('et-EE'),
-      'Paigaldaja': inst.installer_name || '',
-      'Meeskond': inst.team_members || '',
-      'Kirje tegi': inst.user_email || '',
-      'Meetod': inst.installation_method_name || '',
-      'Märkmed': inst.notes || '',
-      'Põhja kõrgus': inst.cast_unit_bottom_elevation || '',
-      'Üla kõrgus': inst.cast_unit_top_elevation || '',
-      'Positsioonikood': inst.cast_unit_position_code || ''
+      [t('installation:excelExport.weight')]: inst.cast_unit_weight || '',
+      [t('installation:excelExport.installed')]: new Date(inst.installed_at).toLocaleString('et-EE'),
+      [t('installation:excelExport.installer')]: inst.installer_name || '',
+      [t('installation:excelExport.team')]: inst.team_members || '',
+      [t('installation:excelExport.recordedBy')]: inst.user_email || '',
+      [t('installation:excelExport.method')]: inst.installation_method_name || '',
+      [t('installation:excelExport.notes')]: inst.notes || '',
+      [t('installation:excelExport.bottomElevation')]: inst.cast_unit_bottom_elevation || '',
+      [t('installation:excelExport.topElevation')]: inst.cast_unit_top_elevation || '',
+      [t('installation:excelExport.positionCode')]: inst.cast_unit_position_code || ''
     }));
     const mainSheet = XLSX.utils.json_to_sheet(mainData);
-    XLSX.utils.book_append_sheet(wb, mainSheet, 'Paigaldused');
+    XLSX.utils.book_append_sheet(wb, mainSheet, t('installation:excelExport.sheetInstallations'));
 
     // Statistics sheet
     const byRecorder = new Map<string, number>();
@@ -2074,7 +2075,7 @@ export default function InstallationsScreen({
       const recorder = inst.user_email || t('inspectionList.unknown');
       byRecorder.set(recorder, (byRecorder.get(recorder) || 0) + 1);
 
-      const method = inst.installation_method_name || 'Määramata';
+      const method = inst.installation_method_name || t('installation:unassigned');
       byMethod.set(method, (byMethod.get(method) || 0) + 1);
 
       const installers = inst.team_members
@@ -2088,48 +2089,50 @@ export default function InstallationsScreen({
       totalWeight += parseFloat(inst.cast_unit_weight || '0') || 0;
     });
 
+    const statsCol = t('installation:excelExport.stats');
+    const valueCol = t('installation:excelExport.value');
     const statsData = [
-      { 'Statistika': 'Kokku detaile', 'Väärtus': month.allItems.length },
-      { 'Statistika': 'Tööpäevi', 'Väärtus': workingDays.size },
-      { 'Statistika': 'Paigaldajaid', 'Väärtus': byInstaller.size },
-      { 'Statistika': 'Kogukaal (kg)', 'Väärtus': Math.round(totalWeight * 10) / 10 },
-      { 'Statistika': '', 'Väärtus': '' },
-      { 'Statistika': '--- Kirjed tegid ---', 'Väärtus': '' },
+      { [statsCol]: t('installation:excelExport.totalDetails'), [valueCol]: month.allItems.length },
+      { [statsCol]: t('installation:excelExport.workingDays'), [valueCol]: workingDays.size },
+      { [statsCol]: t('installation:excelExport.installers'), [valueCol]: byInstaller.size },
+      { [statsCol]: t('installation:excelExport.totalWeight'), [valueCol]: Math.round(totalWeight * 10) / 10 },
+      { [statsCol]: '', [valueCol]: '' },
+      { [statsCol]: t('installation:excelExport.recordedBySection'), [valueCol]: '' },
       ...Array.from(byRecorder.entries()).map(([name, count]) => ({
-        'Statistika': name.split('@')[0],
-        'Väärtus': count
+        [statsCol]: name.split('@')[0],
+        [valueCol]: count
       })),
-      { 'Statistika': '', 'Väärtus': '' },
-      { 'Statistika': '--- Paigaldajad ---', 'Väärtus': '' },
+      { [statsCol]: '', [valueCol]: '' },
+      { [statsCol]: t('installation:excelExport.installersSection'), [valueCol]: '' },
       ...Array.from(byInstaller.entries()).map(([name, count]) => ({
-        'Statistika': name,
-        'Väärtus': count
+        [statsCol]: name,
+        [valueCol]: count
       })),
-      { 'Statistika': '', 'Väärtus': '' },
-      { 'Statistika': '--- Meetodid ---', 'Väärtus': '' },
+      { [statsCol]: '', [valueCol]: '' },
+      { [statsCol]: t('installation:excelExport.methodsSection'), [valueCol]: '' },
       ...Array.from(byMethod.entries()).map(([name, count]) => ({
-        'Statistika': name,
-        'Väärtus': count
+        [statsCol]: name,
+        [valueCol]: count
       }))
     ];
     const statsSheet = XLSX.utils.json_to_sheet(statsData);
-    XLSX.utils.book_append_sheet(wb, statsSheet, 'Statistika');
+    XLSX.utils.book_append_sheet(wb, statsSheet, t('installation:excelExport.sheetStatistics'));
 
     // Days breakdown sheet
     const daysData = month.days.flatMap(day =>
       day.items.map(inst => ({
-        'Kuupäev': day.dayLabel,
-        'Assembly Mark': inst.assembly_mark || '',
-        'Kaal (kg)': inst.cast_unit_weight || '',
-        'Paigaldaja': inst.installer_name || '',
-        'Meeskond': inst.team_members || ''
+        [t('installation:excelExport.date')]: day.dayLabel,
+        [t('installation:excelExport.assemblyMark')]: inst.assembly_mark || '',
+        [t('installation:excelExport.weight')]: inst.cast_unit_weight || '',
+        [t('installation:excelExport.installer')]: inst.installer_name || '',
+        [t('installation:excelExport.team')]: inst.team_members || ''
       }))
     );
     const daysSheet = XLSX.utils.json_to_sheet(daysData);
-    XLSX.utils.book_append_sheet(wb, daysSheet, 'Päevade kaupa');
+    XLSX.utils.book_append_sheet(wb, daysSheet, t('installation:excelExport.sheetByDays'));
 
     // Download
-    const fileName = `Paigaldused_${month.monthLabel.replace(' ', '_')}.xlsx`;
+    const fileName = `${t('installation:excelExport.installationsFileName')}_${month.monthLabel.replace(' ', '_')}.xlsx`;
     XLSX.writeFile(wb, fileName);
     setMessage(t('installation:screen.exported', { fileName }));
     setMonthMenuOpen(null);
@@ -2349,14 +2352,14 @@ export default function InstallationsScreen({
   // Uses database-based approach (same as toggleColorByDay) - fetches guid_ifc from trimble_model_objects
   const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>, retryCount = 0) => {
     setColoringInProgress(true);
-    setColoringProgress('Mudeli kontroll...');
+    setColoringProgress(t('installation:ui.coloringModelCheck'));
     try {
       // Get all loaded models
       const models = await api.viewer.getModels();
       if (!models || models.length === 0) {
         console.log('[INSTALL] No models loaded for coloring, retry:', retryCount);
         if (retryCount < 5) {
-          setColoringProgress(`Ootan mudelit... (${retryCount + 1}/5)`);
+          setColoringProgress(t('installation:ui.coloringWaitingForModel', { attempt: retryCount + 1 }));
           setTimeout(() => applyInstallationColoring(guidsMap, retryCount + 1), 500 * (retryCount + 1));
         } else {
           setColoringInProgress(false);
@@ -4996,34 +4999,34 @@ export default function InstallationsScreen({
   const calendarDays = getDaysForMonth(currentMonth);
   const today = formatDateKey(new Date());
 
-  // Get month name in Estonian
-  const MONTH_NAMES = ['Jaanuar', 'Veebruar', 'Märts', 'Aprill', 'Mai', 'Juuni', 'Juuli', 'August', 'September', 'Oktoober', 'November', 'Detsember'];
-  const currentMonthName = `${MONTH_NAMES[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`;
+  // Get month name - translated
+  const monthNames = t('installation:monthsList', { returnObjects: true }) as string[];
+  const currentMonthName = `${monthNames[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`;
 
-  // Map resource type names to their icons
+  // Map resource type names to their icons - uses translated names
   const RESOURCE_ICON_MAP: Record<string, string> = {
-    'Kraana': 'crane.png',
-    'Teleskooplaadur': 'forklift.png',
-    'Korvtõstuk': 'poomtostuk.png',
-    'Käärtõstuk': 'kaartostuk.png',
-    'Käsitsi': 'manual.png',
-    'Monteerija': 'monteerija.png',
-    'Troppija': 'troppija.png',
-    'Keevitaja': 'keevitaja.png'
+    [t('installation:resources.crane')]: 'crane.png',
+    [t('installation:resources.forklift')]: 'forklift.png',
+    [t('installation:resources.poomtostuk')]: 'poomtostuk.png',
+    [t('installation:resources.kaartostuk')]: 'kaartostuk.png',
+    [t('installation:resources.manual')]: 'manual.png',
+    [t('installation:resources.monteerija')]: 'monteerija.png',
+    [t('installation:resources.troppija')]: 'troppija.png',
+    [t('installation:resources.keevitaja')]: 'keevitaja.png'
   };
 
-  // Group resources by type and render them grouped (e.g., "Kraana: K1 | K2")
+  // Group resources by type and render them grouped
   const renderGroupedResources = (workers: string[]) => {
     // Group by resource type
     const grouped: Record<string, string[]> = {};
-    const RESOURCE_ORDER = ['Kraana', 'Teleskooplaadur', 'Korvtõstuk', 'Käärtõstuk', 'Troppija', 'Monteerija', 'Keevitaja'];
+    const RESOURCE_ORDER = [t('installation:resources.crane'), t('installation:resources.forklift'), t('installation:resources.poomtostuk'), t('installation:resources.kaartostuk'), t('installation:resources.troppija'), t('installation:resources.monteerija'), t('installation:resources.keevitaja')];
 
     for (const worker of workers) {
       const colonIndex = worker.indexOf(':');
       if (colonIndex === -1) {
         // No colon - put in "Other" category
-        if (!grouped['Muu']) grouped['Muu'] = [];
-        grouped['Muu'].push(worker);
+        if (!grouped[t('installation:ui.other')]) grouped[t('installation:ui.other')] = [];
+        grouped[t('installation:ui.other')].push(worker);
       } else {
         const resourceType = worker.substring(0, colonIndex).trim();
         const resourceName = worker.substring(colonIndex + 1).trim();
@@ -7818,7 +7821,7 @@ export default function InstallationsScreen({
               }}>
                 {/* Week number header + Day names */}
                 <div style={{ textAlign: 'center', fontWeight: 600, padding: '4px', color: '#9ca3af', fontSize: '9px' }}>Nd</div>
-                {DAY_NAMES.map(day => (
+                {(t('installation:weekdaysMinMon', { returnObjects: true }) as string[] || DAY_NAMES_FALLBACK).map((day: string) => (
                   <div key={day} style={{ textAlign: 'center', fontWeight: 600, padding: '4px', color: '#6b7280' }}>
                     {day}
                   </div>

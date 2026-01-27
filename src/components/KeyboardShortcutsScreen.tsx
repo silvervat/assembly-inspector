@@ -29,85 +29,22 @@ interface GuideCategory {
   items: GuideItem[];
 }
 
-// Guide categories and items
-const guideCategories: GuideCategory[] = [
-  {
-    id: 'keyboard_shortcuts',
-    name: 'Globaalsed otseteed',
-    icon: <FiCommand size={18} />,
-    items: [
-      {
-        id: 'alt_shift_a',
-        title: 'ALT + SHIFT + A',
-        description: 'Värvib kõik saabunud (kinnitatud) aga paigaldamata detailid roheliseks, ülejäänud mudel värvitakse valgeks.'
-      },
-      {
-        id: 'alt_shift_m',
-        title: 'ALT + SHIFT + M',
-        description: 'Lisab valitud detailidele markupid musta tekstiga ja 500mm joonega. Kui detailid on üksteisele lähemal kui 4m, kasutatakse 2m kõrguserinevust.'
-      },
-      {
-        id: 'alt_shift_s',
-        title: 'ALT + SHIFT + S',
-        description: 'Avab kiirotsingu modaali ja laiendab extensioni paneeli. Võimaldab otsida detaile assembly margi järgi ükskõik milliselt lehelt.'
-      },
-      {
-        id: 'alt_shift_w',
-        title: 'ALT + SHIFT + W',
-        description: 'Värvib kogu mudeli valgeks - sama funktsioon mis Tööriistad lehel.'
-      },
-      {
-        id: 'alt_shift_b',
-        title: 'ALT + SHIFT + B',
-        description: 'Lisab valitud detailidele poltide markupid tumesinises värvis. Kui poldid on üksteisele lähemal kui 4m, kasutatakse 1.5m kõrguserinevust.'
-      },
-      {
-        id: 'alt_shift_i',
-        title: 'ALT + SHIFT + I',
-        description: 'Avab Paigaldamiste sisestamise lehe otse, sõltumata sellest millisel lehel parasjagu oled.'
-      },
-      {
-        id: 'alt_shift_d',
-        title: 'ALT + SHIFT + D',
-        description: 'Lisab valitud detailidele kaherealised markupid veoki lühendi ja tarnekuupäevaga. Iga veok saab erineva värvi, lähedased markupid saavad erineva kõrguse.'
-      },
-      {
-        id: 'alt_shift_r',
-        title: 'ALT + SHIFT + R',
-        description: 'Eemaldab kõik markupid mudelis. Kasulik kui on vaja kiiresti kõik markupid kustutada ilma Tööriistad lehele minemata.'
-      },
-      {
-        id: 'alt_shift_c',
-        title: 'ALT + SHIFT + C',
-        description: 'Värvib kogu mudeli valgeks (nagu ALT+SHIFT+W), aga mudelis valitud detailid värvitakse tumeroheliseks. Kasulik kindlate detailide esiletoomiseks.'
-      },
-      {
-        id: 'alt_shift_t',
-        title: 'ALT + SHIFT + T',
-        description: 'Avab tarnegraafiku ja värvib tänased tarned. Iga veok saab erineva värvi (sama mis tarnegraafiku listis). Kui tänaseks pole tarneid, annab teada.'
-      },
-      {
-        id: 'alt_shift_1',
-        title: 'ALT + SHIFT + 1',
-        description: 'Kopeerib valitud detailide assembly margid Exceli-formaadis (tabulaatoriga eraldatud MARK ja GUID). Sobib otse Excelisse kleepimiseks.'
-      },
-      {
-        id: 'alt_shift_2',
-        title: 'ALT + SHIFT + 2',
-        description: 'Kopeerib valitud detailide assembly margid lihtsalt nimekirjana (iga mark eraldi real). Sobib emaili või messengeri saatmiseks.'
-      },
-      {
-        id: 'alt_shift_3',
-        title: 'ALT + SHIFT + 3',
-        description: 'Värvib kõik paigaldatud detailid tumesiniseks, ülejäänud mudel värvitakse valgeks. Sama loogika mis Paigaldamiste lehel.'
-      },
-      {
-        id: 'alt_shift_4',
-        title: 'ALT + SHIFT + 4',
-        description: 'Valib kõik paigaldatud detailid (ilma värvimata). Töötab osade kaupa, toetab suuri mahtusid (20k+ detaili).'
-      }
-    ]
-  }
+// Shortcut item definitions (descriptions resolved via i18n)
+const shortcutItems = [
+  { id: 'alt_shift_a', title: 'ALT + SHIFT + A', descKey: 'shortcuts.alt_shift_a_desc' },
+  { id: 'alt_shift_m', title: 'ALT + SHIFT + M', descKey: 'shortcuts.alt_shift_m_desc' },
+  { id: 'alt_shift_s', title: 'ALT + SHIFT + S', descKey: 'shortcuts.alt_shift_s_desc' },
+  { id: 'alt_shift_w', title: 'ALT + SHIFT + W', descKey: 'shortcuts.alt_shift_w_desc' },
+  { id: 'alt_shift_b', title: 'ALT + SHIFT + B', descKey: 'shortcuts.alt_shift_b_desc' },
+  { id: 'alt_shift_i', title: 'ALT + SHIFT + I', descKey: 'shortcuts.alt_shift_i_desc' },
+  { id: 'alt_shift_d', title: 'ALT + SHIFT + D', descKey: 'shortcuts.alt_shift_d_desc' },
+  { id: 'alt_shift_r', title: 'ALT + SHIFT + R', descKey: 'shortcuts.alt_shift_r_desc' },
+  { id: 'alt_shift_c', title: 'ALT + SHIFT + C', descKey: 'shortcuts.alt_shift_c_desc' },
+  { id: 'alt_shift_t', title: 'ALT + SHIFT + T', descKey: 'shortcuts.alt_shift_t_desc' },
+  { id: 'alt_shift_1', title: 'ALT + SHIFT + 1', descKey: 'shortcuts.alt_shift_1_desc' },
+  { id: 'alt_shift_2', title: 'ALT + SHIFT + 2', descKey: 'shortcuts.alt_shift_2_desc' },
+  { id: 'alt_shift_3', title: 'ALT + SHIFT + 3', descKey: 'shortcuts.alt_shift_3_desc' },
+  { id: 'alt_shift_4', title: 'ALT + SHIFT + 4', descKey: 'shortcuts.alt_shift_4_desc' },
 ];
 
 export default function KeyboardShortcutsScreen({
@@ -124,6 +61,20 @@ export default function KeyboardShortcutsScreen({
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
+  // Build guide categories with translated descriptions
+  const guideCategories: GuideCategory[] = useMemo(() => [
+    {
+      id: 'keyboard_shortcuts',
+      name: t('shortcuts.globalShortcuts'),
+      icon: <FiCommand size={18} />,
+      items: shortcutItems.map(item => ({
+        id: item.id,
+        title: item.title,
+        description: t(item.descKey)
+      }))
+    }
+  ], [t]);
+
   // Filter items based on search query
   const filteredCategories = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -138,7 +89,7 @@ export default function KeyboardShortcutsScreen({
         item.description.toLowerCase().includes(query)
       )
     })).filter(category => category.items.length > 0);
-  }, [searchQuery]);
+  }, [searchQuery, guideCategories]);
 
   const toggleCategory = (categoryId: string) => {
     const newExpanded = new Set(expandedCategories);
