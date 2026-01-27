@@ -4920,7 +4920,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
           // Create/update items for this group - use FRESH data from Trimble model!
           const itemsToInsert: any[] = [];
-          const itemsToUpdate: { id: string; vehicle_id: string; scheduled_date: string | null; sort_order: number; notes: string | null }[] = [];
+          const itemsToUpdate: { id: string; vehicle_id: string; scheduled_date: string | null; sort_order: number; notes: string | null; oldItem: typeof items[0] }[] = [];
 
           groupItems.forEach((row, idx) => {
             const ifcGuid = row.guid.length === 22 ? row.guid : (row.guid.length === 36 ? msToIfcGuid(row.guid) : '');
@@ -4939,7 +4939,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 vehicle_id: vehicle!.id,
                 scheduled_date: scheduledDate,
                 sort_order: idx,
-                notes: row.comment || existingItem.notes || null
+                notes: row.comment || existingItem.notes || null,
+                oldItem: existingItem
               });
             } else {
               // INSERT new item
@@ -4975,7 +4976,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             if (error) throw error;
           }
 
-          // Batch update existing items
+          // Batch update existing items and log history
+          const historyEntries: any[] = [];
           for (const item of itemsToUpdate) {
             const { error } = await supabase
               .from('trimble_delivery_items')
@@ -4989,7 +4991,40 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
             if (error) {
               console.error('Error updating existing item:', error);
+              continue;
             }
+
+            // Track changes in history
+            const oldVehicle = vehicles.find(v => v.id === item.oldItem.vehicle_id);
+            const dateChanged = item.oldItem.scheduled_date !== item.scheduled_date;
+            const vehicleChanged = item.oldItem.vehicle_id !== item.vehicle_id;
+
+            if (dateChanged || vehicleChanged) {
+              historyEntries.push({
+                trimble_project_id: projectId,
+                item_id: item.id,
+                vehicle_id: item.oldItem.vehicle_id,
+                change_type: 'schedule_import',
+                old_date: item.oldItem.scheduled_date || null,
+                new_date: item.scheduled_date,
+                old_vehicle_id: item.oldItem.vehicle_id || null,
+                new_vehicle_id: item.vehicle_id,
+                old_vehicle_code: oldVehicle?.vehicle_code || null,
+                new_vehicle_code: vehicleCode || null,
+                change_reason: 'Detailne import',
+                changed_by: tcUserEmail,
+                is_snapshot: false
+              });
+            }
+          }
+
+          // Insert history entries in batch
+          if (historyEntries.length > 0) {
+            const { error } = await supabase.from('trimble_delivery_history').insert(historyEntries);
+            if (error) {
+              console.error('Error inserting history:', error);
+            }
+            console.log(`📝 Logged ${historyEntries.length} history entries for group ${vehicleCode || 'unknown'}`);
           }
 
           if (itemsToUpdate.length > 0) {
