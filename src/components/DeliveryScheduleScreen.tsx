@@ -688,8 +688,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     { id: 'comments', label: 'Kommentaarid', labelEn: 'Comments', enabled: true }
   ]);
 
-  // Color mode for model visualization - default to vehicle coloring
-  const [colorMode, setColorMode] = useState<'none' | 'vehicle' | 'date' | 'timeline' | 'progress'>('vehicle');
+  // Color mode for model visualization - no coloring by default
+  const [colorMode, setColorMode] = useState<'none' | 'vehicle' | 'date' | 'timeline' | 'progress'>('none');
   const [showColorMenu, setShowColorMenu] = useState(false);
   const [showImportExportMenu, setShowImportExportMenu] = useState(false);
   const [showPlaybackMenu, setShowPlaybackMenu] = useState(false);
@@ -6694,8 +6694,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         const today = new Date().toISOString().slice(0, 10);
 
         const PROGRESS_COLORS = {
-          installed:  { r: 30, g: 64, b: 175, a: 255 },  // dark blue (#1e40af)
-          delivered:  { r: 34, g: 197, b: 94, a: 255 }    // green (#22c55e)
+          installed:  { r: 10, g: 58, b: 103, a: 255 },   // dark blue (#0a3a67) - same as Alt+Shift+3
+          delivered:  { r: 34, g: 197, b: 94, a: 255 }     // green (#22c55e)
         };
 
         setVehicleColors({});
@@ -6703,21 +6703,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
         setMessage('Laen paigalduse andmeid...');
 
-        // 1. Fetch installed items from installation_schedule
+        // 1. Fetch installed items from installations table (same as Alt+Shift+3 / InstallationsScreen)
         const installedGuids = new Set<string>();
         let offset = 0;
         const PAGE = 5000;
         while (true) {
           const { data } = await supabase
-            .from('installation_schedule')
-            .select('guid_ifc, guid')
-            .eq('trimble_project_id', projectId)
-            .eq('status', 'completed')
+            .from('installations')
+            .select('guid_ifc')
+            .eq('project_id', projectId)
             .range(offset, offset + PAGE - 1);
 
           if (!data || data.length === 0) break;
           for (const row of data) {
-            const g = (row.guid_ifc || row.guid || '').toLowerCase();
+            const g = (row.guid_ifc || '').toLowerCase();
             if (g) installedGuids.add(g);
           }
           if (data.length < PAGE) break;

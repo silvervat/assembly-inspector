@@ -283,6 +283,8 @@
     "color": "Värvi",
     "colorByVehicle": "Veokite kaupa",
     "colorByDate": "Kuupäevade kaupa",
+    "colorByTimeline": "Ajatelg",
+    "colorByProgress": "Paigaldatud / tarnitud",
     "colorByFactory": "Tehaste kaupa",
     "colorWhite": "Värvi valgeks",
     "playback": "Taasesitus",
