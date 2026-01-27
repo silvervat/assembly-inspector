@@ -689,11 +689,11 @@ export default function CranePlannerScreen({
   // Save crane
   const handleSave = async () => {
     if (!selectedCraneModelId) {
-      alert('Palun vali kraana!');
+      alert(t('crane.selectCraneAlert'));
       return;
     }
     if (!pickedPosition) {
-      alert('Palun vali positsioon mudelist!');
+      alert(t('crane.selectPositionAlert'));
       return;
     }
 
@@ -922,14 +922,14 @@ export default function CranePlannerScreen({
       // Get selected objects from model
       const selection = await api.viewer.getSelection();
       if (!selection || selection.length === 0) {
-        alert('Vali esmalt mudelist objekt(id)!');
+        alert(t('crane.selectObjectsFromModel'));
         return;
       }
 
       const modelId = selection[0].modelId;
       const runtimeIds = selection.flatMap(s => s.objectRuntimeIds || []);
       if (runtimeIds.length === 0) {
-        alert('Valitud objektidel puudub info!');
+        alert(t('crane.selectedObjectsMissingInfo'));
         return;
       }
 
@@ -1025,7 +1025,7 @@ export default function CranePlannerScreen({
       });
     } catch (error: any) {
       console.error('Error calculating lifting capacity:', error);
-      alert('Viga arvutamisel: ' + error.message);
+      alert(t('crane.calculationError', { message: error.message }));
     }
   };
 
@@ -1341,9 +1341,9 @@ export default function CranePlannerScreen({
           }}>
             <FiAlertCircle size={20} style={{ color: '#92400e' }} />
             <div>
-              <div style={{ fontWeight: 500, color: '#92400e' }}>Kraanasid pole andmebaasis</div>
+              <div style={{ fontWeight: 500, color: '#92400e' }}>{t('crane.noCranesInDatabase')}</div>
               <div style={{ fontSize: '13px', color: '#a16207' }}>
-                Lisa esmalt kraanasid Administratsiooni &gt; Kraanade Andmebaas lehel
+                {t('crane.addCranesFirst')}
               </div>
             </div>
           </div>
@@ -1354,7 +1354,7 @@ export default function CranePlannerScreen({
           <div style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '16px' }}>
             <div style={{ padding: '16px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0 }}>
-                {editingCraneId ? 'Muuda Kraana' : 'Paiguta Uus Kraana'}
+                {editingCraneId ? t('crane.editCraneTitle') : t('crane.placeNewCrane')}
               </h2>
               <button
                 onClick={cancelPlacing}
@@ -1367,13 +1367,13 @@ export default function CranePlannerScreen({
             <div style={{ padding: '16px' }}>
               {/* Crane Selection */}
               <div style={{ marginBottom: '20px' }}>
-                <label style={labelStyle}>Vali Kraana *</label>
+                <label style={labelStyle}>{t('crane.selectCrane')}</label>
                 <select
                   style={inputStyle}
                   value={selectedCraneModelId}
                   onChange={e => setSelectedCraneModelId(e.target.value)}
                 >
-                  <option value="">-- Vali kraana --</option>
+                  <option value="">{t('crane.selectCranePlaceholder')}</option>
                   {craneModels.filter(c => c.is_active).map(crane => (
                     <option key={crane.id} value={crane.id}>
                       {crane.manufacturer} {crane.model} ({(crane.max_capacity_kg / 1000).toFixed(0)}t)
@@ -1385,7 +1385,7 @@ export default function CranePlannerScreen({
                     {CRANE_TYPE_LABELS[selectedCraneModel.crane_type]} •
                     Max {(selectedCraneModel.max_capacity_kg / 1000).toFixed(0)}t @
                     {selectedCraneModel.max_radius_m}m radius •
-                    Kõrgus {selectedCraneModel.max_height_m}m
+                    {t('crane.heightXm', { height: selectedCraneModel.max_height_m })}
                   </div>
                 )}
               </div>
@@ -1393,13 +1393,13 @@ export default function CranePlannerScreen({
               {/* Counterweight Selection */}
               {selectedCraneModelId && (
                 <div style={{ marginBottom: '20px' }}>
-                  <label style={labelStyle}>Vastukaalu konfiguratsioon</label>
+                  <label style={labelStyle}>{t('crane.counterweightConfig')}</label>
                   <select
                     style={inputStyle}
                     value={selectedCounterweightId}
                     onChange={e => setSelectedCounterweightId(e.target.value)}
                   >
-                    <option value="">-- Vali vastukaal (valikuline) --</option>
+                    <option value="">{t('crane.selectCounterweightPlaceholder')}</option>
                     {counterweights.map(cw => (
                       <option key={cw.id} value={cw.id}>
                         {cw.name} ({(cw.weight_kg / 1000).toFixed(0)}t)
@@ -1412,18 +1412,18 @@ export default function CranePlannerScreen({
               {/* Position */}
               <div style={{ marginBottom: '20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <label style={{ ...labelStyle, marginBottom: 0 }}>Positsioon *</label>
+                  <label style={{ ...labelStyle, marginBottom: 0 }}>{t('crane.position')}</label>
                   {pickedPosition && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
-                      <span style={{ color: '#6b7280' }}>Uuenda:</span>
+                      <span style={{ color: '#6b7280' }}>{t('crane.update')}</span>
                       <select
                         value={positionPickMode}
                         onChange={e => setPositionPickMode(e.target.value as 'location' | 'location_height' | 'height')}
                         style={{ padding: '2px 6px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '12px' }}
                       >
-                        <option value="location">Ainult asukoht (X, Y)</option>
-                        <option value="location_height">Asukoht + kõrgus (X, Y, Z)</option>
-                        <option value="height">Ainult kõrgus (Z)</option>
+                        <option value="location">{t('crane.locationOnly')}</option>
+                        <option value="location_height">{t('crane.locationAndHeight')}</option>
+                        <option value="height">{t('crane.heightOnly')}</option>
                       </select>
                     </div>
                   )}
@@ -1439,7 +1439,7 @@ export default function CranePlannerScreen({
                       color: '#92400e'
                     }}>
                       <FiTarget className="animate-pulse" style={{ marginRight: '8px' }} />
-                      Kliki mudelis objektil...
+                      {t('crane.clickObjectInModel')}
                     </div>
                     <button
                       onClick={cancelPicking}
@@ -1451,7 +1451,7 @@ export default function CranePlannerScreen({
                         cursor: 'pointer'
                       }}
                     >
-                      Tühista
+                      {t('buttons.cancel')}
                     </button>
                   </div>
                 ) : (
@@ -1475,7 +1475,7 @@ export default function CranePlannerScreen({
                       <FiMapPin />
                       {pickedPosition
                         ? `X: ${pickedPosition.x.toFixed(2)}m, Y: ${pickedPosition.y.toFixed(2)}m, Z: ${pickedPosition.z.toFixed(2)}m`
-                        : 'Vali Positsioon Mudelist'}
+                        : t('crane.selectPositionFromModel')}
                     </button>
                   </div>
                 )}
@@ -1503,23 +1503,23 @@ export default function CranePlannerScreen({
                         {autoSaveStatus === 'saving' && (
                           <>
                             <FiLoader className="animate-spin" size={14} style={{ color: '#d97706' }} />
-                            <span style={{ color: '#d97706' }}>Salvestamine...</span>
+                            <span style={{ color: '#d97706' }}>{t('crane.autoSaving')}</span>
                           </>
                         )}
                         {autoSaveStatus === 'saved' && (
                           <>
                             <FiCheck size={14} style={{ color: '#16a34a' }} />
-                            <span style={{ color: '#16a34a' }}>Muudatused salvestatud</span>
+                            <span style={{ color: '#16a34a' }}>{t('crane.changesSaved')}</span>
                           </>
                         )}
                         {autoSaveStatus === 'error' && (
                           <>
                             <FiAlertCircle size={14} style={{ color: '#dc2626' }} />
-                            <span style={{ color: '#dc2626' }}>Salvestamine ebaõnnestus</span>
+                            <span style={{ color: '#dc2626' }}>{t('crane.saveFail')}</span>
                           </>
                         )}
                         {autoSaveStatus === 'idle' && (
-                          <span style={{ color: '#6b7280' }}>Muudatused salvestatakse automaatselt</span>
+                          <span style={{ color: '#6b7280' }}>{t('crane.autoSaveIdle')}</span>
                         )}
                       </div>
                       {autoSaveStatus === 'saving' && (
@@ -1539,7 +1539,7 @@ export default function CranePlannerScreen({
                   {/* Step Settings Row */}
                   <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '13px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span>Liigutamise samm:</span>
+                      <span>{t('crane.movementStep')}</span>
                       <select
                         value={moveStep}
                         onChange={e => setMoveStep(parseFloat(e.target.value))}
@@ -1557,7 +1557,7 @@ export default function CranePlannerScreen({
                       </select>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <span>Pööramise samm:</span>
+                      <span>{t('crane.rotationStep')}</span>
                       <select
                         value={rotateStep}
                         onChange={e => setRotateStep(parseFloat(e.target.value))}
@@ -1578,7 +1578,7 @@ export default function CranePlannerScreen({
                     {/* Movement with diagonal arrows */}
                     <div>
                       <div style={{ fontWeight: 500, fontSize: '13px', marginBottom: '8px', textAlign: 'center' }}>
-                        Liiguta ({moveStep}m samm)
+                        {t('crane.move', { step: moveStep })}
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
                         {/* Top row: screen up-left, up, up-right (view-relative) */}
@@ -1600,7 +1600,7 @@ export default function CranePlannerScreen({
                     {/* Rotation */}
                     <div>
                       <div style={{ fontWeight: 500, fontSize: '13px', marginBottom: '8px', textAlign: 'center' }}>
-                        Pööra ({rotateStep}° samm)
+                        {t('crane.rotate', { step: rotateStep })}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                         <button onClick={() => rotateCrane(rotateStep)} style={{ ...btnStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
@@ -1617,16 +1617,16 @@ export default function CranePlannerScreen({
                   {/* Height with colored buttons */}
                   <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#fff', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 500 }}>Kõrgus:</span>
+                      <span style={{ fontSize: '13px', fontWeight: 500 }}>{t('crane.height')}</span>
                       <select
                         value={heightStep}
                         onChange={e => setHeightStep(parseFloat(e.target.value))}
                         style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px' }}
                       >
-                        <option value="0.1">0.1m samm</option>
-                        <option value="0.25">0.25m samm</option>
-                        <option value="0.5">0.5m samm</option>
-                        <option value="1">1m samm</option>
+                        <option value="0.1">{t('crane.heightStep', { step: '0.1' })}</option>
+                        <option value="0.25">{t('crane.heightStep', { step: '0.25' })}</option>
+                        <option value="0.5">{t('crane.heightStep', { step: '0.5' })}</option>
+                        <option value="1">{t('crane.heightStep', { step: '1' })}</option>
                       </select>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1683,7 +1683,7 @@ export default function CranePlannerScreen({
               {selectedCraneModelId && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px', marginBottom: '20px' }}>
                   <div>
-                    <label style={labelStyle}>Noole pikkus (m)</label>
+                    <label style={labelStyle}>{t('crane.boomLength')}</label>
                     {availableBoomLengths.length > 0 ? (
                       <select
                         style={inputStyle}
@@ -1704,12 +1704,12 @@ export default function CranePlannerScreen({
                         display: 'flex',
                         alignItems: 'center'
                       }}>
-                        {selectedCounterweightId ? 'Laen...' : 'Vali esmalt vastukaal'}
+                        {selectedCounterweightId ? t('crane.loading') : t('crane.selectCounterweightFirst')}
                       </div>
                     )}
                   </div>
                   <div>
-                    <label style={labelStyle}>Raadiuse samm (m)</label>
+                    <label style={labelStyle}>{t('crane.radiusStep')}</label>
                     <select
                       style={inputStyle}
                       value={config.radius_step_m}
@@ -1721,22 +1721,22 @@ export default function CranePlannerScreen({
                     </select>
                   </div>
                   <div>
-                    <label style={labelStyle}>Max raadius (m)</label>
+                    <label style={labelStyle}>{t('crane.maxRadius')}</label>
                     <input
                       type="number"
                       style={inputStyle}
                       value={config.max_radius_limit_m || ''}
                       onChange={e => setConfig(prev => ({ ...prev, max_radius_limit_m: parseFloat(e.target.value) || 0 }))}
-                      placeholder={selectedCraneModel ? `Max ${selectedCraneModel.max_radius_m}m` : 'Piir puudub'}
+                      placeholder={selectedCraneModel ? t('crane.maxRadiusPlaceholder', { radius: selectedCraneModel.max_radius_m }) : t('crane.noLimit')}
                       step="5"
                       min="0"
                     />
                     <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
-                      0 = piir puudub
+                      {t('crane.zeroNoLimit')}
                     </div>
                   </div>
                   <div>
-                    <label style={labelStyle}>Konks / Tõsteblokk + ketid (kg)</label>
+                    <label style={labelStyle}>{t('crane.hookWeight')}</label>
                     <input
                       type="number"
                       style={inputStyle}
@@ -1746,7 +1746,7 @@ export default function CranePlannerScreen({
                     />
                   </div>
                   <div>
-                    <label style={labelStyle}>Lisakaal (kg)</label>
+                    <label style={labelStyle}>{t('crane.additionalWeight')}</label>
                     <input
                       type="number"
                       style={inputStyle}
@@ -1756,7 +1756,7 @@ export default function CranePlannerScreen({
                     />
                   </div>
                   <div>
-                    <label style={labelStyle}>Ohutustegur</label>
+                    <label style={labelStyle}>{t('crane.safetyFactor')}</label>
                     <select
                       style={inputStyle}
                       value={config.safety_factor}
@@ -1770,7 +1770,7 @@ export default function CranePlannerScreen({
                     </select>
                   </div>
                   <div>
-                    <label style={labelStyle}>Positsioon Label (valikuline)</label>
+                    <label style={labelStyle}>{t('crane.positionLabel')}</label>
                     <input
                       type="text"
                       style={inputStyle}
@@ -1781,7 +1781,7 @@ export default function CranePlannerScreen({
                   </div>
                   {/* Radius Ring Settings */}
                   <div style={{ gridColumn: 'span 2', padding: '12px', backgroundColor: '#f9fafb', borderRadius: '6px' }}>
-                    <div style={{ fontWeight: 500, fontSize: '14px', marginBottom: '12px' }}>Raadiuse ringide seaded</div>
+                    <div style={{ fontWeight: 500, fontSize: '14px', marginBottom: '12px' }}>{t('crane.radiusRingSettings')}</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
@@ -1790,7 +1790,7 @@ export default function CranePlannerScreen({
                             checked={config.show_radius_rings}
                             onChange={e => setConfig(prev => ({ ...prev, show_radius_rings: e.target.checked }))}
                           />
-                          Näita raadiusi
+                          {t('crane.showRadius')}
                         </label>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1800,11 +1800,11 @@ export default function CranePlannerScreen({
                             checked={config.show_capacity_labels}
                             onChange={e => setConfig(prev => ({ ...prev, show_capacity_labels: e.target.checked }))}
                           />
-                          Näita tõstevõimeid
+                          {t('crane.showCapacities')}
                         </label>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '13px' }}>Ringi värv:</span>
+                        <span style={{ fontSize: '13px' }}>{t('crane.ringColor')}</span>
                         <input
                           type="color"
                           value={`#${config.radius_color.r.toString(16).padStart(2, '0')}${config.radius_color.g.toString(16).padStart(2, '0')}${config.radius_color.b.toString(16).padStart(2, '0')}`}
@@ -1819,7 +1819,7 @@ export default function CranePlannerScreen({
                         />
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '13px' }}>Läbipaistvus:</span>
+                        <span style={{ fontSize: '13px' }}>{t('crane.opacity')}</span>
                         <input
                           type="range"
                           min="50"
@@ -1838,7 +1838,7 @@ export default function CranePlannerScreen({
                   {/* Label Settings */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '13px' }}>Sildi kõrgus:</span>
+                      <span style={{ fontSize: '13px' }}>{t('crane.labelHeight')}</span>
                       <select
                         value={config.label_height_mm}
                         onChange={e => setConfig(prev => ({ ...prev, label_height_mm: parseInt(e.target.value) }))}
@@ -1853,7 +1853,7 @@ export default function CranePlannerScreen({
                       </select>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '13px' }}>Sildi värv:</span>
+                      <span style={{ fontSize: '13px' }}>{t('crane.labelColor')}</span>
                       <input
                         type="color"
                         value={`#${config.label_color.r.toString(16).padStart(2, '0')}${config.label_color.g.toString(16).padStart(2, '0')}${config.label_color.b.toString(16).padStart(2, '0')}`}
@@ -1870,7 +1870,7 @@ export default function CranePlannerScreen({
                   </div>
                   {/* Crane Color Settings */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '13px' }}>Kraana värv:</span>
+                    <span style={{ fontSize: '13px' }}>{t('crane.craneColor')}</span>
                     <input
                       type="color"
                       value={`#${config.crane_color.r.toString(16).padStart(2, '0')}${config.crane_color.g.toString(16).padStart(2, '0')}${config.crane_color.b.toString(16).padStart(2, '0')}`}
@@ -1885,7 +1885,7 @@ export default function CranePlannerScreen({
                     />
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '13px' }}>Kraana läbipaistvus:</span>
+                    <span style={{ fontSize: '13px' }}>{t('crane.craneOpacity')}</span>
                     <input
                       type="range"
                       min="50"
@@ -1906,10 +1906,10 @@ export default function CranePlannerScreen({
               {loadCalculations.length > 0 && (
                 <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f0f9ff', borderRadius: '8px' }}>
                   <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
-                    Kasutatav tõstevõime (ohutustegur {config.safety_factor}x)
+                    {t('crane.usableCapacity', { factor: config.safety_factor })}
                   </h4>
                   <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '8px' }}>
-                    Tühikaal: {formatWeight(config.hook_weight_kg + config.lifting_block_kg)}
+                    {t('crane.deadWeight', { weight: formatWeight(config.hook_weight_kg + config.lifting_block_kg) })}
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '8px' }}>
                     {loadCalculations.slice(0, 8).map(calc => (
@@ -1944,7 +1944,7 @@ export default function CranePlannerScreen({
                     cursor: 'pointer'
                   }}
                 >
-                  Tühista
+                  {t('buttons.cancel')}
                 </button>
                 <button
                   onClick={handleSave}
@@ -1961,7 +1961,7 @@ export default function CranePlannerScreen({
                     cursor: selectedCraneModelId && pickedPosition ? 'pointer' : 'not-allowed'
                   }}
                 >
-                  <FiSave /> {editingCraneId ? 'Salvesta Muudatused' : 'Paiguta Kraana'}
+                  <FiSave /> {editingCraneId ? t('crane.saveChanges') : t('crane.placeCrane')}
                 </button>
               </div>
             </div>
@@ -1974,7 +1974,7 @@ export default function CranePlannerScreen({
             {/* Heading on separate line */}
             <div style={{ marginBottom: '8px' }}>
               <span style={{ fontSize: '11px', fontWeight: 600, color: '#6b7280' }}>
-                Paigutatud kraanid ({projectCranes.length})
+                {t('crane.placedCranes', { count: projectCranes.length })}
               </span>
             </div>
             {/* Button */}
@@ -1995,7 +1995,7 @@ export default function CranePlannerScreen({
                     cursor: craneModels.filter(c => c.is_active).length > 0 ? 'pointer' : 'not-allowed'
                   }}
                 >
-                  <FiPlus size={16} /> Paiguta uus Kraana
+                  <FiPlus size={16} /> {t('crane.placeNewCraneBtn')}
                 </button>
               </div>
             )}
@@ -2013,8 +2013,8 @@ export default function CranePlannerScreen({
                 justifyContent: 'center'
               }}>
                 <FiMapPin size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
-                <p style={{ fontSize: '16px', marginBottom: '8px' }}>Kraanasid pole veel paigutatud</p>
-                <p style={{ fontSize: '14px', marginBottom: '24px' }}>Lisa esimene kraana projekti</p>
+                <p style={{ fontSize: '16px', marginBottom: '8px' }}>{t('crane.noCranesPlaced')}</p>
+                <p style={{ fontSize: '14px', marginBottom: '24px' }}>{t('crane.addFirstCraneToProject')}</p>
                 <button
                   onClick={startPlacing}
                   disabled={craneModels.filter(c => c.is_active).length === 0}
@@ -2032,7 +2032,7 @@ export default function CranePlannerScreen({
                     cursor: craneModels.filter(c => c.is_active).length > 0 ? 'pointer' : 'not-allowed'
                   }}
                 >
-                  <FiPlus size={20} /> Paiguta Kraana
+                  <FiPlus size={20} /> {t('crane.placeCraneBtn')}
                 </button>
               </div>
             ) : (
@@ -2088,7 +2088,7 @@ export default function CranePlannerScreen({
                           overflow: 'hidden',
                           textOverflow: 'ellipsis'
                         }}>
-                          {crane.position_label || 'Nimetu'}
+                          {crane.position_label || t('crane.unnamed')}
                         </div>
                         <div style={{
                           fontSize: '10px',
@@ -2100,7 +2100,7 @@ export default function CranePlannerScreen({
                         }}>
                           {crane.crane_model?.manufacturer} {crane.crane_model?.model}
                           <span style={{ margin: '0 3px' }}>•</span>
-                          Nool {crane.boom_length_m}m
+                          {t('crane.boom')} {crane.boom_length_m}m
                           <span style={{ margin: '0 3px' }}>•</span>
                           ({crane.position_x.toFixed(1)}, {crane.position_y.toFixed(1)}, {crane.position_z.toFixed(1)})
                         </div>
@@ -2120,7 +2120,7 @@ export default function CranePlannerScreen({
                             alignItems: 'center',
                             justifyContent: 'center'
                           }}
-                          title={crane.markup_ids.length > 0 ? 'Peida mudelis' : 'Näita mudelis'}
+                          title={crane.markup_ids.length > 0 ? t('crane.hideInModel') : t('crane.showInModel')}
                         >
                           {crane.markup_ids.length > 0 ? <FiEye size={12} /> : <FiEyeOff size={12} />}
                         </button>
@@ -2136,7 +2136,7 @@ export default function CranePlannerScreen({
                             alignItems: 'center',
                             justifyContent: 'center'
                           }}
-                          title="Muuda"
+                          title={t('buttons.edit')}
                         >
                           <FiEdit2 size={12} />
                         </button>
@@ -2153,7 +2153,7 @@ export default function CranePlannerScreen({
                             alignItems: 'center',
                             justifyContent: 'center'
                           }}
-                          title="Kustuta"
+                          title={t('buttons.delete')}
                         >
                           <FiTrash2 size={12} />
                         </button>
@@ -2171,7 +2171,7 @@ export default function CranePlannerScreen({
                               alignItems: 'center',
                               justifyContent: 'center'
                             }}
-                            title="Rohkem"
+                            title={t('crane.more')}
                           >
                             <FiMoreVertical size={12} />
                           </button>
@@ -2208,7 +2208,7 @@ export default function CranePlannerScreen({
                                 onMouseLeave={e => (e.target as HTMLElement).style.backgroundColor = 'white'}
                               >
                                 <FiTarget size={14} />
-                                Arvuta tõstevõime
+                                {t('crane.calculateCapacity')}
                               </button>
                             </div>
                           )}
@@ -2227,7 +2227,7 @@ export default function CranePlannerScreen({
                         justifyContent: 'space-between',
                         fontSize: '11px'
                       }}>
-                        <span style={{ color: '#dc2626' }}>Kustuta kraana?</span>
+                        <span style={{ color: '#dc2626' }}>{t('crane.deleteCraneConfirm')}</span>
                         <div style={{ display: 'flex', gap: '4px' }}>
                           <button
                             onClick={() => setDeleteConfirmId(null)}
@@ -2240,7 +2240,7 @@ export default function CranePlannerScreen({
                               fontSize: '11px'
                             }}
                           >
-                            Ei
+                            {t('buttons.no')}
                           </button>
                           <button
                             onClick={() => handleDelete(crane.id)}
@@ -2254,7 +2254,7 @@ export default function CranePlannerScreen({
                               fontSize: '11px'
                             }}
                           >
-                            Jah
+                            {t('buttons.yes')}
                           </button>
                         </div>
                       </div>
@@ -2298,9 +2298,9 @@ export default function CranePlannerScreen({
                 alignItems: 'center'
               }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Tõstevõime arvutus</h3>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>{t('crane.liftCapacityCalculation')}</h3>
                   <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#6b7280' }}>
-                    {liftingModal.crane.position_label || 'Kraana'} • {liftingModal.crane.crane_model?.manufacturer} {liftingModal.crane.crane_model?.model}
+                    {liftingModal.crane.position_label || t('equipment.crane')} • {liftingModal.crane.crane_model?.manufacturer} {liftingModal.crane.crane_model?.model}
                   </p>
                 </div>
                 <button
@@ -2361,16 +2361,16 @@ export default function CranePlannerScreen({
                   fontSize: '12px'
                 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                    <div><strong>Ohutustegur:</strong> {liftingModal.crane.safety_factor}x</div>
-                    <div><strong>Konksu kaal:</strong> {formatWeight(liftingModal.crane.hook_weight_kg)}</div>
-                    <div><strong>Tõsteplokk:</strong> {formatWeight(liftingModal.crane.lifting_block_kg)}</div>
-                    <div><strong>Masti kõrgus:</strong> 3.5m</div>
+                    <div><strong>{t('crane.safetyFactorLabel')}</strong> {liftingModal.crane.safety_factor}x</div>
+                    <div><strong>{t('crane.hookWeightLabel')}</strong> {formatWeight(liftingModal.crane.hook_weight_kg)}</div>
+                    <div><strong>{t('crane.liftingBlock')}</strong> {formatWeight(liftingModal.crane.lifting_block_kg)}</div>
+                    <div><strong>{t('crane.mastHeight')}</strong> 3.5m</div>
                   </div>
                 </div>
 
                 {/* Object results */}
                 <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
-                  Valitud objektid ({liftingModal.objects.length})
+                  {t('crane.selectedObjects', { count: liftingModal.objects.length })}
                 </h4>
 
                 {liftingModal.objects.map((obj, idx) => (
@@ -2395,25 +2395,25 @@ export default function CranePlannerScreen({
                           backgroundColor: obj.isSafe ? '#22c55e' : '#ef4444',
                           color: 'white'
                         }}>
-                          {obj.isSafe ? '✓ SOBIB' : '✗ EI SOBI'}
+                          {obj.isSafe ? `✓ ${t('crane.fits')}` : `✗ ${t('crane.doesNotFit')}`}
                         </span>
                       )}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '12px', color: '#374151' }}>
-                      <div>📏 Kaugus: <strong>{obj.distance.toFixed(1)}m</strong></div>
-                      <div>📐 Kõrgus: <strong>{obj.height.toFixed(1)}m</strong></div>
-                      <div>🎯 Noole nurk: <strong>{obj.boomAngle}°</strong></div>
-                      <div>⛓️ Keti pikkus: <strong>{obj.chainLength.toFixed(1)}m</strong></div>
-                      <div>📍 Noole tipp (baasist): <strong>{obj.boomTipHeight.toFixed(1)}m</strong></div>
-                      <div>🗺️ Noole tipp (Z): <strong>{obj.boomTipAbsZ.toFixed(1)}m</strong></div>
-                      <div>⚖️ Kaal: <strong>{obj.weight > 0 ? formatWeight(obj.weight) : 'Teadmata'}</strong></div>
-                      <div>💪 Tõstevõime: <strong style={{ color: obj.capacity > 0 ? '#16a34a' : '#dc2626' }}>
-                        {obj.capacity > 0 ? formatWeight(obj.capacity) : 'Väljas ulatusest'}
+                      <div>📏 {t('crane.distance')} <strong>{obj.distance.toFixed(1)}m</strong></div>
+                      <div>📐 {t('crane.heightLabel')} <strong>{obj.height.toFixed(1)}m</strong></div>
+                      <div>🎯 {t('crane.boomAngle')} <strong>{obj.boomAngle}°</strong></div>
+                      <div>⛓️ {t('crane.chainLength')} <strong>{obj.chainLength.toFixed(1)}m</strong></div>
+                      <div>📍 {t('crane.boomTipFromBase')} <strong>{obj.boomTipHeight.toFixed(1)}m</strong></div>
+                      <div>🗺️ {t('crane.boomTipZ')} <strong>{obj.boomTipAbsZ.toFixed(1)}m</strong></div>
+                      <div>⚖️ {t('crane.weight')} <strong>{obj.weight > 0 ? formatWeight(obj.weight) : t('crane.unknown')}</strong></div>
+                      <div>💪 {t('crane.capacity')} <strong style={{ color: obj.capacity > 0 ? '#16a34a' : '#dc2626' }}>
+                        {obj.capacity > 0 ? formatWeight(obj.capacity) : t('crane.outOfReach')}
                       </strong></div>
                     </div>
                     {obj.capacity > 0 && obj.weight > 0 && (
                       <div style={{ marginTop: '8px', fontSize: '11px', color: '#6b7280' }}>
-                        Varu: {formatWeight(obj.capacity - obj.weight)} ({((obj.capacity - obj.weight) / obj.capacity * 100).toFixed(0)}%)
+                        {t('crane.reserve')} {formatWeight(obj.capacity - obj.weight)} ({((obj.capacity - obj.weight) / obj.capacity * 100).toFixed(0)}%)
                       </div>
                     )}
                   </div>
@@ -2428,12 +2428,12 @@ export default function CranePlannerScreen({
                   fontSize: '11px',
                   color: '#6b7280'
                 }}>
-                  <strong>Visualiseering mudelis:</strong>
+                  <strong>{t('crane.visualizationInModel')}</strong>
                   <div style={{ display: 'flex', gap: '12px', marginTop: '6px', flexWrap: 'wrap' }}>
-                    <span>🔵 Kraana mast</span>
-                    <span>🟠 Nool (boom)</span>
-                    <span>🟢 Kett/tross</span>
-                    <span>🟡 Horisontaalne kaugus</span>
+                    <span>🔵 {t('crane.craneMast')}</span>
+                    <span>🟠 {t('crane.boomLine')}</span>
+                    <span>🟢 {t('crane.chainRope')}</span>
+                    <span>🟡 {t('crane.horizontalDistance')}</span>
                   </div>
                 </div>
               </div>
@@ -2457,7 +2457,7 @@ export default function CranePlannerScreen({
                     fontSize: '13px'
                   }}
                 >
-                  Sulge
+                  {t('buttons.close')}
                 </button>
               </div>
             </div>

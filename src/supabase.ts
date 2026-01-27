@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import i18n from './i18n';
 
 // Supabase config from environment variables
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://your-project.supabase.co';
@@ -1608,7 +1609,6 @@ export interface DeliveryShareLink {
 
 export const ISSUE_STATUS_CONFIG: Record<IssueStatus, {
   label: string;
-  labelEn: string;
   color: string;
   bgColor: string;
   modelColor: { r: number; g: number; b: number; a: number };
@@ -1616,25 +1616,25 @@ export const ISSUE_STATUS_CONFIG: Record<IssueStatus, {
   order: number;
 }> = {
   nonconformance: {
-    label: 'Mittevastavus', labelEn: 'Non-conformance',
+    get label() { return i18n.t('common:supabase.issueStatus.nonconformance'); },
     color: '#DC2626', bgColor: '#FEE2E2',
     modelColor: { r: 255, g: 0, b: 0, a: 255 },
     icon: 'alert-triangle', order: 0
   },
   in_progress: {
-    label: 'TÖÖS', labelEn: 'In Progress',
+    get label() { return i18n.t('common:supabase.issueStatus.inProgress'); },
     color: '#2563EB', bgColor: '#DBEAFE',
     modelColor: { r: 0, g: 100, b: 255, a: 255 },
     icon: 'loader', order: 1
   },
   completed: {
-    label: 'VALMIS', labelEn: 'Completed',
+    get label() { return i18n.t('common:supabase.issueStatus.completed'); },
     color: '#16A34A', bgColor: '#DCFCE7',
     modelColor: { r: 0, g: 255, b: 100, a: 255 },
     icon: 'check-circle', order: 2
   },
   closed: {
-    label: 'LÕPETATUD', labelEn: 'Closed',
+    get label() { return i18n.t('common:supabase.issueStatus.closed'); },
     color: '#4B5563', bgColor: '#F3F4F6',
     modelColor: { r: 100, g: 100, b: 100, a: 255 },
     icon: 'check-square', order: 3
@@ -1646,28 +1646,27 @@ export type IssueFixedCategory = 'production' | 'installation' | 'design' | 'oth
 
 export const ISSUE_FIXED_CATEGORY_CONFIG: Record<IssueFixedCategory, {
   label: string;
-  labelEn: string;
   color: string;
   bgColor: string;
   icon: string;
 }> = {
   production: {
-    label: 'Tootmisviga', labelEn: 'Production Error',
+    get label() { return i18n.t('common:supabase.issueCategory.production'); },
     color: '#7C3AED', bgColor: '#EDE9FE',
     icon: 'package'
   },
   installation: {
-    label: 'Paigaldusviga', labelEn: 'Installation Error',
+    get label() { return i18n.t('common:supabase.issueCategory.installation'); },
     color: '#0891B2', bgColor: '#CFFAFE',
     icon: 'tool'
   },
   design: {
-    label: 'Projekteerimisviga', labelEn: 'Design Error',
+    get label() { return i18n.t('common:supabase.issueCategory.design'); },
     color: '#DB2777', bgColor: '#FCE7F3',
     icon: 'pen-tool'
   },
   other: {
-    label: 'Muu', labelEn: 'Other',
+    get label() { return i18n.t('common:supabase.issueCategory.other'); },
     color: '#6B7280', bgColor: '#F3F4F6',
     icon: 'more-horizontal'
   }
@@ -1679,49 +1678,25 @@ export const ISSUE_PRIORITY_CONFIG: Record<IssuePriority, {
   bgColor: string;
   icon: string;
 }> = {
-  low: { label: 'Madal', color: '#6B7280', bgColor: '#F3F4F6', icon: 'arrow-down' },
-  medium: { label: 'Keskmine', color: '#CA8A04', bgColor: '#FEF9C3', icon: 'minus' },
-  high: { label: 'Kõrge', color: '#EA580C', bgColor: '#FFEDD5', icon: 'arrow-up' },
-  critical: { label: 'Kriitiline', color: '#DC2626', bgColor: '#FEE2E2', icon: 'alert-octagon' }
+  low: { get label() { return i18n.t('common:supabase.issuePriority.low'); }, color: '#6B7280', bgColor: '#F3F4F6', icon: 'arrow-down' },
+  medium: { get label() { return i18n.t('common:supabase.issuePriority.medium'); }, color: '#CA8A04', bgColor: '#FEF9C3', icon: 'minus' },
+  high: { get label() { return i18n.t('common:supabase.issuePriority.high'); }, color: '#EA580C', bgColor: '#FFEDD5', icon: 'arrow-up' },
+  critical: { get label() { return i18n.t('common:supabase.issuePriority.critical'); }, color: '#DC2626', bgColor: '#FEE2E2', icon: 'alert-octagon' }
 };
 
 export const ISSUE_SOURCE_CONFIG: Record<IssueSource, { label: string }> = {
-  inspection: { label: 'Inspektsioon' },
-  delivery: { label: 'Tarnimine' },
-  installation: { label: 'Paigaldamine' },
-  production: { label: 'Tootmine' },
-  design: { label: 'Projekteerimine' },
-  other: { label: 'Muu' }
+  inspection: { get label() { return i18n.t('common:supabase.issueSource.inspection'); } },
+  delivery: { get label() { return i18n.t('common:supabase.issueSource.delivery'); } },
+  installation: { get label() { return i18n.t('common:supabase.issueSource.installation'); } },
+  production: { get label() { return i18n.t('common:supabase.issueSource.production'); } },
+  design: { get label() { return i18n.t('common:supabase.issueSource.design'); } },
+  other: { get label() { return i18n.t('common:supabase.issueSource.other'); } }
 };
 
-// Activity action labels (Estonian)
-export const ACTIVITY_ACTION_LABELS: Record<ActivityAction, string> = {
-  issue_created: 'Probleem loodud',
-  issue_updated: 'Probleem uuendatud',
-  issue_deleted: 'Probleem kustutatud',
-  status_changed: 'Staatus muudetud',
-  priority_changed: 'Prioriteet muudetud',
-  category_changed: 'Kategooria muudetud',
-  user_assigned: 'Kasutaja määratud',
-  user_unassigned: 'Kasutaja eemaldatud',
-  assignment_accepted: 'Määramine aktsepteeritud',
-  assignment_rejected: 'Määramine tagasi lükatud',
-  resource_added: 'Ressurss lisatud',
-  resource_removed: 'Ressurss eemaldatud',
-  resource_updated: 'Ressurss uuendatud',
-  attachment_added: 'Fail lisatud',
-  attachment_removed: 'Fail eemaldatud',
-  comment_added: 'Kommentaar lisatud',
-  comment_edited: 'Kommentaar muudetud',
-  comment_deleted: 'Kommentaar kustutatud',
-  zoomed_to_model: 'Zoomitud mudelis',
-  isolated_in_model: 'Isoleeritud mudelis',
-  colored_in_model: 'Värvitud mudelis',
-  resolution_set: 'Lahendus määratud',
-  issue_closed: 'Probleem suletud',
-  issue_reopened: 'Probleem taasavatud',
-  issue_cancelled: 'Probleem tühistatud'
-};
+// Activity action labels (i18n)
+export const ACTIVITY_ACTION_LABELS: Record<ActivityAction, string> = new Proxy({} as Record<ActivityAction, string>, {
+  get(_, key: string) { return i18n.t(`common:supabase.activityAction.${key}`); }
+});
 
 // ============================================
 // GOOGLE SHEETS SYNC TYPES
@@ -1971,29 +1946,19 @@ export const DEFAULT_RADIUS_COLOR: CraneRGBAColor = { r: 255, g: 0, b: 0, a: 128
 export const DEFAULT_LABEL_COLOR: CraneRGBAColor = { r: 50, g: 50, b: 50, a: 255 };   // Dark gray for labels
 
 // Crane document type labels
-export const CRANE_DOCUMENT_TYPE_LABELS: Record<CraneDocumentType, string> = {
-  manual: 'Kasutusjuhend',
-  load_chart: 'Tõstegraafikud',
-  certificate: 'Sertifikaat',
-  specification: 'Tehnilised andmed'
-};
+export const CRANE_DOCUMENT_TYPE_LABELS: Record<CraneDocumentType, string> = new Proxy({} as Record<CraneDocumentType, string>, {
+  get(_, key: string) { return i18n.t(`common:supabase.craneDocumentType.${key}`); }
+});
 
 // Crane type labels
-export const CRANE_TYPE_LABELS: Record<CraneType, string> = {
-  mobile: 'Mobiilkraana',
-  crawler: 'Roomikkraana',
-  loader: 'Manipulaator',
-  tower: 'Tornkraana',
-  telehandler: 'Pöörlev teleskooplaadur'
-};
+export const CRANE_TYPE_LABELS: Record<CraneType, string> = new Proxy({} as Record<CraneType, string>, {
+  get(_, key: string) { return i18n.t(`common:supabase.craneType.${key}`); }
+});
 
 // Cab position labels
-export const CAB_POSITION_LABELS: Record<CabPosition, string> = {
-  front: 'Ees',
-  rear: 'Taga',
-  left: 'Vasakul',
-  right: 'Paremal'
-};
+export const CAB_POSITION_LABELS: Record<CabPosition, string> = new Proxy({} as Record<CabPosition, string>, {
+  get(_, key: string) { return i18n.t(`common:supabase.cabPosition.${key}`); }
+});
 
 // ============================================================
 // KONTROLLKAVADE SÜSTEEM v3.0 - TypeScript Tüübid
@@ -2441,18 +2406,18 @@ export interface InspectionRGBAColor {
 // Hardcoded inspection status colors (not configurable)
 export const INSPECTION_STATUS_COLORS = {
   // Kontrollikavasse määratud - Sinine #0C77BE
-  planned: { r: 12, g: 119, b: 190, a: 255, hex: '#0C77BE', label: 'Kontrollikavasse määratud' },
+  planned: { r: 12, g: 119, b: 190, a: 255, hex: '#0C77BE', get label() { return i18n.t('common:supabase.inspectionStatus.planned'); } },
   // Pooleli - Oranž #E5850A
-  inProgress: { r: 229, g: 133, b: 10, a: 255, hex: '#E5850A', label: 'Pooleli' },
+  inProgress: { r: 229, g: 133, b: 10, a: 255, hex: '#E5850A', get label() { return i18n.t('common:supabase.inspectionStatus.inProgress'); } },
   // Valmis - Roheline #34A853
-  completed: { r: 52, g: 168, b: 83, a: 255, hex: '#34A853', label: 'Valmis' },
+  completed: { r: 52, g: 168, b: 83, a: 255, hex: '#34A853', get label() { return i18n.t('common:supabase.inspectionStatus.completed'); } },
   // Tagasi lükatud - Punane #DC3545
-  rejected: { r: 220, g: 53, b: 69, a: 255, hex: '#DC3545', label: 'Tagasi lükatud' },
+  rejected: { r: 220, g: 53, b: 69, a: 255, hex: '#DC3545', get label() { return i18n.t('common:supabase.inspectionStatus.rejected'); } },
   // Lõpetatud ja heaks kiidetud - Must #18181B
-  approved: { r: 24, g: 24, b: 27, a: 255, hex: '#18181B', label: 'Lõpetatud ja heaks kiidetud' },
+  approved: { r: 24, g: 24, b: 27, a: 255, hex: '#18181B', get label() { return i18n.t('common:supabase.inspectionStatus.approved'); } },
   // Ülejäänud mudel - Valge
-  background: { r: 255, g: 255, b: 255, a: 255, hex: '#FFFFFF', label: 'Muu' },
-} as const;
+  background: { r: 255, g: 255, b: 255, a: 255, hex: '#FFFFFF', get label() { return i18n.t('common:supabase.inspectionStatus.background'); } },
+};
 
 // Legacy colors for backward compatibility
 export const INSPECTION_COLORS: Record<string, InspectionRGBAColor> = {

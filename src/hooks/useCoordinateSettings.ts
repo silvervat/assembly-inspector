@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   supabase,
   ProjectCoordinateSettings,
@@ -31,6 +32,7 @@ export interface UseCoordinateSettingsResult {
  * Hook for managing project coordinate settings
  */
 export function useCoordinateSettings(projectId: string | null): UseCoordinateSettingsResult {
+  const { t } = useTranslation('errors');
   const [settings, setSettings] = useState<ProjectCoordinateSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +84,7 @@ export function useCoordinateSettings(projectId: string | null): UseCoordinateSe
       }
     } catch (err) {
       console.error('Error loading coordinate settings:', err);
-      setError(err instanceof Error ? err.message : 'Viga seadete laadimisel');
+      setError(err instanceof Error ? err.message : t('coordinates.loadSettingsError'));
     } finally {
       setLoading(false);
     }
@@ -93,7 +95,7 @@ export function useCoordinateSettings(projectId: string | null): UseCoordinateSe
     updates: Partial<ProjectCoordinateSettings>
   ): Promise<boolean> => {
     if (!projectId || !settings) {
-      setError('Projekti ID puudub');
+      setError(t('general.projectIdMissing'));
       return false;
     }
 
@@ -113,7 +115,7 @@ export function useCoordinateSettings(projectId: string | null): UseCoordinateSe
       return true;
     } catch (err) {
       console.error('Error updating coordinate settings:', err);
-      setError(err instanceof Error ? err.message : 'Viga seadete uuendamisel');
+      setError(err instanceof Error ? err.message : t('coordinates.updateSettingsError'));
       return false;
     }
   }, [projectId, settings, loadSettings]);
@@ -130,7 +132,7 @@ export function useCoordinateSettings(projectId: string | null): UseCoordinateSe
     userName?: string
   ): Promise<boolean> => {
     if (!projectId || !settings) {
-      setError('Projekti ID puudub');
+      setError(t('general.projectIdMissing'));
       return false;
     }
 
@@ -158,7 +160,7 @@ export function useCoordinateSettings(projectId: string | null): UseCoordinateSe
       return true;
     } catch (err) {
       console.error('Error saving calibration:', err);
-      setError(err instanceof Error ? err.message : 'Viga kalibreerimise salvestamisel');
+      setError(err instanceof Error ? err.message : t('coordinates.saveCalibrationError'));
       return false;
     }
   }, [projectId, settings, loadSettings]);
@@ -166,7 +168,7 @@ export function useCoordinateSettings(projectId: string | null): UseCoordinateSe
   // Reset calibration
   const resetCalibration = useCallback(async (): Promise<boolean> => {
     if (!projectId || !settings) {
-      setError('Projekti ID puudub');
+      setError(t('general.projectIdMissing'));
       return false;
     }
 
@@ -194,7 +196,7 @@ export function useCoordinateSettings(projectId: string | null): UseCoordinateSe
       return true;
     } catch (err) {
       console.error('Error resetting calibration:', err);
-      setError(err instanceof Error ? err.message : 'Viga kalibreerimise lähtestamisel');
+      setError(err instanceof Error ? err.message : t('coordinates.resetCalibrationError'));
       return false;
     }
   }, [projectId, settings, loadSettings]);

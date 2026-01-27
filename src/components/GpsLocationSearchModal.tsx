@@ -36,13 +36,13 @@ interface DetailWithGps extends DeliveryItem {
   gps_positioned_by?: string;
 }
 
-// Signal quality indicator colors
-const SIGNAL_COLORS: Record<GpsSignalQuality, { bg: string; text: string; label: string }> = {
-  excellent: { bg: '#dcfce7', text: '#166534', label: 'Suurepärane' },
-  good: { bg: '#d1fae5', text: '#065f46', label: 'Hea' },
-  fair: { bg: '#fef3c7', text: '#92400e', label: 'Nõrk' },
-  poor: { bg: '#fee2e2', text: '#991b1b', label: 'Halb' },
-  none: { bg: '#f3f4f6', text: '#6b7280', label: 'Puudub' }
+// Signal quality indicator colors (labels are resolved via i18n in component)
+const SIGNAL_COLORS: Record<GpsSignalQuality, { bg: string; text: string }> = {
+  excellent: { bg: '#dcfce7', text: '#166534' },
+  good: { bg: '#d1fae5', text: '#065f46' },
+  fair: { bg: '#fef3c7', text: '#92400e' },
+  poor: { bg: '#fee2e2', text: '#991b1b' },
+  none: { bg: '#f3f4f6', text: '#6b7280' }
 };
 
 export default function GpsLocationSearchModal({
@@ -53,8 +53,7 @@ export default function GpsLocationSearchModal({
   onClose,
   isPopupMode = false
 }: GpsLocationSearchModalProps) {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { t: _t } = useTranslation('tools');
+  const { t } = useTranslation(['tools', 'common']);
 
   // If not in popup mode, show option to open in new window (due to iframe GPS restrictions)
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -122,7 +121,7 @@ export default function GpsLocationSearchModal({
       setItems(itemsWithGps);
     } catch (e) {
       console.error('Error loading items:', e);
-      setMessage('Viga andmete laadimisel');
+      setMessage(t('gpsSearch.loadError'));
     } finally {
       setLoading(false);
     }
@@ -153,7 +152,7 @@ export default function GpsLocationSearchModal({
   // Save GPS position for an item
   const savePosition = useCallback(async (item: DetailWithGps) => {
     if (!position) {
-      setMessage('GPS positsioon pole saadaval');
+      setMessage(t('gpsSearch.noGpsPosition'));
       return;
     }
 
@@ -193,10 +192,10 @@ export default function GpsLocationSearchModal({
           : i
       ));
 
-      setMessage(`✅ ${item.assembly_mark} positsioon salvestatud (±${position.accuracy.toFixed(0)}m)`);
+      setMessage(`✅ ${t('gpsSearch.positionSaved', { mark: item.assembly_mark, accuracy: position.accuracy.toFixed(0) })}`);
     } catch (e: any) {
       console.error('Error saving position:', e);
-      setMessage(`Viga salvestamisel: ${e.message}`);
+      setMessage(t('gpsSearch.saveError') + ': ' + e.message);
     } finally {
       setSaving(null);
     }
@@ -205,7 +204,7 @@ export default function GpsLocationSearchModal({
   // Create text markup on model for selected items
   const createMarkups = useCallback(async () => {
     if (selectedItems.size === 0) {
-      setMessage('Vali elemendid, millele markerid lisada');
+      setMessage(t('gpsSearch.selectItemsForMarkers'));
       return;
     }
 
@@ -214,11 +213,11 @@ export default function GpsLocationSearchModal({
     );
 
     if (itemsToMark.length === 0) {
-      setMessage('Valitud elementidel pole GPS positsioone');
+      setMessage(t('gpsSearch.noGpsPositions'));
       return;
     }
 
-    setMessage(`Lisan ${itemsToMark.length} markerit mudelile...`);
+    setMessage(t('gpsSearch.addingMarkers', { count: itemsToMark.length }));
 
     try {
       const markups: any[] = [];
@@ -257,11 +256,11 @@ export default function GpsLocationSearchModal({
         await (api.markup as any)?.addTextMarkup?.(markups);
       }
 
-      setMessage(`✅ ${markups.length} markerit lisatud mudelile`);
+      setMessage(`✅ ${t('gpsSearch.markersAdded', { count: markups.length })}`);
       setSelectedItems(new Set());
     } catch (e: any) {
       console.error('Error creating markups:', e);
-      setMessage(`Viga markerite lisamisel: ${e.message}`);
+      setMessage(t('gpsSearch.markerError') + ': ' + e.message);
     }
   }, [api, items, selectedItems]);
 
@@ -312,7 +311,7 @@ export default function GpsLocationSearchModal({
           <div className="modal-header" style={{ borderBottom: '1px solid #e5e7eb' }}>
             <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <FiMapPin style={{ color: '#16a34a' }} />
-              GPS Location Search
+              {t('gpsSearch.title')}
             </h2>
             <button className="close-btn" onClick={onClose}>
               <FiX />
@@ -331,10 +330,10 @@ export default function GpsLocationSearchModal({
             }}>
               <FiExternalLink size={40} style={{ color: '#2563eb', marginBottom: 12 }} />
               <div style={{ fontSize: 15, fontWeight: 600, color: '#1e40af', marginBottom: 8 }}>
-                GPS vajab eraldi akent
+                {t('gpsSearch.needsSeparateWindow')}
               </div>
               <p style={{ fontSize: 13, color: '#3b82f6', margin: 0 }}>
-                Trimble Connect piirab GPS kasutamist. Asukoha tuvastamiseks avaneb tööriist eraldi brauseri aknas.
+                {t('gpsSearch.iframeRestriction')}
               </p>
             </div>
 
@@ -352,7 +351,7 @@ export default function GpsLocationSearchModal({
             }}>
               <FiAlertCircle style={{ flexShrink: 0, marginTop: 2 }} />
               <div>
-                Brauserid blokeerivad GPS-i iframes turvalisuse kaalutlustel. Eraldi aken võimaldab GPS-i kasutada.
+                {t('gpsSearch.browserBlocksGps')}
               </div>
             </div>
 
@@ -376,7 +375,7 @@ export default function GpsLocationSearchModal({
               }}
             >
               <FiExternalLink />
-              Ava GPS Location Search
+              {t('gpsSearch.openGpsSearch')}
             </button>
           </div>
 
@@ -400,7 +399,7 @@ export default function GpsLocationSearchModal({
                 fontSize: 13
               }}
             >
-              Tühista
+              {t('common:buttons.cancel')}
             </button>
           </div>
         </div>
@@ -437,7 +436,7 @@ export default function GpsLocationSearchModal({
         <div className="modal-header" style={{ borderBottom: '1px solid #e5e7eb' }}>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <FiMapPin style={{ color: '#16a34a' }} />
-            GPS Location Search
+            {t('gpsSearch.title')}
           </h2>
           <button className="close-btn" onClick={onClose}>
             <FiX />
@@ -457,7 +456,7 @@ export default function GpsLocationSearchModal({
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <FiNavigation style={{ color: signalInfo.text }} />
             <span style={{ fontWeight: 500, color: signalInfo.text }}>
-              {signalInfo.label}
+              {t(`gpsSearch.signal.${signalQuality}`)}
             </span>
           </div>
 
@@ -472,13 +471,13 @@ export default function GpsLocationSearchModal({
               </div>
               {lastUpdateAge > 0 && (
                 <div style={{ fontSize: 12, color: signalInfo.text, opacity: 0.6 }}>
-                  {lastUpdateAge}s tagasi
+                  {t('gpsSearch.secondsAgo', { seconds: lastUpdateAge })}
                 </div>
               )}
             </>
           ) : (
             <div style={{ fontSize: 13, color: signalInfo.text }}>
-              {gpsError || 'Ootan GPS signaali...'}
+              {gpsError || t('gpsSearch.waitingForSignal')}
             </div>
           )}
 
@@ -496,7 +495,7 @@ export default function GpsLocationSearchModal({
                 cursor: 'pointer'
               }}
             >
-              Luba GPS
+              {t('gpsSearch.allowGps')}
             </button>
           )}
         </div>
@@ -524,7 +523,7 @@ export default function GpsLocationSearchModal({
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Otsi cast unit marki järgi..."
+                placeholder={t('gpsSearch.searchPlaceholder')}
                 style={{
                   width: '100%',
                   padding: '10px 12px 10px 40px',
@@ -565,7 +564,7 @@ export default function GpsLocationSearchModal({
               borderBottom: '1px solid #bfdbfe'
             }}>
               <span style={{ fontSize: 13, color: '#1e40af' }}>
-                {selectedItems.size} valitud
+                {t('gpsSearch.selected', { count: selectedItems.size })}
               </span>
               <button
                 onClick={createMarkups}
@@ -582,7 +581,7 @@ export default function GpsLocationSearchModal({
                   gap: 6
                 }}
               >
-                <FiTarget /> Lisa markerid mudelile
+                <FiTarget /> {t('gpsSearch.addMarkers')}
               </button>
               <button
                 onClick={clearSelection}
@@ -596,7 +595,7 @@ export default function GpsLocationSearchModal({
                   cursor: 'pointer'
                 }}
               >
-                Tühista valik
+                {t('gpsSearch.clearSelection')}
               </button>
             </div>
           )}
@@ -619,12 +618,12 @@ export default function GpsLocationSearchModal({
             {loading ? (
               <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
                 <FiRefreshCw className="spinning" style={{ fontSize: 24, marginBottom: 8 }} />
-                <p>Laadin andmeid...</p>
+                <p>{t('gpsSearch.loading')}</p>
               </div>
             ) : filteredItems.length === 0 ? (
               <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>
                 <FiMapPin style={{ fontSize: 32, marginBottom: 8, opacity: 0.5 }} />
-                <p>{searchQuery ? 'Ühtegi elementi ei leitud' : 'Paigaldamata elemente pole'}</p>
+                <p>{searchQuery ? t('gpsSearch.noResults') : t('gpsSearch.noItems')}</p>
               </div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
@@ -637,10 +636,10 @@ export default function GpsLocationSearchModal({
                         onChange={e => e.target.checked ? selectAll() : clearSelection()}
                       />
                     </th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left' }}>Cast Unit Mark</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left' }}>Product Name</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left' }}>{t('common:qrActivation.castUnitMark')}</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left' }}>{t('common:excel.productName')}</th>
                     <th style={{ padding: '10px 12px', textAlign: 'center', width: 100 }}>GPS</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'center', width: 120 }}>Tegevus</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', width: 120 }}>{t('gpsSearch.action')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -688,7 +687,7 @@ export default function GpsLocationSearchModal({
                               rel="noopener noreferrer"
                               style={{ fontSize: 10, color: '#2563eb' }}
                             >
-                              <FiMap size={10} /> Kaart
+                              <FiMap size={10} /> {t('gpsSearch.map')}
                             </a>
                           </div>
                         ) : (
@@ -719,7 +718,7 @@ export default function GpsLocationSearchModal({
                           ) : (
                             <FiCrosshair size={12} />
                           )}
-                          {item.gps_latitude ? 'Uuenda' : 'Fikseeri'}
+                          {item.gps_latitude ? t('gpsSearch.updatePosition') : t('gpsSearch.fixPosition')}
                         </button>
                       </td>
                     </tr>
@@ -738,10 +737,10 @@ export default function GpsLocationSearchModal({
           alignItems: 'center'
         }}>
           <div style={{ fontSize: 12, color: '#6b7280' }}>
-            {filteredItems.length} elementi • {filteredItems.filter(i => i.gps_latitude).length} GPS positsiooniga
+            {t('gpsSearch.stats', { total: filteredItems.length, withGps: filteredItems.filter(i => i.gps_latitude).length })}
           </div>
           <button className="cancel-btn" onClick={isPopupMode ? () => window.close() : onClose}>
-            Sulge
+            {t('gpsSearch.close')}
           </button>
         </div>
     </>

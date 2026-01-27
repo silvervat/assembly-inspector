@@ -50,7 +50,7 @@ export const InspectionAdminPanel: React.FC<InspectionAdminPanelProps> = ({
   user,
   onClose
 }) => {
-  const { t } = useTranslation('inspection');
+  const { t } = useTranslation(['inspection', 'common']);
 
   // Helper functions for translated status labels
   const getStatusLabel = useCallback((status: string) => t(`status.${status}`, { defaultValue: status }), [t]);
@@ -281,7 +281,7 @@ void setFilterCategory;
               fontSize: '13px'
             }}
           >
-            Värskenda
+            {t('common:buttons.refresh')}
           </button>
           <button
             onClick={onClose}
@@ -349,7 +349,7 @@ void setFilterCategory;
       >
         <input
           type="text"
-          placeholder="Otsi assembly marki..."
+          placeholder={t('admin.searchAssemblyMark')}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{
@@ -442,10 +442,10 @@ void setFilterCategory;
                   />
                 </th>
                 <th style={{ padding: '8px', borderBottom: '1px solid #E5E7EB', textAlign: 'left' }}>Assembly</th>
-                <th style={{ padding: '8px', borderBottom: '1px solid #E5E7EB', textAlign: 'left' }}>Staatus</th>
-                <th style={{ padding: '8px', borderBottom: '1px solid #E5E7EB', textAlign: 'left' }}>Ülevaatus</th>
-                <th style={{ padding: '8px', borderBottom: '1px solid #E5E7EB', textAlign: 'left' }}>Loodud</th>
-                <th style={{ padding: '8px', borderBottom: '1px solid #E5E7EB', textAlign: 'center' }}>Tegevused</th>
+                <th style={{ padding: '8px', borderBottom: '1px solid #E5E7EB', textAlign: 'left' }}>{t('admin.status')}</th>
+                <th style={{ padding: '8px', borderBottom: '1px solid #E5E7EB', textAlign: 'left' }}>{t('admin.review')}</th>
+                <th style={{ padding: '8px', borderBottom: '1px solid #E5E7EB', textAlign: 'left' }}>{t('admin.created')}</th>
+                <th style={{ padding: '8px', borderBottom: '1px solid #E5E7EB', textAlign: 'center' }}>{t('admin.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -509,7 +509,7 @@ void setFilterCategory;
                         cursor: 'pointer',
                         fontSize: '11px'
                       }}
-                      title="Ajalugu"
+                      title={t('admin.history')}
                     >
                       📋
                     </button>

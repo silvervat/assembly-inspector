@@ -132,14 +132,14 @@ function getMonthKey(dateStr: string): string {
 function getMonthLabel(dateStr: string): string {
   const date = new Date(dateStr);
   // Month labels are generated at call site using t() - this is a fallback
-  const months = ['Jaan', 'Veebr', 'Märts', 'Apr', 'Mai', 'Juuni', 'Juuli', 'Aug', 'Sept', 'Okt', 'Nov', 'Dets'];
-  return `${months[date.getMonth()]} ${date.getFullYear()}`;
+  const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${monthsShort[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 function getFullMonthLabel(dateStr: string): string {
   const date = new Date(dateStr);
-  const months = ['Jaanuar', 'Veebruar', 'Märts', 'Aprill', 'Mai', 'Juuni', 'Juuli', 'August', 'September', 'Oktoober', 'November', 'Detsember'];
-  return `${months[date.getMonth()]} ${date.getFullYear()}`;
+  const monthsFull = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  return `${monthsFull[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 function getDayKey(dateStr: string): string {
@@ -2373,7 +2373,7 @@ export default function InstallationsScreen({
       // Step 1: Check if we have cached foundObjects, if not fetch from DB and find
       let foundByLowercase = foundObjectsCacheRef.current;
       if (foundByLowercase.size === 0) {
-        setColoringProgress('Laadin andmebaasist...');
+        setColoringProgress(t('installation:ui.coloringLoadingDb'));
         console.log('[INSTALL] Cache empty, fetching GUIDs from database...');
         const PAGE_SIZE = 5000;
         const allGuids: string[] = [];
@@ -2382,7 +2382,7 @@ export default function InstallationsScreen({
 
         while (true) {
           pageCount++;
-          setColoringProgress(`Laadin andmebaasist... ${offset > 0 ? `(${offset} objekti)` : ''}`);
+          setColoringProgress(offset > 0 ? t('installation:ui.coloringLoadingDbProgress', { count: offset }) : t('installation:ui.coloringLoadingDb'));
 
           const { data, error } = await supabase
             .from('trimble_model_objects')
@@ -2406,7 +2406,7 @@ export default function InstallationsScreen({
         }
 
         console.log(`[INSTALL] Total GUIDs fetched: ${allGuids.length}`);
-        setColoringProgress(`Otsin mudelis ${allGuids.length} objekti...`);
+        setColoringProgress(t('installation:ui.coloringSearchingModel', { count: allGuids.length }));
 
         const foundObjects = await findObjectsInLoadedModels(api, allGuids);
         console.log(`[INSTALL] Found ${foundObjects.size} objects in models`);
@@ -2419,7 +2419,7 @@ export default function InstallationsScreen({
         foundObjectsCacheRef.current = foundByLowercase;
       } else {
         console.log(`[INSTALL] Using cached foundObjects: ${foundByLowercase.size}`);
-        setColoringProgress(`Värvin ${foundByLowercase.size} objekti...`);
+        setColoringProgress(t('installation:ui.coloringObjects', { count: foundByLowercase.size }));
       }
 
       // Step 2: Calculate new color state
@@ -2435,7 +2435,7 @@ export default function InstallationsScreen({
       }
 
       // Step 3: Compare with last color state and determine changes
-      setColoringProgress('Arvutan muudatused...');
+      setColoringProgress(t('installation:ui.coloringCalculating'));
       const lastState = lastColorStateRef.current;
       const toWhite: { modelId: string; runtimeId: number }[] = [];
       const toInstalled: { modelId: string; runtimeId: number }[] = [];
@@ -2445,7 +2445,7 @@ export default function InstallationsScreen({
 
       if (needsFullReset) {
         console.log('[INSTALL] No previous state, doing full coloring...');
-        setColoringProgress('Lähtestasin värvid...');
+        setColoringProgress(t('installation:ui.coloringResettingColors'));
         await api.viewer.setObjectState(undefined, { color: "reset" });
 
         for (const [guidLower, found] of foundByLowercase) {
@@ -2500,7 +2500,7 @@ export default function InstallationsScreen({
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
           coloredCount += batch.length;
           const percent = totalChanges > 0 ? Math.round((coloredCount / totalChanges) * 100) : 0;
-          setColoringProgress(`Värvin... ${percent}%`);
+          setColoringProgress(t('installation:ui.coloringProgress', { percent }));
           await api.viewer.setObjectState(
             { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
             { color: { r: 255, g: 255, b: 255, a: 255 } }
@@ -2515,7 +2515,7 @@ export default function InstallationsScreen({
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
           coloredCount += batch.length;
           const percent = totalChanges > 0 ? Math.round((coloredCount / totalChanges) * 100) : 0;
-          setColoringProgress(`Värvin... ${percent}%`);
+          setColoringProgress(t('installation:ui.coloringProgress', { percent }));
           await api.viewer.setObjectState(
             { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
             { color: INSTALLED_COLOR }
@@ -2542,7 +2542,7 @@ export default function InstallationsScreen({
   // Apply coloring for PREASSEMBLY mode: installed items = INSTALLED_COLOR, preassembly items = PREASSEMBLY_COLOR
   const applyPreassemblyColoring = async () => {
     setColoringInProgress(true);
-    setColoringProgress('Mudeli kontroll...');
+    setColoringProgress(t('installation:ui.coloringModelCheck'));
     try {
       // Get all loaded models
       const models = await api.viewer.getModels();
@@ -2557,14 +2557,14 @@ export default function InstallationsScreen({
       // Step 1: Check if we have cached foundObjects, if not fetch from DB and find
       let foundByLowercase = foundObjectsCacheRef.current;
       if (foundByLowercase.size === 0) {
-        setColoringProgress('Laadin andmebaasist...');
+        setColoringProgress(t('installation:ui.coloringLoadingDb'));
         console.log('[PREASSEMBLY] Cache empty, fetching GUIDs from database...');
         const PAGE_SIZE = 5000;
         const allGuids: string[] = [];
         let offset = 0;
 
         while (true) {
-          setColoringProgress(`Laadin andmebaasist... ${offset > 0 ? `(${offset} objekti)` : ''}`);
+          setColoringProgress(offset > 0 ? t('installation:ui.coloringLoadingDbProgress', { count: offset }) : t('installation:ui.coloringLoadingDb'));
 
           const { data, error } = await supabase
             .from('trimble_model_objects')
@@ -2590,7 +2590,7 @@ export default function InstallationsScreen({
         }
 
         console.log(`[PREASSEMBLY] Total GUIDs fetched: ${allGuids.length}`);
-        setColoringProgress(`Otsin mudelis ${allGuids.length} objekti...`);
+        setColoringProgress(t('installation:ui.coloringSearchingModel', { count: allGuids.length }));
 
         const foundObjects = await findObjectsInLoadedModels(api, allGuids);
         console.log(`[PREASSEMBLY] Found ${foundObjects.size} objects in models`);
@@ -2603,7 +2603,7 @@ export default function InstallationsScreen({
         foundObjectsCacheRef.current = foundByLowercase;
       } else {
         console.log(`[PREASSEMBLY] Using cached foundObjects: ${foundByLowercase.size}`);
-        setColoringProgress(`Värvin ${foundByLowercase.size} objekti...`);
+        setColoringProgress(t('installation:ui.coloringObjects', { count: foundByLowercase.size }));
       }
 
       // Step 2: Get installed and preassembly GUIDs (already lowercase)
@@ -3162,7 +3162,7 @@ export default function InstallationsScreen({
       // Format installation date for the comment
       const dateObj = new Date(installDate);
       const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}.${(dateObj.getMonth() + 1).toString().padStart(2, '0')}.${dateObj.getFullYear()}`;
-      const confirmComment = `Märgitud kinnitatuks läbi paigaldus andmete. Paigalduse kuupäev ${formattedDate}`;
+      const confirmComment = t('installation:ui.autoConfirmComment', { date: formattedDate });
 
       // 1. Find delivery items by GUID
       const { data: deliveryItems, error: deliveryError } = await supabase
@@ -3426,13 +3426,13 @@ export default function InstallationsScreen({
         notes: notes || null,
         photo_urls: photoUrls.length > 0 ? photoUrls : null,
         team_members: [
-          ...monteerijad.map(m => `Monteerija: ${m}`),
-          ...troppijad.map(t => `Troppija: ${t}`),
-          ...keevitajad.map(k => `Keevitaja: ${k}`),
-          ...craneOperators.map(c => `Kraana: ${c}`),
-          ...forkliftOperators.map(f => `Teleskooplaadur: ${f}`),
-          ...poomtostukOperators.map(p => `Korvtõstuk: ${p}`),
-          ...kaartostukOperators.map(k => `Käärtõstuk: ${k}`)
+          ...monteerijad.map(m => `${t('installation:resources.monteerija')}: ${m}`),
+          ...troppijad.map(tr => `${t('installation:resources.troppija')}: ${tr}`),
+          ...keevitajad.map(k => `${t('installation:resources.keevitaja')}: ${k}`),
+          ...craneOperators.map(c => `${t('installation:resources.crane')}: ${c}`),
+          ...forkliftOperators.map(f => `${t('installation:resources.forklift')}: ${f}`),
+          ...poomtostukOperators.map(p => `${t('installation:resources.poomtostuk')}: ${p}`),
+          ...kaartostukOperators.map(k => `${t('installation:resources.kaartostuk')}: ${k}`)
         ].join(', ') || null
       }));
 
@@ -3688,13 +3688,13 @@ export default function InstallationsScreen({
         notes: notes || null,
         photo_urls: photoUrls.length > 0 ? photoUrls : null,
         team_members: [
-          ...monteerijad.map(m => `Monteerija: ${m}`),
-          ...troppijad.map(t => `Troppija: ${t}`),
-          ...keevitajad.map(k => `Keevitaja: ${k}`),
-          ...craneOperators.map(c => `Kraana: ${c}`),
-          ...forkliftOperators.map(f => `Teleskooplaadur: ${f}`),
-          ...poomtostukOperators.map(p => `Korvtõstuk: ${p}`),
-          ...kaartostukOperators.map(k => `Käärtõstuk: ${k}`)
+          ...monteerijad.map(m => `${t('installation:resources.monteerija')}: ${m}`),
+          ...troppijad.map(tr => `${t('installation:resources.troppija')}: ${tr}`),
+          ...keevitajad.map(k => `${t('installation:resources.keevitaja')}: ${k}`),
+          ...craneOperators.map(c => `${t('installation:resources.crane')}: ${c}`),
+          ...forkliftOperators.map(f => `${t('installation:resources.forklift')}: ${f}`),
+          ...poomtostukOperators.map(p => `${t('installation:resources.poomtostuk')}: ${p}`),
+          ...kaartostukOperators.map(k => `${t('installation:resources.kaartostuk')}: ${k}`)
         ].join(', ') || null
       }));
 
@@ -3803,13 +3803,13 @@ export default function InstallationsScreen({
         preassembled_at: installDate,
         notes: notes || null,
         team_members: [
-          ...monteerijad.map(m => `Monteerija: ${m}`),
-          ...troppijad.map(t => `Troppija: ${t}`),
-          ...keevitajad.map(k => `Keevitaja: ${k}`),
-          ...craneOperators.map(c => `Kraana: ${c}`),
-          ...forkliftOperators.map(f => `Teleskooplaadur: ${f}`),
-          ...poomtostukOperators.map(p => `Korvtõstuk: ${p}`),
-          ...kaartostukOperators.map(k => `Käärtõstuk: ${k}`)
+          ...monteerijad.map(m => `${t('installation:resources.monteerija')}: ${m}`),
+          ...troppijad.map(tr => `${t('installation:resources.troppija')}: ${tr}`),
+          ...keevitajad.map(k => `${t('installation:resources.keevitaja')}: ${k}`),
+          ...craneOperators.map(c => `${t('installation:resources.crane')}: ${c}`),
+          ...forkliftOperators.map(f => `${t('installation:resources.forklift')}: ${f}`),
+          ...poomtostukOperators.map(p => `${t('installation:resources.poomtostuk')}: ${p}`),
+          ...kaartostukOperators.map(k => `${t('installation:resources.kaartostuk')}: ${k}`)
         ].join(', ') || null
       }));
 
@@ -4180,13 +4180,13 @@ export default function InstallationsScreen({
         installation_method_name: methodName || null,
         installed_at: installDate,
         team_members: [
-          ...monteerijad.map(m => `Monteerija: ${m}`),
-          ...troppijad.map(t => `Troppija: ${t}`),
-          ...keevitajad.map(k => `Keevitaja: ${k}`),
-          ...craneOperators.map(c => `Kraana: ${c}`),
-          ...forkliftOperators.map(f => `Teleskooplaadur: ${f}`),
-          ...poomtostukOperators.map(p => `Korvtõstuk: ${p}`),
-          ...kaartostukOperators.map(k => `Käärtõstuk: ${k}`)
+          ...monteerijad.map(m => `${t('installation:resources.monteerija')}: ${m}`),
+          ...troppijad.map(tr => `${t('installation:resources.troppija')}: ${tr}`),
+          ...keevitajad.map(k => `${t('installation:resources.keevitaja')}: ${k}`),
+          ...craneOperators.map(c => `${t('installation:resources.crane')}: ${c}`),
+          ...forkliftOperators.map(f => `${t('installation:resources.forklift')}: ${f}`),
+          ...poomtostukOperators.map(p => `${t('installation:resources.poomtostuk')}: ${p}`),
+          ...kaartostukOperators.map(k => `${t('installation:resources.kaartostuk')}: ${k}`)
         ].join(', ') || null,
         notes: notes || null
       }));
@@ -4484,7 +4484,7 @@ export default function InstallationsScreen({
       return;
     }
 
-    if (!confirm('Kas oled kindel, et soovid selle paigalduse kustutada?')) {
+    if (!confirm(t('installation:ui.confirmDeleteInstallation'))) {
       return;
     }
 
@@ -4521,7 +4521,7 @@ export default function InstallationsScreen({
       return;
     }
 
-    if (!confirm('Kas oled kindel, et soovid selle preassembly kirje kustutada?')) {
+    if (!confirm(t('installation:ui.confirmDeletePreassembly'))) {
       return;
     }
 
@@ -4555,10 +4555,10 @@ export default function InstallationsScreen({
     }
 
     // Double confirmation
-    if (!confirm(`Kas oled kindel, et soovid kustutada KÕIK ${items.length} paigaldust päeval ${dayKey}?`)) {
+    if (!confirm(t('installation:ui.confirmDeleteDayInstallations', { count: items.length, day: dayKey }))) {
       return;
     }
-    if (!confirm(`VIIMANE HOIATUS: See kustutab ${items.length} paigalduse kirjet jäädavalt! Kas jätkata?`)) {
+    if (!confirm(t('installation:ui.confirmDeleteFinalWarning', { count: items.length }))) {
       return;
     }
 
@@ -4600,10 +4600,10 @@ export default function InstallationsScreen({
 
     // Double confirmation with month name
     const monthLabel = getFullMonthLabel(items[0].installed_at);
-    if (!confirm(`Kas oled kindel, et soovid kustutada KÕIK ${items.length} paigaldust kuus ${monthLabel}?`)) {
+    if (!confirm(t('installation:ui.confirmDeleteMonthInstallations', { count: items.length, month: monthLabel }))) {
       return;
     }
-    if (!confirm(`⚠️ VIIMANE HOIATUS: See kustutab ${items.length} paigalduse kirjet jäädavalt!\n\nKas oled TÄIESTI kindel?`)) {
+    if (!confirm(t('installation:ui.confirmDeleteMonthFinalWarning', { count: items.length }))) {
       return;
     }
 
@@ -4638,10 +4638,10 @@ export default function InstallationsScreen({
     if (items.length === 0) return;
 
     // Double confirmation
-    if (!confirm(`Kas oled kindel, et soovid kustutada KÕIK ${items.length} preassembly kirjet päeval ${dayKey}?`)) {
+    if (!confirm(t('installation:ui.confirmDeleteDayPreassembly', { count: items.length, day: dayKey }))) {
       return;
     }
-    if (!confirm(`VIIMANE HOIATUS: See kustutab ${items.length} preassembly kirjet jäädavalt! Kas jätkata?`)) {
+    if (!confirm(t('installation:ui.confirmDeletePreassemblyFinalWarning', { count: items.length }))) {
       return;
     }
 
@@ -4672,10 +4672,10 @@ export default function InstallationsScreen({
 
     // Double confirmation with month name
     const monthLabel = getFullMonthLabel(items[0].preassembled_at);
-    if (!confirm(`Kas oled kindel, et soovid kustutada KÕIK ${items.length} preassembly kirjet kuus ${monthLabel}?`)) {
+    if (!confirm(t('installation:ui.confirmDeleteMonthPreassembly', { count: items.length, month: monthLabel }))) {
       return;
     }
-    if (!confirm(`⚠️ VIIMANE HOIATUS: See kustutab ${items.length} preassembly kirjet jäädavalt!\n\nKas oled TÄIESTI kindel?`)) {
+    if (!confirm(t('installation:ui.confirmDeleteMonthPreassemblyFinalWarning', { count: items.length }))) {
       return;
     }
 
@@ -5438,7 +5438,7 @@ export default function InstallationsScreen({
         {/* Warning icon for items not found in current model */}
         {isUnfound && (
           <span
-            title="Seda detaili ei leitud avatud mudelis. Andmed sisestati ilmselt teise mudeliga."
+            title={t('installation:ui.detailNotFoundInModel')}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -5483,7 +5483,7 @@ export default function InstallationsScreen({
               e.stopPropagation();
               openGallery(inst.photo_urls!, 0);
             }}
-            title={`${inst.photo_urls.length} foto(t)`}
+            title={t('installation:ui.photoCount', { count: inst.photo_urls.length })}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -5511,14 +5511,14 @@ export default function InstallationsScreen({
         <button
           className="installation-info-btn"
           onClick={(e) => { e.stopPropagation(); setShowInstallInfo(inst); }}
-          title="Info"
+          title={t('installation:ui.installationInfo')}
         >
           <FiInfo size={14} />
         </button>
         <button
           className="installation-zoom-btn"
           onClick={() => zoomToInstallation(inst)}
-          title="Zoom"
+          title={t('installation:actions.zoomTo')}
         >
           <FiZoomIn size={14} />
         </button>
@@ -5526,7 +5526,7 @@ export default function InstallationsScreen({
           <button
             className="installation-delete-btn"
             onClick={() => deleteInstallation(inst.id)}
-            title="Kustuta"
+            title={t('installation:ui.delete')}
           >
             <FiTrash2 size={14} />
           </button>
@@ -5569,7 +5569,7 @@ export default function InstallationsScreen({
         {/* Warning icon for items not found in current model */}
         {isUnfound && (
           <span
-            title="Seda detaili ei leitud avatud mudelis. Andmed sisestati ilmselt teise mudeliga."
+            title={t('installation:ui.detailNotFoundInModel')}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -5614,7 +5614,7 @@ export default function InstallationsScreen({
               e.stopPropagation();
               openGallery(item.photo_urls!, 0);
             }}
-            title={`${item.photo_urls.length} foto(t)`}
+            title={t('installation:ui.photoCount', { count: item.photo_urls.length })}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -5642,14 +5642,14 @@ export default function InstallationsScreen({
         <button
           className="installation-info-btn"
           onClick={(e) => { e.stopPropagation(); setShowPreassemblyInfo(item); }}
-          title="Info"
+          title={t('installation:ui.installationInfo')}
         >
           <FiInfo size={14} />
         </button>
         <button
           className="installation-zoom-btn"
           onClick={() => zoomToPreassembly(item)}
-          title="Zoom"
+          title={t('installation:actions.zoomTo')}
         >
           <FiZoomIn size={14} />
         </button>
@@ -5657,7 +5657,7 @@ export default function InstallationsScreen({
           <button
             className="installation-delete-btn"
             onClick={() => deletePreassembly(item.id)}
-            title="Kustuta"
+            title={t('installation:ui.delete')}
           >
             <FiTrash2 size={14} />
           </button>
@@ -5714,7 +5714,7 @@ export default function InstallationsScreen({
                 setCalendarCollapsed(false);
               }
             }}
-            title="Topeltklõps avab kalendri"
+            title={t('installation:ui.doubleClickOpensCalendar')}
             style={{ cursor: 'pointer' }}
           >
             {day.dayLabel}
@@ -5722,7 +5722,7 @@ export default function InstallationsScreen({
           <button
             className="date-count clickable"
             onClick={(e) => selectInstallations(day.items, e)}
-            title="Vali need detailid mudelis"
+            title={t('installation:ui.selectTheseDetailsInModel')}
             style={dayColor ? {
               backgroundColor: `rgb(${dayColor.r}, ${dayColor.g}, ${dayColor.b})`,
               color: getTextColor(dayColor.r, dayColor.g, dayColor.b) === 'FFFFFF' ? '#fff' : '#000'
@@ -5733,7 +5733,7 @@ export default function InstallationsScreen({
           <button
             className="group-info-btn"
             onClick={(e) => { e.stopPropagation(); setShowDayInfo(day); }}
-            title="Päeva info"
+            title={t('installation:ui.dayInfo')}
           >
             <FiInfo size={12} />
           </button>
@@ -5746,7 +5746,7 @@ export default function InstallationsScreen({
                 setMonthMenuOpen(null);
                 setDayMenuOpen(dayMenuOpen === day.dayKey ? null : day.dayKey);
               }}
-              title="Rohkem valikuid"
+              title={t('installation:ui.moreOptions')}
             >
               <FiMoreVertical size={12} />
             </button>
@@ -5762,7 +5762,7 @@ export default function InstallationsScreen({
                   disabled={isDayLocked(day.dayKey)}
                 >
                   <FiEdit2 size={14} />
-                  <span>Muuda päeva ({day.items.length})</span>
+                  <span>{t('installation:ui.editDay', { count: day.items.length })}</span>
                 </button>
                 {isAdmin && !monthLocks.has(day.dayKey.substring(0, 7)) && (
                   <button
@@ -5771,20 +5771,20 @@ export default function InstallationsScreen({
                     {dayLocks.has(day.dayKey) ? (
                       <>
                         <FiUnlock size={14} />
-                        <span>Ava päev</span>
+                        <span>{t('installation:ui.unlockDay')}</span>
                       </>
                     ) : (
                       <>
                         <FiLock size={14} />
-                        <span>Lukusta päev</span>
+                        <span>{t('installation:ui.lockDay')}</span>
                       </>
                     )}
                   </button>
                 )}
                 {isAdmin && monthLocks.has(day.dayKey.substring(0, 7)) && (
-                  <button disabled title="Kuu on lukustatud">
+                  <button disabled title={t('installation:ui.monthLocked')}>
                     <FiLock size={14} />
-                    <span>Päev lukustatud (kuu lukus)</span>
+                    <span>{t('installation:ui.dayLockedMonthLock')}</span>
                   </button>
                 )}
                 <button
@@ -5793,7 +5793,7 @@ export default function InstallationsScreen({
                   disabled={isDayLocked(day.dayKey)}
                 >
                   <FiTrash2 size={14} />
-                  <span>Kustuta päev ({day.items.length})</span>
+                  <span>{t('installation:ui.deleteDay', { count: day.items.length })}</span>
                 </button>
               </div>
             )}
@@ -5840,7 +5840,7 @@ export default function InstallationsScreen({
                           fontSize: '10px',
                           cursor: isDayLocked(day.dayKey) ? 'not-allowed' : 'pointer'
                         }}
-                        title={isDayLocked(day.dayKey) ? 'Päev on lukustatud' : 'Muuda selle meeskonna andmeid'}
+                        title={isDayLocked(day.dayKey) ? t('installation:ui.dayIsLocked') : t('installation:ui.editTeamData')}
                       >
                         <FiEdit2 size={10} />
                         Muuda
@@ -5863,7 +5863,7 @@ export default function InstallationsScreen({
                           fontSize: '10px',
                           cursor: 'pointer'
                         }}
-                        title="Salvesta need ressursid eelseadeks sisestusvormi jaoks"
+                        title={t('installation:ui.saveResourcesAsPreset')}
                       >
                         <FiBookmark size={10} />
                         Eelseade
@@ -5883,7 +5883,7 @@ export default function InstallationsScreen({
                           e.stopPropagation();
                           selectInstallations(group.items);
                         }}
-                        title="Vali need detailid mudelis"
+                        title={t('installation:ui.selectTheseDetailsInModel')}
                       >
                         {group.items.length}
                       </span>
@@ -5939,7 +5939,7 @@ export default function InstallationsScreen({
           <button
             className="date-count clickable"
             onClick={(e) => selectPreassemblies(day.items, e)}
-            title="Vali need detailid mudelis"
+            title={t('installation:ui.selectTheseDetailsInModel')}
             style={{ background: '#7c3aed', color: '#fff' }}
           >
             {day.items.length}
@@ -5954,7 +5954,7 @@ export default function InstallationsScreen({
                 const paDayKey = `pa-${day.dayKey}`;
                 setDayMenuOpen(dayMenuOpen === paDayKey ? null : paDayKey);
               }}
-              title="Rohkem valikuid"
+              title={t('installation:ui.moreOptions')}
             >
               <FiMoreVertical size={12} />
             </button>
@@ -5970,7 +5970,7 @@ export default function InstallationsScreen({
                   disabled={isDayLocked(day.dayKey)}
                 >
                   <FiEdit2 size={14} />
-                  <span>Muuda päeva ({day.items.length})</span>
+                  <span>{t('installation:ui.editDay', { count: day.items.length })}</span>
                 </button>
                 {isAdmin && !monthLocks.has(day.dayKey.substring(0, 7)) && (
                   <button
@@ -5979,20 +5979,20 @@ export default function InstallationsScreen({
                     {dayLocks.has(day.dayKey) ? (
                       <>
                         <FiUnlock size={14} />
-                        <span>Ava päev</span>
+                        <span>{t('installation:ui.unlockDay')}</span>
                       </>
                     ) : (
                       <>
                         <FiLock size={14} />
-                        <span>Lukusta päev</span>
+                        <span>{t('installation:ui.lockDay')}</span>
                       </>
                     )}
                   </button>
                 )}
                 {isAdmin && monthLocks.has(day.dayKey.substring(0, 7)) && (
-                  <button disabled title="Kuu on lukustatud">
+                  <button disabled title={t('installation:ui.monthLocked')}>
                     <FiLock size={14} />
-                    <span>Päev lukustatud (kuu lukus)</span>
+                    <span>{t('installation:ui.dayLockedMonthLock')}</span>
                   </button>
                 )}
                 <button
@@ -6001,7 +6001,7 @@ export default function InstallationsScreen({
                   disabled={isDayLocked(day.dayKey)}
                 >
                   <FiTrash2 size={14} />
-                  <span>Kustuta päev ({day.items.length})</span>
+                  <span>{t('installation:ui.deleteDay', { count: day.items.length })}</span>
                 </button>
               </div>
             )}
@@ -6030,10 +6030,10 @@ export default function InstallationsScreen({
       {/* PageHeader with hamburger menu */}
       <PageHeader
         title={showList
-          ? (entryMode === 'preassembly' ? 'Preassembly ülevaade' : 'Paigalduste ülevaade')
-          : 'Paigaldamised'
+          ? (entryMode === 'preassembly' ? t('installation:ui.preassemblyOverview') : t('installation:ui.installationsOverview'))
+          : t('installation:ui.installationsTitle')
         }
-        subtitle={showList ? 'Paigaldamised' : undefined}
+        subtitle={showList ? t('installation:ui.installationsTitle') : undefined}
         onBack={showList ? async () => {
           setShowList(false);
           // Reapply base coloring based on mode
@@ -6080,7 +6080,7 @@ export default function InstallationsScreen({
           minWidth: '200px'
         }}>
           <FiRefreshCw size={18} className="spinning" style={{ color: '#3b82f6' }} />
-          <span>{coloringProgress || 'Värvin mudelit...'}</span>
+          <span>{coloringProgress || t('installation:ui.coloringModel')}</span>
         </div>
       )}
 
@@ -6107,7 +6107,7 @@ export default function InstallationsScreen({
               }}
             >
               <FiTool size={16} />
-              <span>Paigalduste ülevaade</span>
+              <span>{t('installation:ui.installationsOverview')}</span>
               <span className="menu-count" style={{ background: '#3b82f6' }}>{installations.length}</span>
             </button>
             <button
@@ -6128,7 +6128,7 @@ export default function InstallationsScreen({
               }}
             >
               <FiPackage size={16} />
-              <span>Preassembly ülevaade</span>
+              <span>{t('installation:ui.preassemblyOverview')}</span>
               <span className="menu-count" style={{ background: '#7c3aed' }}>{preassemblies.length}</span>
             </button>
           </div>
@@ -6138,13 +6138,13 @@ export default function InstallationsScreen({
             <div className="assembly-selection-warning">
               <div className="warning-content">
                 <span className="warning-icon">⚠️</span>
-                <span className="warning-text">Assembly Selection on välja lülitatud. Paigalduste salvestamiseks peab see olema sees.</span>
+                <span className="warning-text">{t('installation:ui.assemblySelectionOff')}</span>
               </div>
               <button
                 className="enable-assembly-btn"
                 onClick={enableAssemblySelection}
               >
-                Lülita sisse
+                {t('installation:ui.enableAssemblySelection')}
               </button>
             </div>
           )}
@@ -6182,7 +6182,7 @@ export default function InstallationsScreen({
                 }}
               >
                 <FiTool size={14} />
-                <span>Paigaldus</span>
+                <span>{t('installation:ui.installation')}</span>
               </button>
               <button
                 onClick={() => handleEntryModeChange('preassembly')}
@@ -6204,12 +6204,12 @@ export default function InstallationsScreen({
                 }}
               >
                 <FiPackage size={14} />
-                <span>Preassembly</span>
+                <span>{t('installation:ui.preassembly')}</span>
               </button>
             </div>
 
             <div className="form-row">
-              <label><FiCalendar size={14} /> Kuupäev</label>
+              <label><FiCalendar size={14} /> {t('installation:ui.date')}</label>
               <div className="date-input-wrapper">
                 <input
                   type="datetime-local"
@@ -6230,14 +6230,14 @@ export default function InstallationsScreen({
                 <div className="date-weekday">
                   {(() => {
                     const date = new Date(installDate);
-                    const weekdays = ['Pühapäev', 'Esmaspäev', 'Teisipäev', 'Kolmapäev', 'Neljapäev', 'Reede', 'Laupäev'];
+                    const weekdays = (t('installation:weekdaysList', { returnObjects: true }) as string[]);
                     const weekday = weekdays[date.getDay()];
                     const today = new Date();
                     const isToday = date.toDateString() === today.toDateString();
                     return (
                       <>
                         <span className="weekday-name">{weekday}</span>
-                        {isToday && <span className="today-badge">Täna</span>}
+                        {isToday && <span className="today-badge">{t('installation:ui.today')}</span>}
                       </>
                     );
                   })()}
@@ -6246,7 +6246,7 @@ export default function InstallationsScreen({
             </div>
 
             <div className="form-row">
-              <label>{entryMode === 'preassembly' ? 'Preassembly ressursid' : 'Paigaldus ressursid'}</label>
+              <label>{entryMode === 'preassembly' ? t('installation:ui.preassemblyResources') : t('installation:ui.installationResources')}</label>
               {/* All resources in one row with wrapping */}
               <div className="install-methods-row" style={{ marginBottom: '12px', overflow: 'visible' }}>
                 {INSTALL_METHODS_CONFIG.map(method => {
@@ -6311,7 +6311,7 @@ export default function InstallationsScreen({
             {/* Kraana (equipment model/company) */}
             {selectedInstallMethods.crane && selectedInstallMethods.crane > 0 && (
               <div className="form-row">
-                <label><img src={`${import.meta.env.BASE_URL}icons/crane.png`} alt="Kraana" style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)', verticalAlign: 'middle', marginRight: '4px' }} /> Kraana ({selectedInstallMethods.crane})</label>
+                <label><img src={`${import.meta.env.BASE_URL}icons/crane.png`} alt={t('installation:resources.crane')} style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)', verticalAlign: 'middle', marginRight: '4px' }} /> {t('installation:ui.craneLabel', { count: selectedInstallMethods.crane })}</label>
                 <div className="team-members-input">
                   {craneOperators.length > 0 && (
                     <div className="team-chips">
@@ -6351,7 +6351,7 @@ export default function InstallationsScreen({
                               }
                             }
                           }}
-                          placeholder={`Kraana ${craneOperators.length + 1}`}
+                          placeholder={t('installation:ui.cranePlaceholder', { number: craneOperators.length + 1 })}
                           className="full-width-input"
                           style={{ flex: 1 }}
                         />
@@ -6402,7 +6402,7 @@ export default function InstallationsScreen({
             {/* Teleskooplaadur (equipment model/company) */}
             {selectedInstallMethods.forklift && selectedInstallMethods.forklift > 0 && (
               <div className="form-row">
-                <label><img src={`${import.meta.env.BASE_URL}icons/forklift.png`} alt="Teleskooplaadur" style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)', verticalAlign: 'middle', marginRight: '4px' }} /> Teleskooplaadur ({selectedInstallMethods.forklift})</label>
+                <label><img src={`${import.meta.env.BASE_URL}icons/forklift.png`} alt={t('installation:resources.forklift')} style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)', verticalAlign: 'middle', marginRight: '4px' }} /> {t('installation:ui.forkliftLabel', { count: selectedInstallMethods.forklift })}</label>
                 <div className="team-members-input">
                   {forkliftOperators.length > 0 && (
                     <div className="team-chips">
@@ -6442,7 +6442,7 @@ export default function InstallationsScreen({
                               }
                             }
                           }}
-                          placeholder={`Teleskooplaadur ${forkliftOperators.length + 1}`}
+                          placeholder={t('installation:ui.forkliftPlaceholder', { number: forkliftOperators.length + 1 })}
                           className="full-width-input"
                           style={{ flex: 1 }}
                         />
@@ -6493,7 +6493,7 @@ export default function InstallationsScreen({
             {/* Korvtõstuk (equipment model/company) */}
             {selectedInstallMethods.poomtostuk && selectedInstallMethods.poomtostuk > 0 && (
               <div className="form-row">
-                <label><img src={`${import.meta.env.BASE_URL}icons/poomtostuk.png`} alt="Korvtõstuk" style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)', verticalAlign: 'middle', marginRight: '4px' }} /> Korvtõstuk ({selectedInstallMethods.poomtostuk})</label>
+                <label><img src={`${import.meta.env.BASE_URL}icons/poomtostuk.png`} alt={t('installation:resources.poomtostuk')} style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)', verticalAlign: 'middle', marginRight: '4px' }} /> {t('installation:ui.boomLiftLabel', { count: selectedInstallMethods.poomtostuk })}</label>
                 <div className="team-members-input">
                   {poomtostukOperators.length > 0 && (
                     <div className="team-chips">
@@ -6533,7 +6533,7 @@ export default function InstallationsScreen({
                               }
                             }
                           }}
-                          placeholder={`Korvtõstuk ${poomtostukOperators.length + 1}`}
+                          placeholder={t('installation:ui.boomLiftPlaceholder', { number: poomtostukOperators.length + 1 })}
                           className="full-width-input"
                           style={{ flex: 1 }}
                         />
@@ -6584,7 +6584,7 @@ export default function InstallationsScreen({
             {/* Käärtõstuk (equipment model/company) */}
             {selectedInstallMethods.kaartostuk && selectedInstallMethods.kaartostuk > 0 && (
               <div className="form-row">
-                <label><img src={`${import.meta.env.BASE_URL}icons/kaartostuk.png`} alt="Käärtõstuk" style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)', verticalAlign: 'middle', marginRight: '4px' }} /> Käärtõstuk ({selectedInstallMethods.kaartostuk})</label>
+                <label><img src={`${import.meta.env.BASE_URL}icons/kaartostuk.png`} alt={t('installation:resources.kaartostuk')} style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)', verticalAlign: 'middle', marginRight: '4px' }} /> {t('installation:ui.scissorLiftLabel', { count: selectedInstallMethods.kaartostuk })}</label>
                 <div className="team-members-input">
                   {kaartostukOperators.length > 0 && (
                     <div className="team-chips">
@@ -6624,7 +6624,7 @@ export default function InstallationsScreen({
                               }
                             }
                           }}
-                          placeholder={`Käärtõstuk ${kaartostukOperators.length + 1}`}
+                          placeholder={t('installation:ui.scissorLiftPlaceholder', { number: kaartostukOperators.length + 1 })}
                           className="full-width-input"
                           style={{ flex: 1 }}
                         />
@@ -6717,7 +6717,7 @@ export default function InstallationsScreen({
                         }}
                         placeholder={selectedInstallMethods.monteerija
                           ? `Monteerija ${monteerijad.length + 1}`
-                          : 'Monteerija nimi'}
+                          : t('installation:ui.installerNamePlaceholder')}
                         className="full-width-input"
                         style={{ flex: 1 }}
                       />
@@ -6767,7 +6767,7 @@ export default function InstallationsScreen({
             {/* Troppijad (people names) */}
             {selectedInstallMethods.troppija && selectedInstallMethods.troppija > 0 && (
               <div className="form-row">
-                <label><FiUsers size={14} /> Troppijad ({selectedInstallMethods.troppija})</label>
+                <label><FiUsers size={14} /> {t('installation:ui.riggersLabel', { count: selectedInstallMethods.troppija })}</label>
                 <div className="team-members-input">
                   {troppijad.length > 0 && (
                     <div className="team-chips">
@@ -6858,7 +6858,7 @@ export default function InstallationsScreen({
             {/* Keevitajad (people names) */}
             {selectedInstallMethods.keevitaja && selectedInstallMethods.keevitaja > 0 && (
               <div className="form-row">
-                <label><FiUsers size={14} /> Keevitajad ({selectedInstallMethods.keevitaja})</label>
+                <label><FiUsers size={14} /> {t('installation:ui.weldersLabel', { count: selectedInstallMethods.keevitaja })}</label>
                 <div className="team-members-input">
                   {keevitajad.length > 0 && (
                     <div className="team-chips">
@@ -6947,11 +6947,11 @@ export default function InstallationsScreen({
             )}
 
             <div className="form-row">
-              <label><FiEdit2 size={14} /> Märkused</label>
+              <label><FiEdit2 size={14} /> {t('installation:ui.notes')}</label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Lisa märkused..."
+                placeholder={t('installation:ui.addNotes')}
                 className="full-width-textarea"
                 rows={2}
               />
@@ -6961,7 +6961,7 @@ export default function InstallationsScreen({
             <div className="photos-section" style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, color: '#374151' }}>
-                  <FiCamera size={14} /> Fotod
+                  <FiCamera size={14} /> {t('installation:ui.photos')}
                 </label>
                 {formPhotos.length < 10 && (
                   <button
@@ -7112,8 +7112,8 @@ export default function InstallationsScreen({
                     padding: '12px'
                   }}>
                     <FiImage size={20} />
-                    <span style={{ fontSize: '12px' }}>Lohista, kleebi või klõpsa</span>
-                    <span style={{ fontSize: '10px', color: '#b1b5ba' }}>Ctrl+V kleepimiseks</span>
+                    <span style={{ fontSize: '12px' }}>{t('installation:ui.dragPasteOrClick')}</span>
+                    <span style={{ fontSize: '10px', color: '#b1b5ba' }}>{t('installation:ui.ctrlVToPaste')}</span>
                   </div>
                 )}
               </div>
@@ -7128,11 +7128,11 @@ export default function InstallationsScreen({
                   background: entryMode === 'preassembly' ? '#7c3aed' : undefined
                 }}
               >
-                {saving ? 'Salvestan...' :
-                  monteerijad.length === 0 ? 'Lisa monteerija' :
+                {saving ? t('installation:actions.saving') :
+                  monteerijad.length === 0 ? t('installation:ui.addInstaller') :
                   entryMode === 'installation' ?
-                    <><FiPlus size={16} /> Salvesta paigaldus ({newObjectsCount})</> :
-                    <><FiPlus size={16} /> Salvesta preassembly ({newObjectsCount})</>
+                    <><FiPlus size={16} /> {t('installation:ui.saveInstallation')} ({newObjectsCount})</> :
+                    <><FiPlus size={16} /> {t('installation:ui.savePreassembly')} ({newObjectsCount})</>
                 }
               </button>
             </div>
@@ -7143,20 +7143,20 @@ export default function InstallationsScreen({
             {selectedObjects.length === 0 ? (
               <div className="no-selection-compact">
                 <FiSearch size={16} />
-                <span>Vali mudelilt detail(id)</span>
+                <span>{t('installation:ui.selectDetailsFromModel')}</span>
               </div>
             ) : (
               <>
                 <div className="selected-objects-title">
-                  <span>Valitud: {selectedObjects.length}</span>
+                  <span>{t('installation:ui.selected', { count: selectedObjects.length })}</span>
                   <div className="title-actions">
                     <button
                       className="add-to-temp-list-btn"
                       onClick={addSelectedToTempList}
-                      title="Lisa valitud ajutisse nimekirja"
+                      title={t('installation:ui.addToTempList')}
                       disabled={selectedObjects.length === 0 || addableToTempListCount === 0}
                     >
-                      + Lisa ajutisse listi
+                      + {t('installation:ui.addToTempListShort')}
                       {addableToTempListCount > 0 && (
                         <span className="temp-list-badge">{addableToTempListCount}</span>
                       )}
@@ -7215,7 +7215,7 @@ export default function InstallationsScreen({
                             {statusInfo && (
                               <span
                                 className={`object-inline-status clickable ${statusInfo.type}`}
-                                title={`${statusInfo.type === 'installed' ? 'Paigaldatud' : 'Preassembly'}: ${statusInfo.fullDate.split('T')[0]}${statusInfo.user ? `\nKasutaja: ${statusInfo.user}` : ''}\nKliki, et avada päeva ülevaade`}
+                                title={`${statusInfo.type === 'installed' ? t('installation:ui.installed') : t('installation:ui.preassembly')}: ${statusInfo.fullDate.split('T')[0]}${statusInfo.user ? `\n${t('installation:ui.user')}: ${statusInfo.user}` : ''}\n${t('installation:ui.clickToOpenDayOverview')}`}
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   // Navigate to overview with that date expanded
@@ -7238,7 +7238,7 @@ export default function InstallationsScreen({
                                   setShowList(true);
                                 }}
                               >
-                                {statusInfo.type === 'installed' ? 'Paigaldatud' : 'Preassembly'} {statusInfo.date}
+                                {statusInfo.type === 'installed' ? t('installation:ui.installed') : t('installation:ui.preassembly')} {statusInfo.date}
                               </span>
                             )}
                             {/* Delivery status badges */}
@@ -7253,10 +7253,10 @@ export default function InstallationsScreen({
                                   borderRadius: '4px',
                                   marginLeft: '4px'
                                 }}
-                                title="Detail puudub tarnegraafikus"
+                                title={t('installation:ui.detailMissingFromDeliverySchedule')}
                               >
                                 <FiAlertCircle size={10} style={{ marginRight: '3px', verticalAlign: 'text-top' }} />
-                                puudub tarnegraafikus
+                                {t('installation:ui.missingFromDeliverySchedule')}
                               </span>
                             )}
                             {!isInstalled && isInDeliverySchedule && !hasArrived && (
@@ -7270,10 +7270,10 @@ export default function InstallationsScreen({
                                   borderRadius: '4px',
                                   marginLeft: '4px'
                                 }}
-                                title="Detail on tarnegraafikus, kuid pole märgitud saabunuks"
+                                title={t('installation:ui.detailInDeliveryNotArrived')}
                               >
                                 <FiAlertTriangle size={10} style={{ marginRight: '3px', verticalAlign: 'text-top' }} />
-                                pole märgitud saabunuks
+                                {t('installation:ui.notMarkedAsArrived')}
                               </span>
                             )}
                           </span>
@@ -7289,7 +7289,7 @@ export default function InstallationsScreen({
                                 );
                                 if (fullInstall) setShowInstallInfo(fullInstall);
                               }}
-                              title="Paigalduse info"
+                              title={t('installation:ui.installationInfo')}
                             >
                               <FiInfo size={14} />
                             </button>
@@ -7297,7 +7297,7 @@ export default function InstallationsScreen({
                           <button
                             className="object-unselect-btn"
                             onClick={() => unselectObject(idx)}
-                            title="Eemalda valikust"
+                            title={t('installation:ui.removeFromSelection')}
                           >
                             <FiX size={14} />
                           </button>
@@ -7308,7 +7308,7 @@ export default function InstallationsScreen({
                 </div>
                 {alreadyInstalledCount > 0 && (
                   <div className="already-installed-note">
-                    {alreadyInstalledCount} juba paigaldatud
+                    {t('installation:ui.alreadyInstalledCount', { count: alreadyInstalledCount })}
                   </div>
                 )}
               </>
@@ -7351,16 +7351,16 @@ export default function InstallationsScreen({
                       setMessage(t('installation:screen.errorSelecting'));
                     }
                   }}
-                  title="Vali kõik mudelis"
+                  title={t('installation:ui.selectAllInModel')}
                 >
-                  <span style={{ color: '#10b981', fontWeight: 700 }}>✓</span> Ajutine nimekiri: {tempList.size}
+                  <span style={{ color: '#10b981', fontWeight: 700 }}>✓</span> {t('installation:ui.temporaryList', { count: tempList.size })}
                 </span>
                 <button
                   className="clear-temp-list-btn"
                   onClick={clearTempList}
-                  title="Tühjenda ajutine nimekiri"
+                  title={t('installation:ui.clearTempList')}
                 >
-                  <FiX size={14} /> Tühjenda
+                  <FiX size={14} /> {t('installation:ui.clear')}
                 </button>
               </div>
               <div className="temp-list-items">
@@ -7389,7 +7389,7 @@ export default function InstallationsScreen({
                             console.error('Error zooming to temp list item:', e);
                           }
                         }}
-                        title="Zoom detaili juurde"
+                        title={t('installation:ui.zoomToDetail')}
                       >
                         {assemblyMark}
                       </span>
@@ -7422,7 +7422,7 @@ export default function InstallationsScreen({
                             console.error('Error coloring removed item white:', e);
                           }
                         }}
-                        title="Eemalda listist"
+                        title={t('installation:ui.removeFromList')}
                       >
                         <FiX size={12} />
                       </button>
@@ -7442,7 +7442,7 @@ export default function InstallationsScreen({
               <FiSearch size={14} />
               <input
                 type="text"
-                placeholder="Otsi..."
+                placeholder={t('installation:ui.search')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -7457,11 +7457,11 @@ export default function InstallationsScreen({
             {entryMode === 'installation' && selectedInstallationIds.size > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '8px' }}>
                 <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                  {selectedInstallationIds.size} valitud
+                  {t('installation:ui.selectedCount', { count: selectedInstallationIds.size })}
                 </span>
                 <button
                   onClick={openEditModal}
-                  title="Muuda valitud paigaldusi"
+                  title={t('installation:ui.editInstallations', { count: selectedInstallationIds.size })}
                   style={{
                     padding: '6px 12px',
                     borderRadius: '4px',
@@ -7477,11 +7477,11 @@ export default function InstallationsScreen({
                   }}
                 >
                   <FiEdit2 size={14} />
-                  <span>Muuda</span>
+                  <span>{t('installation:ui.edit')}</span>
                 </button>
                 <button
                   onClick={() => setSelectedInstallationIds(new Set())}
-                  title="Tühista valik"
+                  title={t('installation:ui.cancelSelection')}
                   style={{
                     padding: '6px',
                     borderRadius: '4px',
@@ -7502,11 +7502,11 @@ export default function InstallationsScreen({
             {entryMode === 'preassembly' && selectedPreassemblyIds.size > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '8px' }}>
                 <span style={{ fontSize: '12px', color: '#6b7280' }}>
-                  {selectedPreassemblyIds.size} valitud
+                  {t('installation:ui.selectedCount', { count: selectedPreassemblyIds.size })}
                 </span>
                 <button
                   onClick={openPreassemblyEditModal}
-                  title="Muuda valitud preassembly kirjeid"
+                  title={t('installation:ui.editPreassembly', { count: selectedPreassemblyIds.size })}
                   style={{
                     padding: '6px 12px',
                     borderRadius: '4px',
@@ -7522,11 +7522,11 @@ export default function InstallationsScreen({
                   }}
                 >
                   <FiEdit2 size={14} />
-                  <span>Muuda</span>
+                  <span>{t('installation:ui.edit')}</span>
                 </button>
                 <button
                   onClick={openMarkInstalledModal}
-                  title="Märgi paigaldatuks"
+                  title={t('installation:ui.markAsInstalledBtn')}
                   style={{
                     padding: '6px 12px',
                     borderRadius: '4px',
@@ -7542,11 +7542,11 @@ export default function InstallationsScreen({
                   }}
                 >
                   <FiTool size={14} />
-                  <span>Paigalda</span>
+                  <span>{t('installation:ui.installAction')}</span>
                 </button>
                 <button
                   onClick={() => setSelectedPreassemblyIds(new Set())}
-                  title="Tühista valik"
+                  title={t('installation:ui.cancelSelection')}
                   style={{
                     padding: '6px',
                     borderRadius: '4px',
@@ -7568,7 +7568,7 @@ export default function InstallationsScreen({
                 className={`color-btn${colorByDay ? ' active' : ''}`}
                 onClick={toggleColorByDay}
                 disabled={coloringInProgress || installations.length === 0}
-                title={colorByDay ? "Lülita päeva värvimine välja" : "Värvi päevade kaupa"}
+                title={colorByDay ? t('installation:ui.colorByDayOff') : t('installation:ui.colorByDayOn')}
                 style={{
                   padding: '6px 8px',
                   borderRadius: '4px',
@@ -7583,13 +7583,13 @@ export default function InstallationsScreen({
                 }}
               >
                 <FiDroplet size={14} />
-                <span>Päev</span>
+                <span>{t('installation:ui.dayLabel')}</span>
               </button>
               <button
                 className={`color-btn${colorByMonth ? ' active' : ''}`}
                 onClick={toggleColorByMonth}
                 disabled={coloringInProgress || installations.length === 0}
-                title={colorByMonth ? "Lülita kuu värvimine välja" : "Värvi kuude kaupa"}
+                title={colorByMonth ? t('installation:ui.colorByMonthOff') : t('installation:ui.colorByMonthOn')}
                 style={{
                   padding: '6px 8px',
                   borderRadius: '4px',
@@ -7604,7 +7604,7 @@ export default function InstallationsScreen({
                 }}
               >
                 <FiDroplet size={14} />
-                <span>Kuu</span>
+                <span>{t('installation:ui.monthLabel')}</span>
               </button>
               {(colorByDay || colorByMonth) && (
                 <button
@@ -7617,7 +7617,7 @@ export default function InstallationsScreen({
                     await api.viewer.setObjectState(undefined, { color: "reset" });
                     lastColorStateRef.current = new Map();
                   }}
-                  title="Lähtesta värvid"
+                  title={t('installation:ui.resetColors')}
                   style={{
                     padding: '6px 8px',
                     borderRadius: '4px',
@@ -7640,7 +7640,7 @@ export default function InstallationsScreen({
                 <button
                   onClick={startPlayback}
                   disabled={installations.length === 0}
-                  title="Esita"
+                  title={t('installation:ui.play')}
                   style={{
                     padding: '6px 10px',
                     borderRadius: '4px',
@@ -7661,7 +7661,7 @@ export default function InstallationsScreen({
                   {isPaused ? (
                     <button
                       onClick={resumePlayback}
-                      title="Jätka"
+                      title={t('installation:ui.resume')}
                       style={{
                         padding: '6px 10px',
                         borderRadius: '4px',
@@ -7678,7 +7678,7 @@ export default function InstallationsScreen({
                   ) : (
                     <button
                       onClick={pausePlayback}
-                      title="Paus"
+                      title={t('installation:ui.pause')}
                       style={{
                         padding: '6px 10px',
                         borderRadius: '4px',
@@ -7695,7 +7695,7 @@ export default function InstallationsScreen({
                   )}
                   <button
                     onClick={stopPlayback}
-                    title="Peata"
+                    title={t('installation:ui.stop')}
                     style={{
                       padding: '6px 10px',
                       borderRadius: '4px',
@@ -7765,7 +7765,7 @@ export default function InstallationsScreen({
               <span style={{ fontSize: '11px', color: '#6b7280', minWidth: '30px' }}>
                 {installations.length}
               </span>
-              {isPaused && <span style={{ fontSize: '11px', color: '#f59e0b' }}>(paus)</span>}
+              {isPaused && <span style={{ fontSize: '11px', color: '#f59e0b' }}>({t('installation:ui.pauseIndicator')})</span>}
               <div className="speed-selector" style={{ display: 'flex', gap: '2px', marginLeft: '8px' }}>
                 {PLAYBACK_SPEEDS.map(speed => (
                   <button
@@ -7820,7 +7820,7 @@ export default function InstallationsScreen({
                 fontSize: '11px'
               }}>
                 {/* Week number header + Day names */}
-                <div style={{ textAlign: 'center', fontWeight: 600, padding: '4px', color: '#9ca3af', fontSize: '9px' }}>Nd</div>
+                <div style={{ textAlign: 'center', fontWeight: 600, padding: '4px', color: '#9ca3af', fontSize: '9px' }}>{t('installation:ui.calendarWeekNumber')}</div>
                 {(t('installation:weekdaysMinMon', { returnObjects: true }) as string[] || DAY_NAMES_FALLBACK).map((day: string) => (
                   <div key={day} style={{ textAlign: 'center', fontWeight: 600, padding: '4px', color: '#6b7280' }}>
                     {day}
@@ -7933,14 +7933,14 @@ export default function InstallationsScreen({
 
             {/* Calendar stats */}
             <div style={{ marginTop: '8px', fontSize: '11px', color: '#6b7280', display: 'flex', gap: '12px' }}>
-              <span>Kokku: <strong style={{ color: entryMode === 'preassembly' ? '#7c3aed' : '#111827' }}>
+              <span>{t('installation:ui.totalDetailsPlain')}: <strong style={{ color: entryMode === 'preassembly' ? '#7c3aed' : '#111827' }}>
                 {entryMode === 'preassembly' ? preassemblies.length : installations.length}
               </strong></span>
-              <span>Päevi: <strong style={{ color: entryMode === 'preassembly' ? '#7c3aed' : '#111827' }}>{Object.keys(itemsByDate).length}</strong></span>
+              <span>{t('installation:ui.days')}: <strong style={{ color: entryMode === 'preassembly' ? '#7c3aed' : '#111827' }}>{Object.keys(itemsByDate).length}</strong></span>
               {Object.keys(itemsByDate).length > 0 && (
-                <span>Keskm: <strong style={{ color: entryMode === 'preassembly' ? '#7c3aed' : '#111827' }}>
+                <span>{t('installation:ui.average')}: <strong style={{ color: entryMode === 'preassembly' ? '#7c3aed' : '#111827' }}>
                   {Math.round((entryMode === 'preassembly' ? preassemblies.length : installations.length) / Object.keys(itemsByDate).length)}
-                </strong> tk/päev</span>
+                </strong> {t('installation:ui.pcsPerDay')}</span>
               )}
             </div>
           </div>
@@ -7973,7 +7973,7 @@ export default function InstallationsScreen({
               }}
             >
               <FiTool size={14} />
-              Paigaldatud ({installations.length})
+              {t('installation:ui.installedTab', { count: installations.length })}
             </button>
             <button
               onClick={() => handleEntryModeChange('preassembly')}
@@ -7994,7 +7994,7 @@ export default function InstallationsScreen({
               }}
             >
               <FiPackage size={14} />
-              Preassembly ({preassemblies.length})
+              {t('installation:ui.preassemblyTab', { count: preassemblies.length })}
             </button>
           </div>
 
@@ -8048,7 +8048,7 @@ export default function InstallationsScreen({
                   }}
                 >
                   <FiEdit2 size={12} />
-                  Muuda
+                  {t('installation:ui.edit')}
                 </button>
                 <button
                   onClick={() => setSelectedInstallationIds(new Set())}
@@ -8067,7 +8067,7 @@ export default function InstallationsScreen({
                   }}
                 >
                   <FiX size={12} />
-                  Tühista
+                  {t('installation:ui.cancel')}
                 </button>
               </div>
             </div>
@@ -8122,7 +8122,7 @@ export default function InstallationsScreen({
                   }}
                 >
                   <FiTool size={12} />
-                  Paigalda
+                  {t('installation:ui.installAction')}
                 </button>
                 <button
                   onClick={() => {
@@ -8150,7 +8150,7 @@ export default function InstallationsScreen({
                   }}
                 >
                   <FiEdit2 size={12} />
-                  Muuda
+                  {t('installation:ui.edit')}
                 </button>
                 <button
                   onClick={() => setSelectedPreassemblyIds(new Set())}
@@ -8169,7 +8169,7 @@ export default function InstallationsScreen({
                   }}
                 >
                   <FiX size={12} />
-                  Tühista
+                  {t('installation:ui.cancel')}
                 </button>
               </div>
             </div>
@@ -8178,13 +8178,13 @@ export default function InstallationsScreen({
           {/* List content */}
           <div className="installations-list-content">
             {loading ? (
-              <div className="loading">Laadin...</div>
+              <div className="loading">{t('installation:ui.loading')}</div>
             ) : entryMode === 'installation' ? (
               /* INSTALLATIONS LIST */
               filteredInstallations.length === 0 ? (
                 <div className="empty-list">
                   <FiTruck size={32} />
-                  <p>{searchQuery ? 'Otsingutulemusi ei leitud' : 'Paigaldusi pole veel'}</p>
+                  <p>{searchQuery ? t('installation:ui.noSearchResults') : t('installation:ui.noInstallationsYet')}</p>
                 </div>
               ) : (
                 monthGroups.map(month => {
@@ -8222,7 +8222,7 @@ export default function InstallationsScreen({
                     <button
                       className="month-count clickable"
                       onClick={(e) => selectInstallations(month.allItems, e)}
-                      title="Vali need detailid mudelis"
+                      title={t('installation:ui.selectTheseDetailsInModel')}
                       style={mColor ? {
                         backgroundColor: `rgb(${mColor.r}, ${mColor.g}, ${mColor.b})`,
                         color: getTextColor(mColor.r, mColor.g, mColor.b) === 'FFFFFF' ? '#fff' : '#000'
@@ -8233,7 +8233,7 @@ export default function InstallationsScreen({
                     <button
                       className="group-info-btn"
                       onClick={(e) => { e.stopPropagation(); setShowMonthStats(month); }}
-                      title="Kuu statistika"
+                      title={t('installation:ui.monthStats')}
                     >
                       <FiInfo size={12} />
                     </button>
@@ -8243,7 +8243,7 @@ export default function InstallationsScreen({
                       className="month-lock-indicator"
                       title={isMonthLocked(month.monthKey)
                         ? `🔒 Lukustatud\n👤 ${getMonthLockInfo(month.monthKey)?.locked_by_name || getMonthLockInfo(month.monthKey)?.locked_by || t('inspectionList.unknown')}\n📅 ${getMonthLockInfo(month.monthKey)?.locked_at ? new Date(getMonthLockInfo(month.monthKey)!.locked_at).toLocaleString('et-EE') : ''}\n\nAvada saavad ainult administraatorid`
-                        : 'Kuu pole lukustatud'
+                        : t('installation:ui.monthNotLocked')
                       }
                     >
                       {isMonthLocked(month.monthKey) ? (
@@ -8262,7 +8262,7 @@ export default function InstallationsScreen({
                           setDayMenuOpen(null);
                           setMonthMenuOpen(monthMenuOpen === month.monthKey ? null : month.monthKey);
                         }}
-                        title="Rohkem valikuid"
+                        title={t('installation:ui.moreOptions')}
                       >
                         <FiMoreVertical size={14} />
                       </button>
@@ -8273,19 +8273,19 @@ export default function InstallationsScreen({
                               {isMonthLocked(month.monthKey) ? (
                                 <button onClick={() => unlockMonth(month.monthKey)}>
                                   <FiUnlock size={14} />
-                                  <span>Ava kuu</span>
+                                  <span>{t('installation:ui.unlockMonth')}</span>
                                 </button>
                               ) : (
                                 <button onClick={() => lockMonth(month.monthKey)}>
                                   <FiLock size={14} />
-                                  <span>Lukusta kuu</span>
+                                  <span>{t('installation:ui.lockMonth')}</span>
                                 </button>
                               )}
                             </>
                           )}
                           <button onClick={() => exportMonthToExcel(month)}>
                             <FiDownload size={14} />
-                            <span>Ekspordi Excelisse</span>
+                            <span>{t('installation:ui.exportToExcel')}</span>
                           </button>
                           {!isMonthLocked(month.monthKey) && (
                             <button
@@ -8293,7 +8293,7 @@ export default function InstallationsScreen({
                               className="delete-btn"
                             >
                               <FiTrash2 size={14} />
-                              <span>Kustuta kuu ({month.allItems.length})</span>
+                              <span>{t('installation:ui.deleteMonth', { count: month.allItems.length })}</span>
                             </button>
                           )}
                         </div>
@@ -8313,7 +8313,7 @@ export default function InstallationsScreen({
               filteredPreassemblies.length === 0 ? (
                 <div className="empty-list">
                   <FiPackage size={32} style={{ color: '#7c3aed' }} />
-                  <p>{searchQuery ? 'Otsingutulemusi ei leitud' : 'Preassembly kirjeid pole veel'}</p>
+                  <p>{searchQuery ? t('installation:ui.noSearchResults') : t('installation:ui.noPreassemblyYet')}</p>
                 </div>
               ) : (
                 preassemblyMonthGroups.map(month => {
@@ -8344,21 +8344,21 @@ export default function InstallationsScreen({
                       <button
                         className="month-count clickable"
                         onClick={(e) => selectPreassemblies(month.allItems, e)}
-                        title="Vali kõik selle kuu detailid mudelis"
+                        title={t('installation:ui.selectAllMonthDetailsInModel')}
                         style={{ background: '#7c3aed', color: '#fff' }}
                       >
                         {month.allItems.length}
                       </button>
                       {uninstalledCount < month.allItems.length && (
                         <span
-                          title={`${uninstalledCount} paigaldamata / ${month.allItems.length - uninstalledCount} paigaldatud`}
+                          title={t('installation:ui.uninstalledStats', { uninstalled: uninstalledCount, installed: month.allItems.length - uninstalledCount })}
                           style={{
                             fontSize: '10px',
                             color: '#6b7280',
                             marginLeft: '4px'
                           }}
                         >
-                          ({uninstalledCount} ootab)
+                          ({t('installation:ui.uninstalledWaiting', { count: uninstalledCount })}
                         </span>
                       )}
                       {/* Three-dot menu for preassembly month */}
@@ -8370,7 +8370,7 @@ export default function InstallationsScreen({
                             setDayMenuOpen(null);
                             setMonthMenuOpen(monthMenuOpen === paMenuKey ? null : paMenuKey);
                           }}
-                          title="Rohkem valikuid"
+                          title={t('installation:ui.moreOptions')}
                         >
                           <FiMoreVertical size={14} />
                         </button>
@@ -8378,11 +8378,11 @@ export default function InstallationsScreen({
                           <div className="month-menu-dropdown">
                             <button onClick={(e) => { selectUninstalledPreassemblies(month.allItems, e); setMonthMenuOpen(null); }}>
                               <FiEye size={14} />
-                              <span>Vali ainult paigaldamata ({uninstalledCount})</span>
+                              <span>{t('installation:ui.selectOnlyUninstalled', { count: uninstalledCount })}</span>
                             </button>
                             <button onClick={() => { colorUninstalledPreassemblies(month.allItems); setMonthMenuOpen(null); }}>
                               <FiDroplet size={14} />
-                              <span>Värvi ainult paigaldamata</span>
+                              <span>{t('installation:ui.colorOnlyUninstalled')}</span>
                             </button>
                             <button
                               onClick={() => deleteMonthPreassemblies(month.monthKey, month.allItems)}
@@ -8420,14 +8420,14 @@ export default function InstallationsScreen({
         <div className="modal-overlay" onClick={() => setDuplicateWarning(null)}>
           <div className="settings-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
             <div className="modal-header" style={{ background: '#fff3e0' }}>
-              <h3>⚠️ Juba paigaldatud detailid</h3>
+              <h3>⚠️ {t('installation:ui.duplicateWarningTitle')}</h3>
               <button onClick={() => setDuplicateWarning(null)}>
                 <FiX size={18} />
               </button>
             </div>
             <div className="modal-body">
               <p style={{ marginBottom: '12px', color: '#666' }}>
-                Järgmised detailid on juba varem paigaldatud:
+                {t('installation:ui.duplicateWarningText')}
               </p>
               <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                 {duplicateWarning.map((dup, idx) => (
@@ -8453,7 +8453,7 @@ export default function InstallationsScreen({
                 onClick={() => setDuplicateWarning(null)}
                 style={{ marginTop: '12px', width: '100%' }}
               >
-                Selge
+                {t('installation:ui.ok')}
               </button>
             </div>
           </div>
@@ -8465,7 +8465,7 @@ export default function InstallationsScreen({
         <div className="modal-overlay" onClick={() => setPreassemblyConfirm(null)}>
           <div className="settings-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
             <div className="modal-header" style={{ background: '#fff3e0' }}>
-              <h3>⚠️ Preassembly juba paigaldatud detailidele</h3>
+              <h3>⚠️ {t('installation:ui.preassemblyConfirmTitle')}</h3>
               <button onClick={() => setPreassemblyConfirm(null)}>
                 <FiX size={18} />
               </button>
@@ -8479,15 +8479,14 @@ export default function InstallationsScreen({
                 border: '1px solid #90caf9'
               }}>
                 <p style={{ margin: 0, color: '#1565c0', fontWeight: 500, fontSize: '14px' }}>
-                  ℹ️ <strong>NB! Pöörake tähelepanu kellaajale!</strong>
+                  ℹ️ <strong>{t('installation:ui.preassemblyConfirmNotice')}</strong>
                 </p>
                 <p style={{ margin: '8px 0 0 0', color: '#1565c0', fontSize: '13px' }}>
-                  Preassembly kellaaeg peab olema enne paigalduse kellaaega (päev võib olla sama).
+                  {t('installation:ui.preassemblyConfirmNoticeDetail')}
                 </p>
               </div>
               <p style={{ marginBottom: '12px', color: '#666' }}>
-                Järgmised {preassemblyConfirm.installedItems.length} detaili on juba paigaldatud,
-                kuid preassembly aeg on enne paigalduse aega:
+                {t('installation:ui.preassemblyConfirmText', { count: preassemblyConfirm.installedItems.length })}
               </p>
               <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
                 {preassemblyConfirm.installedItems.map((item, idx) => (
@@ -8501,12 +8500,12 @@ export default function InstallationsScreen({
                     <div style={{ fontWeight: 600, marginBottom: '4px' }}>{item.assemblyMark}</div>
                     <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#666' }}>
                       <div>
-                        <span style={{ color: '#388e3c' }}>📦 Preassembly:</span>{' '}
+                        <span style={{ color: '#388e3c' }}>{t('installation:ui.preassemblyLabel')}</span>{' '}
                         {new Date(item.preassemblyTime).toLocaleDateString('et-EE')}{' '}
                         <strong>{new Date(item.preassemblyTime).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}</strong>
                       </div>
                       <div>
-                        <span style={{ color: '#1976d2' }}>🔧 Paigaldus:</span>{' '}
+                        <span style={{ color: '#1976d2' }}>{t('installation:ui.installationLabel')}</span>{' '}
                         {new Date(item.installedAt).toLocaleDateString('et-EE')}{' '}
                         <strong>{new Date(item.installedAt).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}</strong>
                       </div>
@@ -8520,7 +8519,7 @@ export default function InstallationsScreen({
                   onClick={() => setPreassemblyConfirm(null)}
                   style={{ flex: 1 }}
                 >
-                  Tühista
+                  {t('installation:ui.cancel')}
                 </button>
                 <button
                   className="btn-primary"
@@ -8528,7 +8527,7 @@ export default function InstallationsScreen({
                   disabled={saving}
                   style={{ flex: 1, background: '#ff9800' }}
                 >
-                  {saving ? 'Salvestan...' : `Lisa preassembly (${preassemblyConfirm.objectsToSave.length} tk)`}
+                  {saving ? t('installation:actions.saving') : t('installation:ui.addPreassemblyCount', { count: preassemblyConfirm.objectsToSave.length })}
                 </button>
               </div>
             </div>
@@ -8549,7 +8548,7 @@ export default function InstallationsScreen({
             <div className="modal-body">
               <div className="install-info-rows">
                 <div className="install-info-row">
-                  <span className="install-info-label">Paigaldatud</span>
+                  <span className="install-info-label">{t('installation:ui.installed')}</span>
                   <span className="install-info-value compact-date">{formatCompactDateTime(showInstallInfo.installed_at)}</span>
                 </div>
                 {/* Show if this was preassembled */}
@@ -8572,7 +8571,7 @@ export default function InstallationsScreen({
                           <div className="install-info-row" style={{ background: '#f5f3ff' }}>
                             <span className="install-info-label" style={{ color: '#7c3aed' }}>
                               <FiUsers size={12} style={{ marginRight: '4px' }} />
-                              PA Meeskond
+                              {t('installation:ui.paTeam')}
                             </span>
                             <span className="install-info-value" style={{ color: '#7c3aed' }}>
                               {preassemblyInfo.teamMembers}
@@ -8581,7 +8580,7 @@ export default function InstallationsScreen({
                         )}
                         {preassemblyInfo.methodName && (
                           <div className="install-info-row" style={{ background: '#f5f3ff' }}>
-                            <span className="install-info-label" style={{ color: '#7c3aed' }}>PA Meetod</span>
+                            <span className="install-info-label" style={{ color: '#7c3aed' }}>{t('installation:ui.paMethod')}</span>
                             <span className="install-info-value" style={{ color: '#7c3aed' }}>
                               {preassemblyInfo.methodName}
                             </span>
@@ -8593,21 +8592,21 @@ export default function InstallationsScreen({
                   return null;
                 })()}
                 <div className="install-info-row">
-                  <span className="install-info-label">Meetod</span>
-                  <span className="install-info-value">{showInstallInfo.installation_method_name || 'Määramata'}</span>
+                  <span className="install-info-label">{t('installation:ui.method')}</span>
+                  <span className="install-info-value">{showInstallInfo.installation_method_name || t('installation:ui.unassignedMethod')}</span>
                 </div>
                 <div className="install-info-row">
-                  <span className="install-info-label">Meeskond</span>
+                  <span className="install-info-label">{t('installation:ui.team')}</span>
                   <span className="install-info-value">{showInstallInfo.team_members || showInstallInfo.installer_name || '-'}</span>
                 </div>
                 {showInstallInfo.notes && (
                   <div className="install-info-row">
-                    <span className="install-info-label">Märkused</span>
+                    <span className="install-info-label">{t('installation:ui.notes')}</span>
                     <span className="install-info-value">{showInstallInfo.notes}</span>
                   </div>
                 )}
                 <div className="install-info-row muted">
-                  <span className="install-info-label">Kirje sisestas</span>
+                  <span className="install-info-label">{t('installation:ui.recordedBy')}</span>
                   <span className="install-info-value">
                     {showInstallInfo.user_email.split('@')[0]} · <span className="compact-date">{formatCompactDateTime(showInstallInfo.created_at)}</span>
                   </span>
@@ -8631,7 +8630,7 @@ export default function InstallationsScreen({
             <div className="modal-body">
               <div className="install-info-rows">
                 <div className="install-info-row">
-                  <span className="install-info-label">Preassembly</span>
+                  <span className="install-info-label">{t('installation:ui.preassembly')}</span>
                   <span className="install-info-value compact-date">{formatCompactDateTime(showPreassemblyInfo.preassembled_at)}</span>
                 </div>
                 {/* Show if this has been installed */}
@@ -8654,30 +8653,30 @@ export default function InstallationsScreen({
                   return (
                     <div className="install-info-row" style={{ background: '#fef3c7' }}>
                       <span className="install-info-label" style={{ color: '#d97706' }}>
-                        Staatus
+                        {t('installation:ui.status')}
                       </span>
                       <span className="install-info-value" style={{ color: '#d97706' }}>
-                        Ootab paigaldamist
+                        {t('installation:ui.awaitingInstallation')}
                       </span>
                     </div>
                   );
                 })()}
                 <div className="install-info-row">
-                  <span className="install-info-label">Meetod</span>
-                  <span className="install-info-value">{showPreassemblyInfo.installation_method_name || 'Määramata'}</span>
+                  <span className="install-info-label">{t('installation:ui.method')}</span>
+                  <span className="install-info-value">{showPreassemblyInfo.installation_method_name || t('installation:ui.unassignedMethod')}</span>
                 </div>
                 <div className="install-info-row">
-                  <span className="install-info-label">Meeskond</span>
+                  <span className="install-info-label">{t('installation:ui.team')}</span>
                   <span className="install-info-value">{showPreassemblyInfo.team_members || showPreassemblyInfo.installer_name || '-'}</span>
                 </div>
                 {showPreassemblyInfo.notes && (
                   <div className="install-info-row">
-                    <span className="install-info-label">Märkused</span>
+                    <span className="install-info-label">{t('installation:ui.notes')}</span>
                     <span className="install-info-value">{showPreassemblyInfo.notes}</span>
                   </div>
                 )}
                 <div className="install-info-row muted">
-                  <span className="install-info-label">Kirje sisestas</span>
+                  <span className="install-info-label">{t('installation:ui.recordedBy')}</span>
                   <span className="install-info-value">
                     {showPreassemblyInfo.user_email.split('@')[0]} · <span className="compact-date">{formatCompactDateTime(showPreassemblyInfo.created_at)}</span>
                   </span>
@@ -8693,7 +8692,7 @@ export default function InstallationsScreen({
         <div className="modal-overlay" onClick={() => setShowDayInfo(null)}>
           <div className="settings-modal stats-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>📆 Päeva info: {showDayInfo.dayLabel}</h3>
+              <h3>{t('installation:ui.dayInfo', { day: showDayInfo.dayLabel })}</h3>
               <button onClick={() => setShowDayInfo(null)}>
                 <FiX size={18} />
               </button>
@@ -8712,7 +8711,7 @@ export default function InstallationsScreen({
                   byRecorder.get(recorder)!.push(inst);
 
                   // By method
-                  const method = inst.installation_method_name || 'Määramata';
+                  const method = inst.installation_method_name || t('installation:ui.unassignedMethod');
                   if (!byMethod.has(method)) byMethod.set(method, []);
                   byMethod.get(method)!.push(inst);
 
@@ -8729,14 +8728,14 @@ export default function InstallationsScreen({
                 return (
                   <>
                     <div className="stats-section">
-                      <div className="stats-section-title">👤 Kirjed tegid:</div>
+                      <div className="stats-section-title">{t('installation:ui.recordedBySection')}</div>
                       {Array.from(byRecorder.entries()).map(([recorder, items]) => {
                         const times = items.map(i => new Date(i.created_at || i.installed_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' }));
                         const uniqueTimes = [...new Set(times)].sort();
                         return (
                           <div key={recorder} className="stats-row">
                             <span className="stats-name">{recorder.split('@')[0]}</span>
-                            <span className="stats-count">{items.length} tk</span>
+                            <span className="stats-count">{items.length} {t('installation:ui.pcs')}</span>
                             <span className="stats-times">{uniqueTimes.join(', ')}</span>
                           </div>
                         );
@@ -8744,7 +8743,7 @@ export default function InstallationsScreen({
                     </div>
 
                     <div className="stats-section">
-                      <div className="stats-section-title">👷 Paigaldajad:</div>
+                      <div className="stats-section-title">{t('installation:ui.installersSection')}</div>
                       {Array.from(byInstaller.entries()).map(([installer, items]) => (
                         <div key={installer} className="stats-row">
                           <span className="stats-name">{installer}</span>
@@ -8754,7 +8753,7 @@ export default function InstallationsScreen({
                     </div>
 
                     <div className="stats-section">
-                      <div className="stats-section-title">🔧 Paigaldusmeetodid:</div>
+                      <div className="stats-section-title">{t('installation:ui.methodsSection')}</div>
                       {Array.from(byMethod.entries()).map(([method, items]) => (
                         <div key={method} className="stats-row">
                           <span className="stats-name">{method}</span>
@@ -8764,7 +8763,7 @@ export default function InstallationsScreen({
                     </div>
 
                     <div className="stats-total">
-                      Kokku: <strong>{showDayInfo.items.length}</strong> detaili
+                      {t('installation:ui.totalDetailsPlain')}: <strong>{showDayInfo.items.length}</strong> {t('installation:ui.detaili')}
                     </div>
                   </>
                 );
@@ -8779,7 +8778,7 @@ export default function InstallationsScreen({
         <div className="modal-overlay" onClick={() => setShowMonthStats(null)}>
           <div className="settings-modal stats-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>📅 Kuu statistika: {showMonthStats.monthLabel}</h3>
+              <h3>{t('installation:ui.monthStatsTitle', { month: showMonthStats.monthLabel })}</h3>
               <button onClick={() => setShowMonthStats(null)}>
                 <FiX size={18} />
               </button>
@@ -8797,7 +8796,7 @@ export default function InstallationsScreen({
                   byRecorder.set(recorder, (byRecorder.get(recorder) || 0) + 1);
 
                   // Count by method
-                  const method = inst.installation_method_name || 'Määramata';
+                  const method = inst.installation_method_name || t('installation:ui.unassignedMethod');
                   byMethod.set(method, (byMethod.get(method) || 0) + 1);
 
                   // Count by installer
@@ -8821,15 +8820,15 @@ export default function InstallationsScreen({
                     <div className="stats-summary">
                       <div className="stats-summary-item">
                         <div className="stats-summary-value">{showMonthStats.allItems.length}</div>
-                        <div className="stats-summary-label">Detaili kokku</div>
+                        <div className="stats-summary-label">{t('installation:ui.totalDetailsCount')}</div>
                       </div>
                       <div className="stats-summary-item">
                         <div className="stats-summary-value">{workingDays.size}</div>
-                        <div className="stats-summary-label">Tööpäeva</div>
+                        <div className="stats-summary-label">{t('installation:ui.workingDays')}</div>
                       </div>
                       <div className="stats-summary-item">
                         <div className="stats-summary-value">{byInstaller.size}</div>
-                        <div className="stats-summary-label">Paigaldajat</div>
+                        <div className="stats-summary-label">{t('installation:ui.installersCount')}</div>
                       </div>
                     </div>
 
@@ -8838,14 +8837,14 @@ export default function InstallationsScreen({
                       {sortedRecorders.map(([recorder, count]) => (
                         <div key={recorder} className="stats-row">
                           <span className="stats-name">{recorder.split('@')[0]}</span>
-                          <span className="stats-count">{count} tk</span>
+                          <span className="stats-count">{count} {t('installation:ui.pcs')}</span>
                           <span className="stats-percent">{Math.round(count / showMonthStats.allItems.length * 100)}%</span>
                         </div>
                       ))}
                     </div>
 
                     <div className="stats-section">
-                      <div className="stats-section-title">👷 Paigaldajad (meeskond):</div>
+                      <div className="stats-section-title">{t('installation:ui.installersSectionTeam')}</div>
                       {sortedInstallers.map(([installer, count]) => (
                         <div key={installer} className="stats-row">
                           <span className="stats-name">{installer}</span>
@@ -8877,7 +8876,7 @@ export default function InstallationsScreen({
         <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
           <div className="settings-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
             <div className="modal-header">
-              <h3>✏️ Muuda paigaldusi ({selectedInstallationIds.size})</h3>
+              <h3>{t('installation:ui.editInstallations', { count: selectedInstallationIds.size })}</h3>
               <button onClick={() => setShowEditModal(false)}>
                 <FiX size={18} />
               </button>
@@ -8886,7 +8885,7 @@ export default function InstallationsScreen({
               {/* Date field */}
               <div className="form-row" style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
-                  <FiCalendar size={14} /> Kuupäev
+                  <FiCalendar size={14} /> {t('installation:ui.date')}
                 </label>
                 <input
                   type="datetime-local"
@@ -8899,7 +8898,7 @@ export default function InstallationsScreen({
 
               {/* Resources / Methods */}
               <div className="form-row" style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Paigaldus ressursid</label>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>{t('installation:ui.installationResources')}</label>
                 {/* Machines row */}
                 <div style={{ display: 'flex', gap: '6px', marginBottom: '6px', flexWrap: 'wrap', paddingLeft: '7px' }}>
                   {INSTALL_METHODS_CONFIG.filter(m => m.category === 'machine').map(method => {
@@ -9109,7 +9108,7 @@ export default function InstallationsScreen({
               {/* Team members */}
               <div className="form-row" style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
-                  <FiUsers size={14} /> Meeskond
+                  <FiUsers size={14} /> {t('installation:ui.team')}
                 </label>
                 {editTeamMembers.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
@@ -9156,7 +9155,7 @@ export default function InstallationsScreen({
                           addEditTeamMember(editTeamMemberInput);
                         }
                       }}
-                      placeholder="Meeskonna liige"
+                      placeholder={t('installation:ui.teamMemberPlaceholder')}
                       style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', flex: 1 }}
                     />
                     <button
@@ -9223,12 +9222,12 @@ export default function InstallationsScreen({
               {/* Notes */}
               <div className="form-row" style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
-                  <FiEdit2 size={14} /> Märkused
+                  <FiEdit2 size={14} /> {t('installation:ui.notes')}
                 </label>
                 <textarea
                   value={editNotes}
                   onChange={(e) => setEditNotes(e.target.value)}
-                  placeholder="Lisa märkused..."
+                  placeholder={t('installation:ui.addNotes')}
                   rows={3}
                   style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%', resize: 'vertical' }}
                 />
@@ -9248,7 +9247,7 @@ export default function InstallationsScreen({
                     fontSize: '14px'
                   }}
                 >
-                  Tühista
+                  {t('installation:ui.cancel')}
                 </button>
                 <button
                   onClick={saveEditedInstallations}
@@ -9264,7 +9263,7 @@ export default function InstallationsScreen({
                     fontWeight: 500
                   }}
                 >
-                  {editingSaving ? 'Salvestan...' : 'Salvesta muudatused'}
+                  {editingSaving ? t('installation:actions.saving') : t('installation:ui.saveChanges')}
                 </button>
               </div>
             </div>
@@ -9277,7 +9276,7 @@ export default function InstallationsScreen({
         <div className="modal-overlay" onClick={() => setShowPreassemblyEditModal(false)}>
           <div className="settings-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
             <div className="modal-header" style={{ background: '#f5f3ff' }}>
-              <h3>✏️ Muuda preassembly ({selectedPreassemblyIds.size})</h3>
+              <h3>{t('installation:ui.editPreassembly', { count: selectedPreassemblyIds.size })}</h3>
               <button onClick={() => setShowPreassemblyEditModal(false)}>
                 <FiX size={18} />
               </button>
@@ -9286,7 +9285,7 @@ export default function InstallationsScreen({
               {/* Date field */}
               <div className="form-row" style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
-                  <FiCalendar size={14} /> Kuupäev
+                  <FiCalendar size={14} /> {t('installation:ui.date')}
                 </label>
                 <input
                   type="datetime-local"
@@ -9300,12 +9299,12 @@ export default function InstallationsScreen({
               {/* Notes */}
               <div className="form-row" style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
-                  <FiEdit2 size={14} /> Märkused
+                  <FiEdit2 size={14} /> {t('installation:ui.notes')}
                 </label>
                 <textarea
                   value={preassemblyEditNotes}
                   onChange={(e) => setPreassemblyEditNotes(e.target.value)}
-                  placeholder="Lisa märkused..."
+                  placeholder={t('installation:ui.addNotes')}
                   rows={3}
                   style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%', resize: 'vertical' }}
                 />
@@ -9325,7 +9324,7 @@ export default function InstallationsScreen({
                     fontSize: '14px'
                   }}
                 >
-                  Tühista
+                  {t('installation:ui.cancel')}
                 </button>
                 <button
                   onClick={saveEditedPreassemblies}
@@ -9341,7 +9340,7 @@ export default function InstallationsScreen({
                     fontWeight: 500
                   }}
                 >
-                  {editingSaving ? 'Salvestan...' : 'Salvesta'}
+                  {editingSaving ? t('installation:actions.saving') : t('installation:actions.save')}
                 </button>
               </div>
             </div>
@@ -9354,7 +9353,7 @@ export default function InstallationsScreen({
         <div className="modal-overlay" onClick={() => setShowMarkInstalledModal(false)}>
           <div className="settings-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
             <div className="modal-header" style={{ background: '#eff6ff' }}>
-              <h3>🔧 Märgi paigaldatuks ({markInstalledItems.length})</h3>
+              <h3>{t('installation:ui.markAsInstalled', { count: markInstalledItems.length })}</h3>
               <button onClick={() => setShowMarkInstalledModal(false)}>
                 <FiX size={18} />
               </button>
@@ -9363,7 +9362,7 @@ export default function InstallationsScreen({
               {/* Date field */}
               <div className="form-row" style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
-                  <FiCalendar size={14} /> Paigaldamise kuupäev *
+                  <FiCalendar size={14} /> {t('installation:ui.installationDate')} *
                 </label>
                 <input
                   type="datetime-local"
@@ -9376,7 +9375,7 @@ export default function InstallationsScreen({
 
               {/* Resources / Methods */}
               <div className="form-row" style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Paigaldus ressursid *</label>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>{t('installation:ui.installationResources')} *</label>
                 {/* Machines row */}
                 <div style={{ display: 'flex', gap: '6px', marginBottom: '6px', flexWrap: 'wrap', paddingLeft: '7px' }}>
                   {INSTALL_METHODS_CONFIG.filter(m => m.category === 'machine').map(method => {
@@ -9586,7 +9585,7 @@ export default function InstallationsScreen({
               {/* Monteerijad (required) */}
               <div className="form-row" style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
-                  <FiUsers size={14} /> Monteerijad * {selectedInstallMethods.monteerija ? `(${selectedInstallMethods.monteerija})` : ''}
+                  <FiUsers size={14} /> {t('installation:ui.installersLabel')} * {selectedInstallMethods.monteerija ? `(${selectedInstallMethods.monteerija})` : ''}
                 </label>
                 {monteerijad.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
@@ -9637,8 +9636,8 @@ export default function InstallationsScreen({
                         }
                       }}
                       placeholder={selectedInstallMethods.monteerija
-                        ? `Monteerija ${monteerijad.length + 1}/${selectedInstallMethods.monteerija}`
-                        : 'Monteerija nimi'}
+                        ? t('installation:ui.installerPlaceholder', { number: monteerijad.length + 1 }) + `/${selectedInstallMethods.monteerija}`
+                        : t('installation:ui.installerNamePlaceholder')}
                       style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', flex: 1 }}
                     />
                     <button
@@ -9721,7 +9720,7 @@ export default function InstallationsScreen({
                             }
                           }
                         }}
-                        placeholder={`Troppija ${troppijad.length + 1}/${selectedInstallMethods.troppija}`}
+                        placeholder={t('installation:ui.riggerPlaceholder', { number: troppijad.length + 1, total: selectedInstallMethods.troppija })}
                         style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', flex: 1 }}
                       />
                       <button
@@ -9805,7 +9804,7 @@ export default function InstallationsScreen({
                             }
                           }
                         }}
-                        placeholder={`Keevitaja ${keevitajad.length + 1}/${selectedInstallMethods.keevitaja}`}
+                        placeholder={t('installation:ui.welderPlaceholder', { number: keevitajad.length + 1, total: selectedInstallMethods.keevitaja })}
                         style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', flex: 1 }}
                       />
                       <button
@@ -9839,7 +9838,7 @@ export default function InstallationsScreen({
               {selectedInstallMethods.crane && selectedInstallMethods.crane > 0 && (
                 <div className="form-row" style={{ marginBottom: '16px' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
-                    <img src={`${import.meta.env.BASE_URL}icons/crane.png`} alt="Kraana" style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)' }} /> Kraana operaatorid ({selectedInstallMethods.crane})
+                    <img src={`${import.meta.env.BASE_URL}icons/crane.png`} alt={t('installation:resources.crane')} style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)' }} /> {t('installation:ui.craneLabel', { count: selectedInstallMethods.crane })}
                   </label>
                   {craneOperators.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
@@ -9889,7 +9888,7 @@ export default function InstallationsScreen({
                             }
                           }
                         }}
-                        placeholder={`Kraana ${craneOperators.length + 1}`}
+                        placeholder={t('installation:ui.cranePlaceholder', { number: craneOperators.length + 1 })}
                         style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', flex: 1 }}
                       />
                       <button
@@ -9922,12 +9921,12 @@ export default function InstallationsScreen({
               {/* Notes */}
               <div className="form-row" style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
-                  <FiEdit2 size={14} /> Märkused
+                  <FiEdit2 size={14} /> {t('installation:ui.notes')}
                 </label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Lisa märkused..."
+                  placeholder={t('installation:ui.addNotes')}
                   rows={2}
                   style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%', resize: 'vertical' }}
                 />
@@ -9947,7 +9946,7 @@ export default function InstallationsScreen({
                     fontSize: '14px'
                   }}
                 >
-                  Tühista
+                  {t('installation:ui.cancel')}
                 </button>
                 <button
                   onClick={markPreassembliesAsInstalled}
@@ -9963,7 +9962,7 @@ export default function InstallationsScreen({
                     fontWeight: 500
                   }}
                 >
-                  {saving ? 'Salvestan...' : 'Märgi paigaldatuks'}
+                  {saving ? t('installation:actions.saving') : t('installation:ui.markAsInstalledBtn')}
                 </button>
               </div>
             </div>
@@ -9976,13 +9975,13 @@ export default function InstallationsScreen({
         <div className="modal-overlay" onClick={() => setEditDayModalDate(null)}>
           <div className="comment-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
             <div className="modal-header">
-              <h3>Muuda päeva: {editDayModalDate} ({editDayModalItemCount} detaili)</h3>
+              <h3>{t('installation:ui.editDay', { date: editDayModalDate, count: editDayModalItemCount })}</h3>
               <button onClick={() => setEditDayModalDate(null)}><FiX size={18} /></button>
             </div>
             <div className="comment-modal-body">
               <div className="edit-day-form">
                 <div className="form-group">
-                  <label>Uus kuupäev (valikuline):</label>
+                  <label>{t('installation:ui.newDateOptional')}</label>
                   <input
                     type="date"
                     value={editDayNewDate}
@@ -9993,7 +9992,7 @@ export default function InstallationsScreen({
 
                 {/* Resources / Methods - Machines */}
                 <div className="form-group">
-                  <label style={{ display: 'block', marginBottom: '8px' }}>Paigaldus ressursid (valikuline):</label>
+                  <label style={{ display: 'block', marginBottom: '8px' }}>{t('installation:ui.resourcesOptional')}</label>
                   <div style={{ display: 'flex', gap: '6px', marginBottom: '6px', flexWrap: 'wrap', paddingLeft: '7px' }}>
                     {INSTALL_METHODS_CONFIG.filter(m => m.category === 'machine').map(method => {
                       const isActive = !!editDayMethods[method.key];
@@ -10408,7 +10407,7 @@ export default function InstallationsScreen({
 
                 {/* Photo upload */}
                 <div className="form-group">
-                  <label style={{ display: 'block', marginBottom: '8px' }}>Fotod (valikuline):</label>
+                  <label style={{ display: 'block', marginBottom: '8px' }}>{t('installation:ui.photosOptional')}</label>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
                     {editDayPhotos.map((photo, idx) => (
                       <div key={idx} style={{ position: 'relative' }}>
@@ -10484,18 +10483,18 @@ export default function InstallationsScreen({
                 </div>
 
                 <div className="form-group">
-                  <label>Märkmed (valikuline):</label>
+                  <label>{t('installation:ui.notesOptional')}</label>
                   <textarea
                     value={editDayNotes}
                     onChange={e => setEditDayNotes(e.target.value)}
-                    placeholder="Lisainfo või märkmed..."
+                    placeholder={t('installation:ui.additionalInfoPlaceholder')}
                     rows={3}
                     className="form-input"
                   />
                 </div>
                 <div className="edit-day-info">
                   <FiAlertCircle size={14} />
-                  <span>Muudatused rakenduvad kõigile {editDayModalItemCount} detailile sel päeval</span>
+                  <span>{t('installation:ui.changesApplyToAll', { count: editDayModalItemCount })}</span>
                 </div>
                 <div className="modal-actions">
                   <button
@@ -10508,14 +10507,14 @@ export default function InstallationsScreen({
                     }}
                     disabled={savingEditDay}
                   >
-                    Tühista
+                    {t('installation:ui.cancel')}
                   </button>
                   <button
                     className="save-btn"
                     onClick={saveEditDay}
                     disabled={savingEditDay || (!editDayNewDate && Object.keys(editDayMethods).length === 0 && !editDayNotes.trim() && editDayPhotos.length === 0)}
                   >
-                    {savingEditDay ? 'Salvestan...' : 'Salvesta'}
+                    {savingEditDay ? t('installation:actions.saving') : t('installation:actions.save')}
                   </button>
                 </div>
               </div>
@@ -10592,7 +10591,7 @@ export default function InstallationsScreen({
 
             <img
               src={galleryPhotos[galleryIndex]}
-              alt={`Foto ${galleryIndex + 1}`}
+              alt={t('installation:ui.photoAlt', { number: galleryIndex + 1 })}
               style={{
                 maxWidth: '90vw',
                 maxHeight: '80vh',
@@ -10669,7 +10668,7 @@ export default function InstallationsScreen({
                   fontSize: '13px'
                 }}
               >
-                <FiDownload size={14} /> Lae alla
+                <FiDownload size={14} /> {t('installation:ui.download')}
               </a>
             </div>
           </div>

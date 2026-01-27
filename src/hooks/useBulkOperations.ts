@@ -222,7 +222,7 @@ export function useBulkOperations(options: UseBulkOperationsOptions): UseBulkOpe
       };
     } catch (err) {
       console.error('Error in bulk status change:', err);
-      setError(err instanceof Error ? err.message : 'Viga staatuse muutmisel');
+      setError(err instanceof Error ? err.message : t('bulk.statusChangeError'));
       return null;
     } finally {
       setProcessing(false);
@@ -269,7 +269,7 @@ export function useBulkOperations(options: UseBulkOperationsOptions): UseBulkOpe
       };
     } catch (err) {
       console.error('Error in bulk assign:', err);
-      setError(err instanceof Error ? err.message : 'Viga määramisel');
+      setError(err instanceof Error ? err.message : t('bulk.assignError'));
       return null;
     } finally {
       setProcessing(false);

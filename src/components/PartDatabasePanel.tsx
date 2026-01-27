@@ -270,7 +270,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
       {!compact && (
         <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <FiDatabase size={20} />
-          Detaili andmebaas
+          {t('pageHeader.partDatabase')}
         </h3>
       )}
 
@@ -282,7 +282,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && search()}
-            placeholder="Otsi margi järgi..."
+            placeholder={t('partDatabase.searchByMark')}
             style={{
               flex: 1,
               padding: '6px 10px',
@@ -308,7 +308,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
             }}
           >
             <FiSearch size={12} />
-            Otsi
+            {t('buttons.search')}
           </button>
         </div>
         <button
@@ -328,7 +328,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
           }}
         >
           <FiZap size={12} />
-          Mudeli valikust
+          {t('partDatabase.fromModelSelection')}
         </button>
       </div>
 
@@ -336,7 +336,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
       {searchResults.length > 0 && (
         <div style={{ marginBottom: '16px', background: '#fefce8', borderRadius: '6px', border: '1px solid #fde047', overflow: 'hidden' }}>
           <div style={{ padding: '8px 12px', background: '#fef9c3', borderBottom: '1px solid #fde047', fontWeight: 600, fontSize: '11px', color: '#854d0e' }}>
-            Leiti {searchResults.length} detaili - vali:
+            {t('partDatabase.foundItems', { count: searchResults.length })}
           </div>
           <div style={{ maxHeight: '150px', overflow: 'auto' }}>
             {searchResults.map((item, idx) => (
@@ -359,7 +359,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
       {selectedGuid && (
         <div style={{ marginBottom: '16px', padding: '10px 12px', background: '#f0f9ff', borderRadius: '6px', border: '1px solid #bae6fd' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-            <span style={{ fontWeight: 600, fontSize: '13px', color: '#0369a1' }}>{selectedMark || 'Tundmatu mark'}</span>
+            <span style={{ fontWeight: 600, fontSize: '13px', color: '#0369a1' }}>{selectedMark || t('partDatabase.unknownMark')}</span>
             {selectedWeight && (
               <span style={{ fontSize: '11px', color: '#0369a1', fontWeight: 500 }}>
                 {parseFloat(selectedWeight).toFixed(1)} kg
@@ -380,7 +380,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
           border: '1px solid #e5e7eb'
         }}>
           <div style={{ fontSize: '10px', fontWeight: 600, color: '#6b7280', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Elutsükkel
+            {t('partDatabase.lifecycle')}
           </div>
           <div style={{ display: 'flex', flexDirection: 'row', gap: '6px', justifyContent: 'flex-start', flexWrap: 'wrap' }}>
             {/* Tarne */}
@@ -409,7 +409,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                   }}
                 >
                   <FiTruck size={14} style={{ color: hasData ? '#d97706' : '#9ca3af', marginBottom: '4px' }} />
-                  <span style={{ fontWeight: 600, color: hasData ? '#92400e' : '#9ca3af', fontSize: '10px', marginBottom: '2px' }}>Tarne</span>
+                  <span style={{ fontWeight: 600, color: hasData ? '#92400e' : '#9ca3af', fontSize: '10px', marginBottom: '2px' }}>{t('partDatabase.delivery')}</span>
                   {date && (
                     <span style={{ color: '#374151', fontSize: '9px', fontWeight: 500, lineHeight: 1.2 }}>{date}</span>
                   )}
@@ -443,7 +443,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                   }}
                 >
                   <FiBox size={14} style={{ color: hasData ? '#059669' : '#9ca3af', marginBottom: '4px' }} />
-                  <span style={{ fontWeight: 600, color: hasData ? '#065f46' : '#9ca3af', fontSize: '10px', marginBottom: '2px' }}>Saabunud</span>
+                  <span style={{ fontWeight: 600, color: hasData ? '#065f46' : '#9ca3af', fontSize: '10px', marginBottom: '2px' }}>{t('partDatabase.arrived')}</span>
                   {date && (
                     <span style={{ color: '#374151', fontSize: '9px', fontWeight: 500, lineHeight: 1.2 }}>{date}</span>
                   )}
@@ -483,7 +483,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                   ) : (
                     <img src={`${import.meta.env.BASE_URL}icons/monteerija.png`} alt="" style={{ width: 14, height: 14, opacity: hasData ? 1 : 0.4, marginBottom: '4px' }} />
                   )}
-                  <span style={{ fontWeight: 600, color: hasData ? '#1e40af' : '#9ca3af', fontSize: '10px', marginBottom: '2px' }}>Paigaldus</span>
+                  <span style={{ fontWeight: 600, color: hasData ? '#1e40af' : '#9ca3af', fontSize: '10px', marginBottom: '2px' }}>{t('partDatabase.installation')}</span>
                   {date && (
                     <span style={{ color: '#374151', fontSize: '9px', fontWeight: 500, lineHeight: 1.2 }}>{date}</span>
                   )}
@@ -517,7 +517,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                   }}
                 >
                   <FiCheck size={14} style={{ color: hasData ? '#16a34a' : '#9ca3af', marginBottom: '4px' }} />
-                  <span style={{ fontWeight: 600, color: hasData ? '#166534' : '#9ca3af', fontSize: '10px', marginBottom: '2px' }}>Inspekt.</span>
+                  <span style={{ fontWeight: 600, color: hasData ? '#166534' : '#9ca3af', fontSize: '10px', marginBottom: '2px' }}>{t('partDatabase.inspectionShort')}</span>
                   {date && (
                     <span style={{ color: '#374151', fontSize: '9px', fontWeight: 500, lineHeight: 1.2 }}>{date}</span>
                   )}
@@ -542,7 +542,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                 }}
               >
                 <FiAlertTriangle size={14} style={{ color: '#d97706', marginBottom: '4px' }} />
-                <span style={{ fontWeight: 600, color: '#92400e', fontSize: '10px', marginBottom: '4px' }}>Probleem</span>
+                <span style={{ fontWeight: 600, color: '#92400e', fontSize: '10px', marginBottom: '4px' }}>{t('partDatabase.issue')}</span>
                 <span style={{ color: '#d97706', fontSize: '9px' }}>{data.issues.length} tk</span>
               </div>
             )}
@@ -562,7 +562,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
       {!loading && !data && !selectedGuid && (
         <div style={{ textAlign: 'center', padding: '40px 16px', color: '#64748b' }}>
           <FiDatabase size={36} style={{ marginBottom: '12px', opacity: 0.3 }} />
-          <p style={{ fontSize: '12px' }}>Vali mudelist detail või otsi margi järgi</p>
+          <p style={{ fontSize: '12px' }}>{t('partDatabase.selectOrSearch')}</p>
         </div>
       )}
 
@@ -574,7 +574,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
             <button onClick={() => toggleSection('delivery')} style={{ width: '100%', padding: '10px 12px', background: expandedSections.has('delivery') ? '#fef3c7' : '#fefce8', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', fontSize: '13px' }}>
               <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <FiTruck size={14} style={{ color: '#d97706' }} />
-                Tarnegraafik
+                {t('partDatabase.deliverySchedule')}
                 <span style={{ background: data.deliveryItems.length > 0 ? '#f59e0b' : '#d1d5db', color: 'white', padding: '1px 6px', borderRadius: '8px', fontSize: '10px' }}>{data.deliveryItems.length}</span>
               </span>
               {expandedSections.has('delivery') ? '▼' : '▶'}
@@ -599,25 +599,25 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                             gap: '4px',
                             fontSize: '12px'
                           }}
-                          title="Ava tarnegraafikus"
+                          title={t('partDatabase.openInDeliverySchedule')}
                         >
-                          {item.vehicle?.vehicle_code || 'Tundmatu veok'}
+                          {item.vehicle?.vehicle_code || t('partDatabase.unknownVehicle')}
                           <FiExternalLink size={10} />
                         </button>
                       ) : (
-                        <span style={{ fontWeight: 600 }}>{item.vehicle?.vehicle_code || 'Tundmatu veok'}</span>
+                        <span style={{ fontWeight: 600 }}>{item.vehicle?.vehicle_code || t('partDatabase.unknownVehicle')}</span>
                       )}
                       <span style={{ background: '#6b7280', color: 'white', padding: '1px 6px', borderRadius: '4px', fontSize: '10px' }}>{item.vehicle?.factory?.factory_name || '-'}</span>
                     </div>
                     <div style={{ color: '#6b7280' }}>
-                      Planeeritud: <strong>{item.vehicle?.scheduled_date ? new Date(item.vehicle.scheduled_date).toLocaleDateString('et-EE') : '-'}</strong>
+                      {t('partDatabase.planned')}: <strong>{item.vehicle?.scheduled_date ? new Date(item.vehicle.scheduled_date).toLocaleDateString('et-EE') : '-'}</strong>
                     </div>
                   </div>
                 ))}
               </div>
             )}
             {expandedSections.has('delivery') && data.deliveryItems.length === 0 && (
-              <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>Tarnegraafikus pole</div>
+              <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>{t('partDatabase.notInDeliverySchedule')}</div>
             )}
           </div>
 
@@ -626,7 +626,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
             <button onClick={() => toggleSection('arrivals')} style={{ width: '100%', padding: '10px 12px', background: expandedSections.has('arrivals') ? '#d1fae5' : '#ecfdf5', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', fontSize: '13px' }}>
               <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <FiBox size={14} style={{ color: '#059669' }} />
-                Saabumised
+                {t('partDatabase.arrivals')}
                 <span style={{ background: data.arrivalItems.length > 0 ? '#10b981' : '#d1d5db', color: 'white', padding: '1px 6px', borderRadius: '8px', fontSize: '10px' }}>{data.arrivalItems.length}</span>
               </span>
               {expandedSections.has('arrivals') ? '▼' : '▶'}
@@ -636,20 +636,20 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                 {data.arrivalItems.map((item: any, idx: number) => (
                   <div key={idx} style={{ padding: '8px', background: '#f9fafb', borderRadius: '4px', marginBottom: idx < data.arrivalItems.length - 1 ? '6px' : 0, fontSize: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <span style={{ fontWeight: 600 }}>{item.delivery_vehicle?.vehicle_code || 'Tundmatu veok'}</span>
+                      <span style={{ fontWeight: 600 }}>{item.delivery_vehicle?.vehicle_code || t('partDatabase.unknownVehicle')}</span>
                       <span style={{ background: item.status === 'confirmed' ? '#10b981' : item.status === 'missing' ? '#ef4444' : '#6b7280', color: 'white', padding: '1px 6px', borderRadius: '4px', fontSize: '10px' }}>
-                        {item.status === 'confirmed' ? 'Kinnitatud' : item.status === 'missing' ? 'Puudu' : item.status}
+                        {item.status === 'confirmed' ? t('arrivals.confirmed') : item.status === 'missing' ? t('arrivals.missing') : item.status}
                       </span>
                     </div>
                     <div style={{ color: '#6b7280' }}>
-                      Saabus: <strong>{item.arrived_vehicle?.arrival_date ? new Date(item.arrived_vehicle.arrival_date).toLocaleDateString('et-EE') : '-'}</strong>
+                      {t('partDatabase.arrivedDate')}: <strong>{item.arrived_vehicle?.arrival_date ? new Date(item.arrived_vehicle.arrival_date).toLocaleDateString('et-EE') : '-'}</strong>
                     </div>
                   </div>
                 ))}
               </div>
             )}
             {expandedSections.has('arrivals') && data.arrivalItems.length === 0 && (
-              <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>Saabumisi pole</div>
+              <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>{t('partDatabase.noArrivals')}</div>
             )}
           </div>
 
@@ -658,7 +658,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
             <button onClick={() => toggleSection('installation')} style={{ width: '100%', padding: '10px 12px', background: expandedSections.has('installation') ? '#dbeafe' : '#eff6ff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', fontSize: '13px' }}>
               <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <img src={`${import.meta.env.BASE_URL}icons/monteerija.png`} alt="" style={{ width: 14, height: 14 }} />
-                Paigaldusgraafik
+                {t('partDatabase.installationSchedule')}
                 <span style={{ background: data.installationItems.length > 0 ? '#3b82f6' : '#d1d5db', color: 'white', padding: '1px 6px', borderRadius: '8px', fontSize: '10px' }}>{data.installationItems.length}</span>
               </span>
               {expandedSections.has('installation') ? '▼' : '▶'}
@@ -672,18 +672,18 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                     <div key={idx} style={{ padding: '8px', background: item.source === 'installation' ? '#dcfce7' : item.source === 'preassembly' ? '#dbeafe' : '#f9fafb', borderRadius: '4px', marginBottom: idx < data.installationItems.length - 1 ? '6px' : 0, fontSize: '12px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                         <span style={{ background: item.source === 'installation' ? '#22c55e' : item.source === 'preassembly' ? '#3b82f6' : '#9ca3af', color: 'white', padding: '1px 6px', borderRadius: '4px', fontSize: '10px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          {item.source === 'installation' ? <><FiCheck size={10} /> Paigaldatud</> : item.source === 'preassembly' ? 'Eelkoostus' : 'Planeeritud'}
+                          {item.source === 'installation' ? <><FiCheck size={10} /> {t('partDatabase.installed')}</> : item.source === 'preassembly' ? t('partDatabase.preassembly') : t('partDatabase.planned')}
                         </span>
                         <span style={{ fontWeight: 600 }}>{formattedDate}</span>
                       </div>
-                      {(item.team_members || item.team) && <div style={{ color: '#6b7280' }}>Meeskond: {item.team_members || item.team}</div>}
+                      {(item.team_members || item.team) && <div style={{ color: '#6b7280' }}>{t('partDatabase.team')}: {item.team_members || item.team}</div>}
                     </div>
                   );
                 })}
               </div>
             )}
             {expandedSections.has('installation') && data.installationItems.length === 0 && (
-              <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>Paigaldusgraafikus pole</div>
+              <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>{t('partDatabase.notInInstallationSchedule')}</div>
             )}
           </div>
 
@@ -692,7 +692,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
             <button onClick={() => toggleSection('organizer')} style={{ width: '100%', padding: '10px 12px', background: expandedSections.has('organizer') ? '#fae8ff' : '#fdf4ff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', fontSize: '13px' }}>
               <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <FiGrid size={14} style={{ color: '#a855f7' }} />
-                Organiseerija
+                {t('partDatabase.organizer')}
                 <span style={{ background: data.organizerItems.length > 0 ? '#a855f7' : '#d1d5db', color: 'white', padding: '1px 6px', borderRadius: '8px', fontSize: '10px' }}>{data.organizerItems.length}</span>
               </span>
               {expandedSections.has('organizer') ? '▼' : '▶'}
@@ -703,7 +703,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                   <div key={idx} style={{ padding: '6px 8px', background: '#f9fafb', borderRadius: '4px', marginBottom: idx < data.organizerItems.length - 1 ? '4px' : 0, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
                     <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: item.group?.color ? `rgb(${item.group.color.r},${item.group.color.g},${item.group.color.b})` : '#6b7280', flexShrink: 0 }} />
                     <div style={{ flex: 1 }}>
-                      <span style={{ fontWeight: 600 }}>{item.group?.name || 'Tundmatu grupp'}</span>
+                      <span style={{ fontWeight: 600 }}>{item.group?.name || t('partDatabase.unknownGroup')}</span>
                       <span style={{ color: '#9ca3af', marginLeft: '8px', fontSize: '11px' }}>{item.added_at ? new Date(item.added_at).toLocaleDateString('et-EE') : ''}</span>
                     </div>
                   </div>
@@ -711,7 +711,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
               </div>
             )}
             {expandedSections.has('organizer') && data.organizerItems.length === 0 && (
-              <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>Üheski grupis pole</div>
+              <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>{t('partDatabase.notInAnyGroup')}</div>
             )}
           </div>
 
@@ -720,7 +720,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
             <button onClick={() => toggleSection('inspections')} style={{ width: '100%', padding: '10px 12px', background: expandedSections.has('inspections') ? '#dcfce7' : '#f0fdf4', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', fontSize: '13px' }}>
               <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <FiCheck size={14} style={{ color: '#16a34a' }} />
-                Inspektsioonid
+                {t('partDatabase.inspections')}
                 <span style={{ background: data.inspections.length > 0 ? '#22c55e' : '#d1d5db', color: 'white', padding: '1px 6px', borderRadius: '8px', fontSize: '10px' }}>{data.inspections.length}</span>
               </span>
               {expandedSections.has('inspections') ? '▼' : '▶'}
@@ -730,16 +730,16 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                 {data.inspections.map((item: any, idx: number) => (
                   <div key={idx} style={{ padding: '8px', background: '#f9fafb', borderRadius: '4px', marginBottom: idx < data.inspections.length - 1 ? '6px' : 0, fontSize: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <span style={{ fontWeight: 600 }}>{item.inspection_type || 'Inspektsioon'}</span>
+                      <span style={{ fontWeight: 600 }}>{item.inspection_type || t('partDatabase.inspectionLabel')}</span>
                       <span style={{ color: '#6b7280' }}>{item.inspected_at ? new Date(item.inspected_at).toLocaleDateString('et-EE') : '-'}</span>
                     </div>
-                    <div style={{ color: '#6b7280' }}>Inspektor: {item.inspector_name || item.user_email || '-'}</div>
+                    <div style={{ color: '#6b7280' }}>{t('partDatabase.inspector')}: {item.inspector_name || item.user_email || '-'}</div>
                   </div>
                 ))}
               </div>
             )}
             {expandedSections.has('inspections') && data.inspections.length === 0 && (
-              <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>Inspektsioone pole</div>
+              <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>{t('partDatabase.noInspections')}</div>
             )}
           </div>
 
@@ -748,7 +748,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
             <button onClick={() => toggleSection('issues')} style={{ width: '100%', padding: '10px 12px', background: expandedSections.has('issues') ? '#fef9c3' : '#fefce8', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', fontSize: '13px' }}>
               <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <FiAlertTriangle size={14} style={{ color: '#d97706' }} />
-                Mittevastavused
+                {t('partDatabase.nonConformances')}
                 <span style={{ background: data.issues.length > 0 ? '#eab308' : '#d1d5db', color: 'white', padding: '1px 6px', borderRadius: '8px', fontSize: '10px' }}>{data.issues.length}</span>
               </span>
               {expandedSections.has('issues') ? '▼' : '▶'}
@@ -761,9 +761,9 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                   return (
                     <div key={idx} style={{ padding: '8px', background: '#f9fafb', borderRadius: '4px', marginBottom: idx < data.issues.length - 1 ? '6px' : 0, fontSize: '12px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                        <span style={{ fontWeight: 600 }}>{issue.title || 'Probleem'}</span>
+                        <span style={{ fontWeight: 600 }}>{issue.title || t('partDatabase.issue')}</span>
                         <span style={{ background: issue.status === 'open' ? '#ef4444' : issue.status === 'in_progress' ? '#f59e0b' : '#10b981', color: 'white', padding: '1px 6px', borderRadius: '4px', fontSize: '10px' }}>
-                          {issue.status === 'open' ? 'Avatud' : issue.status === 'in_progress' ? 'Töös' : 'Lahendatud'}
+                          {issue.status === 'open' ? t('issues.statusOpen') : issue.status === 'in_progress' ? t('issues.statusInProgress') : t('issues.statusResolved')}
                         </span>
                       </div>
                       {issue.description && <div style={{ color: '#374151', marginBottom: '4px' }}>{issue.description}</div>}
@@ -774,7 +774,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
               </div>
             )}
             {expandedSections.has('issues') && data.issues.length === 0 && (
-              <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>Mittevastavusi pole</div>
+              <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>{t('partDatabase.noNonConformances')}</div>
             )}
           </div>
         </div>

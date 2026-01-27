@@ -130,7 +130,7 @@ export default function ToolsScreen({
   onColorModelWhite,
   initialExpandedSection
 }: ToolsScreenProps) {
-  const { t } = useTranslation(['tools', 'common']);
+  const { t, i18n } = useTranslation(['tools', 'common']);
   const isAdmin = checkIsAdmin(user);
   const [boltLoading, setBoltLoading] = useState(false);
   const [removeLoading, setRemoveLoading] = useState(false);
@@ -148,11 +148,11 @@ export default function ToolsScreen({
 
   // Marker (Märgista) feature state
   const [markerCategories, setMarkerCategories] = useState<MarkerCategory[]>([
-    { id: 'in_delivery', label: 'Tarnegraafikus', defaultColor: DEFAULT_MARKER_COLORS.in_delivery, guids: [], count: 0 },
-    { id: 'arrived', label: 'Saabunud', defaultColor: DEFAULT_MARKER_COLORS.arrived, guids: [], count: 0 },
-    { id: 'installed', label: 'Paigaldatud', defaultColor: DEFAULT_MARKER_COLORS.installed, guids: [], count: 0 },
-    { id: 'arrived_not_installed', label: 'Saabunud paigaldamata', defaultColor: DEFAULT_MARKER_COLORS.arrived_not_installed, guids: [], count: 0 },
-    { id: 'not_arrived', label: 'Tarnegraafikus saabumata', defaultColor: DEFAULT_MARKER_COLORS.not_arrived, guids: [], count: 0 },
+    { id: 'in_delivery', label: '', defaultColor: DEFAULT_MARKER_COLORS.in_delivery, guids: [], count: 0 },
+    { id: 'arrived', label: '', defaultColor: DEFAULT_MARKER_COLORS.arrived, guids: [], count: 0 },
+    { id: 'installed', label: '', defaultColor: DEFAULT_MARKER_COLORS.installed, guids: [], count: 0 },
+    { id: 'arrived_not_installed', label: '', defaultColor: DEFAULT_MARKER_COLORS.arrived_not_installed, guids: [], count: 0 },
+    { id: 'not_arrived', label: '', defaultColor: DEFAULT_MARKER_COLORS.not_arrived, guids: [], count: 0 },
   ]);
   const [markerColors, setMarkerColors] = useState<Record<string, { r: number; g: number; b: number }>>(DEFAULT_MARKER_COLORS);
   const [markerLoading, setMarkerLoading] = useState(false);
@@ -356,7 +356,7 @@ export default function ToolsScreen({
       setMarkeerijPresets(prev => prev.map(p =>
         p.id === presetId ? { ...p, is_shared: !p.is_shared } : p
       ));
-      showToast(preset.is_shared ? 'Jagamine peatatud' : 'Eelseadistus jagatud', 'success');
+      showToast(preset.is_shared ? t('tools:presets.shareStopped') : t('tools:presets.shared'), 'success');
     } catch (e) {
       console.error('Error toggling share:', e);
     }
@@ -468,11 +468,11 @@ export default function ToolsScreen({
 
       // Update marker categories with data - use original GUIDs
       setMarkerCategories([
-        { id: 'in_delivery', label: 'Tarnegraafikus', defaultColor: DEFAULT_MARKER_COLORS.in_delivery, guids: Array.from(deliveryGuidMap.values()), count: deliveryGuidMap.size },
-        { id: 'arrived', label: 'Saabunud', defaultColor: DEFAULT_MARKER_COLORS.arrived, guids: Array.from(arrivedGuidMap.values()), count: arrivedGuidMap.size },
-        { id: 'installed', label: 'Paigaldatud', defaultColor: DEFAULT_MARKER_COLORS.installed, guids: Array.from(installedGuidMap.values()), count: installedGuidMap.size },
-        { id: 'arrived_not_installed', label: 'Saabunud paigaldamata', defaultColor: DEFAULT_MARKER_COLORS.arrived_not_installed, guids: arrivedNotInstalledGuids, count: arrivedNotInstalledGuids.length },
-        { id: 'not_arrived', label: 'Tarnegraafikus saabumata', defaultColor: DEFAULT_MARKER_COLORS.not_arrived, guids: notArrivedGuids, count: notArrivedGuids.length },
+        { id: 'in_delivery', label: t('tools:categories.inDelivery'), defaultColor: DEFAULT_MARKER_COLORS.in_delivery, guids: Array.from(deliveryGuidMap.values()), count: deliveryGuidMap.size },
+        { id: 'arrived', label: t('tools:categories.arrived'), defaultColor: DEFAULT_MARKER_COLORS.arrived, guids: Array.from(arrivedGuidMap.values()), count: arrivedGuidMap.size },
+        { id: 'installed', label: t('tools:categories.installed'), defaultColor: DEFAULT_MARKER_COLORS.installed, guids: Array.from(installedGuidMap.values()), count: installedGuidMap.size },
+        { id: 'arrived_not_installed', label: t('tools:categories.arrivedNotInstalled'), defaultColor: DEFAULT_MARKER_COLORS.arrived_not_installed, guids: arrivedNotInstalledGuids, count: arrivedNotInstalledGuids.length },
+        { id: 'not_arrived', label: t('tools:categories.notArrived'), defaultColor: DEFAULT_MARKER_COLORS.not_arrived, guids: notArrivedGuids, count: notArrivedGuids.length },
       ]);
 
     } catch (e) {
@@ -904,7 +904,7 @@ export default function ToolsScreen({
                     .limit(1)
                 ]);
 
-                const dbGroup = 'Andmebaas';
+                const dbGroup = t('tools:fields.database');
 
                 // Add delivery fields
                 const deliveryItem = deliveryResult.data?.[0];
@@ -916,7 +916,7 @@ export default function ToolsScreen({
                     // Only date, no vehicle code
                     fields.push({
                       id: 'DB_Tarnekuupaev',
-                      label: 'Tarnekuupäev',
+                      label: t('tools:fields.deliveryDate'),
                       placeholder: '{DB_Tarnekuupaev}',
                       preview: dateStr,
                       group: dbGroup
@@ -925,7 +925,7 @@ export default function ToolsScreen({
                   if (vehicleCode) {
                     fields.push({
                       id: 'DB_Veok',
-                      label: 'Veok',
+                      label: t('tools:fields.vehicle'),
                       placeholder: '{DB_Veok}',
                       preview: vehicleCode,
                       group: dbGroup
@@ -941,7 +941,7 @@ export default function ToolsScreen({
                   if (arrivalDate) {
                     fields.push({
                       id: 'DB_Saabumiskuupaev',
-                      label: 'Saabumiskuupäev',
+                      label: t('tools:fields.arrivalDate'),
                       placeholder: '{DB_Saabumiskuupaev}',
                       preview: new Date(arrivalDate).toLocaleDateString('et-EE'),
                       group: dbGroup
@@ -950,7 +950,7 @@ export default function ToolsScreen({
                   if (unloadLocation) {
                     fields.push({
                       id: 'DB_Mahalaadimiskoht',
-                      label: 'Mahalaadimiskoht',
+                      label: t('tools:fields.unloadLocation'),
                       placeholder: '{DB_Mahalaadimiskoht}',
                       preview: unloadLocation.length > 30 ? unloadLocation.substring(0, 30) + '...' : unloadLocation,
                       group: dbGroup
@@ -965,7 +965,7 @@ export default function ToolsScreen({
                   if (instDate) {
                     fields.push({
                       id: 'DB_Paigalduskuupaev',
-                      label: 'Paigalduskuupäev',
+                      label: t('tools:fields.installationDate'),
                       placeholder: '{DB_Paigalduskuupaev}',
                       preview: new Date(instDate).toLocaleDateString('et-EE'),
                       group: dbGroup
@@ -984,7 +984,7 @@ export default function ToolsScreen({
 
                 if (childIds.length > 0) {
                   const childProps: any[] = await api.viewer.getObjectProperties(modelId, childIds);
-                  const boltGroup = 'Kinnitustarvikud';
+                  const boltGroup = t('tools:fields.fasteners');
                   const boltFieldsAdded = new Set<string>();
 
                   for (let ci = 0; ci < childProps.length; ci++) {
@@ -1090,7 +1090,7 @@ export default function ToolsScreen({
     }
 
     setColoringCategory(categoryId);
-    setBatchProgress({ message: 'Loen andmebaasist...', percent: 0 });
+    setBatchProgress({ message: t('tools:progress.readingFromDb'), percent: 0 });
 
     try {
       const color = markerColors[categoryId] || category.defaultColor;
@@ -1123,14 +1123,14 @@ export default function ToolsScreen({
           if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
         }
         offset += data.length;
-        setBatchProgress({ message: `Loen andmebaasist... ${allGuids.length}`, percent: 5 });
+        setBatchProgress({ message: t('tools:progress.readingFromDbCount', { count: allGuids.length }), percent: 5 });
         if (data.length < PAGE_SIZE) break;
       }
 
       console.log(`Total GUIDs fetched: ${allGuids.length}`);
 
       // Step 2: Find ALL objects in loaded models
-      setBatchProgress({ message: 'Otsin objekte mudelist...', percent: 15 });
+      setBatchProgress({ message: t('tools:progress.searchingInModel'), percent: 15 });
       const allFoundObjects = await findObjectsInLoadedModels(api, allGuids);
 
       if (allFoundObjects.size === 0) {
@@ -1152,7 +1152,7 @@ export default function ToolsScreen({
       const categoryGuidsLower = new Set(category.guids.map(g => g.toLowerCase()));
 
       // Step 4: Color non-category items WHITE
-      setBatchProgress({ message: 'Värvin ülejäänud valgeks...', percent: 30 });
+      setBatchProgress({ message: t('tools:progress.coloringWhite'), percent: 30 });
       const whiteByModel: Record<string, number[]> = {};
 
       for (const [guidLower, found] of foundByLowercase) {
@@ -1174,12 +1174,12 @@ export default function ToolsScreen({
           );
           whiteCount += batch.length;
           const percent = 30 + Math.round((whiteCount / totalWhite) * 30);
-          setBatchProgress({ message: `Värvin valgeks... ${whiteCount}/${totalWhite}`, percent });
+          setBatchProgress({ message: t('tools:progress.coloringWhiteCount', { done: whiteCount, total: totalWhite }), percent });
         }
       }
 
       // Step 5: Color category items with selected color
-      setBatchProgress({ message: `Värvin ${category.label}...`, percent: 65 });
+      setBatchProgress({ message: t('tools:progress.coloringCategory', { label: category.label }), percent: 65 });
       const colorByModel: Record<string, number[]> = {};
 
       for (const [guidLower, found] of foundByLowercase) {
@@ -1201,12 +1201,12 @@ export default function ToolsScreen({
           );
           coloredCount += batch.length;
           const percent = 65 + Math.round((coloredCount / totalToColor) * 30);
-          setBatchProgress({ message: `Värvin ${category.label}... ${coloredCount}/${totalToColor}`, percent });
+          setBatchProgress({ message: t('tools:progress.coloringCategoryCount', { label: category.label, done: coloredCount, total: totalToColor }), percent });
         }
       }
 
       // Step 6: Select the category items in the model
-      setBatchProgress({ message: 'Valin objektid...', percent: 98 });
+      setBatchProgress({ message: t('tools:progress.selectingObjects'), percent: 98 });
       await selectObjectsByGuid(api, category.guids);
 
       setBatchProgress(null);
@@ -1442,7 +1442,7 @@ export default function ToolsScreen({
   // Create markups for selected objects
   const handleCreateMarkeerijMarkups = async () => {
     setMarkeerijLoading(true);
-    setBatchProgress({ message: 'Loen valikut...', percent: 0 });
+    setBatchProgress({ message: t('tools:progress.readingSelection'), percent: 0 });
 
     try {
       const selected = await api.viewer.getSelection();
@@ -1476,13 +1476,13 @@ export default function ToolsScreen({
         return;
       }
 
-      setBatchProgress({ message: 'Loen propertisid...', percent: 10 });
+      setBatchProgress({ message: t('tools:progress.readingProperties'), percent: 10 });
 
       // Get properties for all selected objects (with includeHidden like AdminScreen)
       const properties: any[] = await (api.viewer as any).getObjectProperties(modelId, allRuntimeIds, { includeHidden: true });
       const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, allRuntimeIds);
 
-      setBatchProgress({ message: 'Genereerin markupe...', percent: 30 });
+      setBatchProgress({ message: t('tools:progress.generatingMarkups'), percent: 30 });
 
       const markupsToCreate: { text: string; start: { positionX: number; positionY: number; positionZ: number }; end: { positionX: number; positionY: number; positionZ: number }; color: { r: number; g: number; b: number; a: number } }[] = [];
 
@@ -1660,7 +1660,7 @@ export default function ToolsScreen({
 
       // Apply heights - either fixed or auto-staggered
       if (autoStaggerHeight && markupsToCreate.length > 1) {
-        setBatchProgress({ message: 'Arvutan kõrgusi...', percent: 60 });
+        setBatchProgress({ message: t('tools:progress.calculatingHeights'), percent: 60 });
 
         // Sort by X position for consistent staggering
         const indexed = markupsToCreate.map((m, idx) => ({ m, idx, x: m.start.positionX, y: m.start.positionY }));
@@ -1769,7 +1769,7 @@ export default function ToolsScreen({
       // Show progress for large selections
       const showProgress = allRuntimeIds.length > 10;
       if (showProgress) {
-        setBatchProgress({ message: 'Kogun poltide andmeid', percent: 0 });
+        setBatchProgress({ message: t('tools:progress.collectingBoltData'), percent: 0 });
       }
 
       const markupsToCreate: { text: string; start: { positionX: number; positionY: number; positionZ: number }; end: { positionX: number; positionY: number; positionZ: number } }[] = [];
@@ -1779,7 +1779,7 @@ export default function ToolsScreen({
         const runtimeId = allRuntimeIds[idx];
 
         if (showProgress && idx % 5 === 0) {
-          setBatchProgress({ message: 'Kogun poltide andmeid', percent: Math.round((idx / allRuntimeIds.length) * 50) });
+          setBatchProgress({ message: t('tools:progress.collectingBoltData'), percent: Math.round((idx / allRuntimeIds.length) * 50) });
         }
 
         // Get children (bolt assemblies) using getHierarchyChildren
@@ -1857,7 +1857,7 @@ export default function ToolsScreen({
       console.log('🏷️ Creating', markupsToCreate.length, 'markups');
 
       if (showProgress) {
-        setBatchProgress({ message: 'Loon markupe', percent: 60 });
+        setBatchProgress({ message: t('tools:progress.creatingMarkups'), percent: 60 });
       }
 
       // Create markups
@@ -1876,7 +1876,7 @@ export default function ToolsScreen({
 
       // Color them green
       if (showProgress) {
-        setBatchProgress({ message: 'Värvin markupe', percent: 80 });
+        setBatchProgress({ message: t('tools:progress.coloringMarkups'), percent: 80 });
       }
 
       const greenColor = '#22C55E';
@@ -1887,7 +1887,7 @@ export default function ToolsScreen({
           console.warn('Could not set color for markup', createdIds[i], e);
         }
         if (showProgress && i % 20 === 0) {
-          setBatchProgress({ message: 'Värvin markupe', percent: 80 + Math.round((i / createdIds.length) * 20) });
+          setBatchProgress({ message: t('tools:progress.coloringMarkups'), percent: 80 + Math.round((i / createdIds.length) * 20) });
         }
       }
 
@@ -1931,7 +1931,7 @@ export default function ToolsScreen({
 
       const showProgress = allRuntimeIds.length > 10;
       if (showProgress) {
-        setBatchProgress({ message: 'Kogun kinnitustarvikute andmeid', percent: 0 });
+        setBatchProgress({ message: t('tools:progress.collectingFastenerData'), percent: 0 });
       }
 
       const markupsToCreate: { text: string; start: { positionX: number; positionY: number; positionZ: number }; end: { positionX: number; positionY: number; positionZ: number } }[] = [];
@@ -1940,7 +1940,7 @@ export default function ToolsScreen({
         const runtimeId = allRuntimeIds[idx];
 
         if (showProgress && idx % 5 === 0) {
-          setBatchProgress({ message: 'Kogun kinnitustarvikute andmeid', percent: Math.round((idx / allRuntimeIds.length) * 50) });
+          setBatchProgress({ message: t('tools:progress.collectingFastenerData'), percent: Math.round((idx / allRuntimeIds.length) * 50) });
         }
 
         try {
@@ -2015,7 +2015,7 @@ export default function ToolsScreen({
       }
 
       if (showProgress) {
-        setBatchProgress({ message: 'Loon markupe', percent: 60 });
+        setBatchProgress({ message: t('tools:progress.creatingMarkups'), percent: 60 });
       }
 
       const result = await api.markup?.addTextMarkup?.(markupsToCreate as any) as any;
@@ -2207,9 +2207,8 @@ export default function ToolsScreen({
         }
       }
 
-      const headers = exportLanguage === 'en'
-        ? ['Cast Unit Mark', 'Weight (kg)', 'Position Code', 'Product Name', 'Bolt Name', 'Standard', 'Size', 'Length', 'Bolts', 'Nut Name', 'Nut Type', 'Nuts', 'Washer Name', 'Washer Type', 'Washer ⌀', 'Washers']
-        : ['Cast Unit Mark', 'Kaal (kg)', 'Asukoha kood', 'Toote nimi', 'Poldi nimi', 'Standard', 'Suurus', 'Pikkus', 'Polte', 'Mutri nimi', 'Mutri tüüp', 'Mutreid', 'Seib nimi', 'Seibi tüüp', 'Seibi ⌀', 'Seibe'];
+      const te = i18n.getFixedT(exportLanguage, 'tools');
+      const headers = [te('boltTable.castUnitMark'), te('boltTable.weight'), te('boltTable.positionCode'), te('boltTable.productName'), te('boltTable.boltName'), te('boltTable.standard'), te('boltTable.size'), te('boltTable.length'), te('boltTable.bolts'), te('boltTable.nutName'), te('boltTable.nutType'), te('boltTable.nuts'), te('boltTable.washerName'), te('boltTable.washerType'), te('boltTable.washerDiameter'), te('boltTable.washers')];
 
       const wsData = [headers, ...exportRows.map(r => [r.castUnitMark, r.weight, r.positionCode, r.productName, r.boltName, r.boltStandard, r.boltSize, r.boltLength, r.boltCount, r.nutName, r.nutType, r.nutCount, r.washerName, r.washerType, r.washerDiameter, r.washerCount])];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -2226,9 +2225,7 @@ export default function ToolsScreen({
 
       // Add bolt summary sheet if we have summary data
       if (boltSummary.length > 0) {
-        const summaryHeaders = exportLanguage === 'en'
-          ? ['Bolt Name', 'Standard', 'Size', 'Length', 'Bolts', 'Nut Name', 'Nuts', 'Washer Name', 'Washer Type', 'Washers']
-          : ['Poldi nimi', 'Standard', 'Suurus', 'Pikkus', 'Polte', 'Mutri nimi', 'Mutreid', 'Seibi nimi', 'Seibi tüüp', 'Seibe'];
+        const summaryHeaders = [te('boltTable.boltName'), te('boltTable.standard'), te('boltTable.size'), te('boltTable.length'), te('boltTable.bolts'), te('boltTable.nutName'), te('boltTable.nuts'), te('boltTable.washerName'), te('boltTable.washerType'), te('boltTable.washers')];
 
         const summaryRows = boltSummary.map(b => [
           b.boltName, b.boltStandard, b.boltSize, b.boltLength, b.boltCount,
@@ -2237,7 +2234,7 @@ export default function ToolsScreen({
 
         // Add totals row
         summaryRows.push([
-          exportLanguage === 'en' ? 'TOTAL' : 'KOKKU', '', '', '',
+          te('boltTable.total'), '', '', '',
           boltSummary.reduce((sum, b) => sum + b.boltCount, 0),
           '', boltSummary.reduce((sum, b) => sum + b.nutCount, 0),
           '', '', boltSummary.reduce((sum, b) => sum + b.washerCount, 0)
@@ -2259,7 +2256,7 @@ export default function ToolsScreen({
           if (cell) cell.s = { font: { bold: true }, fill: { fgColor: { rgb: 'E5E7EB' } } };
         }
 
-        XLSX.utils.book_append_sheet(wb, summaryWs, exportLanguage === 'en' ? 'Summary' : 'Kokkuvõte');
+        XLSX.utils.book_append_sheet(wb, summaryWs, te('boltTable.summary'));
       }
 
       const fileName = `${projectName}_poldid_${new Date().toISOString().slice(0, 10)}.xlsx`;
@@ -2300,7 +2297,7 @@ export default function ToolsScreen({
       // Show progress for large selections
       const showProgress = allRuntimeIds.length > 20;
       if (showProgress) {
-        setBatchProgress({ message: 'Skaneerin polte', percent: 0 });
+        setBatchProgress({ message: t('tools:progress.scanningBolts'), percent: 0 });
       }
 
       const summaryMap = new Map<string, BoltSummaryItem>();
@@ -2310,7 +2307,7 @@ export default function ToolsScreen({
         const runtimeId = allRuntimeIds[idx];
 
         if (showProgress && idx % 10 === 0) {
-          setBatchProgress({ message: 'Skaneerin polte', percent: Math.round((idx / allRuntimeIds.length) * 100) });
+          setBatchProgress({ message: t('tools:progress.scanningBolts'), percent: Math.round((idx / allRuntimeIds.length) * 100) });
         }
 
         try {
@@ -2404,9 +2401,8 @@ export default function ToolsScreen({
   const handleCopySummary = async () => {
     if (boltSummary.length === 0) return;
 
-    const headers = exportLanguage === 'en'
-      ? ['Bolt Name', 'Standard', 'Size', 'Length', 'Bolts', 'Nut Name', 'Nuts', 'Washer Name', 'Washer Type', 'Washers']
-      : ['Poldi nimi', 'Standard', 'Suurus', 'Pikkus', 'Polte', 'Mutri nimi', 'Mutreid', 'Seibi nimi', 'Seibi tüüp', 'Seibe'];
+    const te = i18n.getFixedT(exportLanguage, 'tools');
+    const headers = [te('boltTable.boltName'), te('boltTable.standard'), te('boltTable.size'), te('boltTable.length'), te('boltTable.bolts'), te('boltTable.nutName'), te('boltTable.nuts'), te('boltTable.washerName'), te('boltTable.washerType'), te('boltTable.washers')];
 
     let text = headers.join('\t') + '\n';
     for (const b of boltSummary) {
@@ -2576,7 +2572,7 @@ export default function ToolsScreen({
   return (
     <div className="tools-screen">
       <PageHeader
-        title="Tööriistad"
+        title={t('tools:title')}
         onBack={onBackToMenu}
         onNavigate={handleHeaderNavigate}
         currentMode="tools"
@@ -2617,7 +2613,7 @@ export default function ToolsScreen({
           >
             <FiChevronRight size={18} />
             <FiTarget size={18} style={{ color: '#f97316' }} />
-            <h3>Kraanade planeerimine</h3>
+            <h3>{t('tools:sections.cranePlanning')}</h3>
           </div>
         </div>
 
@@ -2629,13 +2625,13 @@ export default function ToolsScreen({
           >
             {expandedSection === 'export' ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
             <FiDownload size={18} style={{ color: '#3b82f6' }} />
-            <h3>Poltide eksport</h3>
+            <h3>{t('tools:sections.boltExport')}</h3>
           </div>
 
           {expandedSection === 'export' && (
             <>
               <p className="tools-section-desc">
-                Skaneeri valitud elementide poldid ja ekspordi Excel-faili. Vali kõigepealt mudelist poltidega detailid.
+                {t('tools:sections.boltExportDesc')}
               </p>
 
               <div className="tools-lang-toggle">
@@ -2665,7 +2661,7 @@ export default function ToolsScreen({
                   fontSize: '14px',
                   fontWeight: 500
                 }}>
-                  ℹ️ Vali mudelist detailid mis on poltidega
+                  {t('tools:labels.selectModelWithBolts')}
                 </div>
               ) : (
                 <div className="tools-buttons">
@@ -2676,7 +2672,7 @@ export default function ToolsScreen({
                     style={{ background: '#22c55e', width: '100%' }}
                   >
                     {scanLoading ? <FiRefreshCw className="spinning" size={14} /> : <FiRefreshCw size={14} />}
-                    <span>Skaneeri poldid</span>
+                    <span>{t('tools:buttons.scanBolts')}</span>
                   </button>
                 </div>
               )}
@@ -2690,37 +2686,37 @@ export default function ToolsScreen({
                     disabled={exportLoading}
                   >
                     {exportLoading ? <FiLoader className="spinning" size={14} /> : <FiDownload size={14} />}
-                    <span>Ekspordi Excel</span>
+                    <span>{t('tools:buttons.exportExcel')}</span>
                   </button>
 
                   <button
                     className="tools-btn tools-btn-compact"
                     onClick={handleCopySummary}
                     disabled={!tableDisplayAllowed}
-                    title={!tableDisplayAllowed ? `Max ${MAX_TABLE_DISPLAY_ROWS} rida` : ''}
+                    title={!tableDisplayAllowed ? t('tools:labels.maxRows', { max: MAX_TABLE_DISPLAY_ROWS }) : ''}
                   >
                     <FiCopy size={14} />
-                    <span>Kopeeri tabel</span>
+                    <span>{t('tools:buttons.copyTable')}</span>
                   </button>
 
                   <button
                     className="tools-btn tools-btn-compact"
                     onClick={handleCopyAsImage}
                     disabled={!tableDisplayAllowed}
-                    title={!tableDisplayAllowed ? `Max ${MAX_TABLE_DISPLAY_ROWS} rida` : ''}
+                    title={!tableDisplayAllowed ? t('tools:labels.maxRows', { max: MAX_TABLE_DISPLAY_ROWS }) : ''}
                   >
                     <FiCamera size={14} />
-                    <span>Kopeeri pildina</span>
+                    <span>{t('tools:buttons.copyAsImage')}</span>
                   </button>
 
                   <button
                     className="tools-btn tools-btn-compact"
                     onClick={handleDownloadAsImage}
                     disabled={!tableDisplayAllowed}
-                    title={!tableDisplayAllowed ? `Max ${MAX_TABLE_DISPLAY_ROWS} rida` : ''}
+                    title={!tableDisplayAllowed ? t('tools:labels.maxRows', { max: MAX_TABLE_DISPLAY_ROWS }) : ''}
                   >
                     <FiDownload size={14} />
-                    <span>Salvesta pilt</span>
+                    <span>{t('tools:buttons.saveImage')}</span>
                   </button>
 
                   <button
@@ -2729,7 +2725,7 @@ export default function ToolsScreen({
                     style={{ gridColumn: 'span 2' }}
                   >
                     <FiX size={14} />
-                    <span>Tühjenda</span>
+                    <span>{t('tools:buttons.clear')}</span>
                   </button>
                 </div>
               )}
@@ -2748,7 +2744,7 @@ export default function ToolsScreen({
                 borderBottom: '2px solid #22c55e'
               }}>
                 <span style={{ fontWeight: 600, color: '#166534' }}>
-                  🔩 Poltide kokkuvõte ({boltSummary.length})
+                  {t('tools:labels.boltSummary')} ({boltSummary.length})
                 </span>
               </div>
               <div style={{
@@ -2767,31 +2763,31 @@ export default function ToolsScreen({
                   <thead>
                     <tr style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
                       <th style={{ padding: '10px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        {exportLanguage === 'en' ? 'Bolt Name' : 'Poldi nimi'}
+                        {i18n.getFixedT(exportLanguage, 'tools')('boltTable.boltName')}
                       </th>
                       <th style={{ padding: '10px 6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', fontWeight: 600, whiteSpace: 'nowrap' }}>
                         Standard
                       </th>
                       <th style={{ padding: '10px 6px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        {exportLanguage === 'en' ? 'Size' : 'Suurus'}
+                        {i18n.getFixedT(exportLanguage, 'tools')('boltTable.size')}
                       </th>
                       <th style={{ padding: '10px 6px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        {exportLanguage === 'en' ? 'Length' : 'Pikkus'}
+                        {i18n.getFixedT(exportLanguage, 'tools')('boltTable.length')}
                       </th>
                       <th style={{ padding: '10px 6px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', fontWeight: 600, background: '#dbeafe', whiteSpace: 'nowrap' }}>
-                        {exportLanguage === 'en' ? 'Bolts' : 'Polte'}
+                        {i18n.getFixedT(exportLanguage, 'tools')('boltTable.bolts')}
                       </th>
                       <th style={{ padding: '10px 6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        {exportLanguage === 'en' ? 'Nut' : 'Mutter'}
+                        {i18n.getFixedT(exportLanguage, 'tools')('boltTable.nut')}
                       </th>
                       <th style={{ padding: '10px 6px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', fontWeight: 600, background: '#fef3c7', whiteSpace: 'nowrap' }}>
-                        {exportLanguage === 'en' ? 'Nuts' : 'Mutreid'}
+                        {i18n.getFixedT(exportLanguage, 'tools')('boltTable.nuts')}
                       </th>
                       <th style={{ padding: '10px 6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                        {exportLanguage === 'en' ? 'Washer' : 'Seib'}
+                        {i18n.getFixedT(exportLanguage, 'tools')('boltTable.washer')}
                       </th>
                       <th style={{ padding: '10px 6px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', fontWeight: 600, background: '#dcfce7', whiteSpace: 'nowrap' }}>
-                        {exportLanguage === 'en' ? 'Washers' : 'Seibe'}
+                        {i18n.getFixedT(exportLanguage, 'tools')('boltTable.washers')}
                       </th>
                     </tr>
                   </thead>
@@ -2844,13 +2840,13 @@ export default function ToolsScreen({
                 fontWeight: 600
               }}>
                 <span style={{ color: '#1d4ed8' }}>
-                  {exportLanguage === 'en' ? 'Total bolts' : 'Kokku polte'}: {boltSummary.reduce((sum, b) => sum + b.boltCount, 0)}
+                  {i18n.getFixedT(exportLanguage, 'tools')('boltTable.totalBolts')}: {boltSummary.reduce((sum, b) => sum + b.boltCount, 0)}
                 </span>
                 <span style={{ color: '#a16207' }}>
-                  {exportLanguage === 'en' ? 'Total nuts' : 'Kokku mutreid'}: {boltSummary.reduce((sum, b) => sum + b.nutCount, 0)}
+                  {i18n.getFixedT(exportLanguage, 'tools')('boltTable.totalNuts')}: {boltSummary.reduce((sum, b) => sum + b.nutCount, 0)}
                 </span>
                 <span style={{ color: '#166534' }}>
-                  {exportLanguage === 'en' ? 'Total washers' : 'Kokku seibe'}: {boltSummary.reduce((sum, b) => sum + b.washerCount, 0)}
+                  {i18n.getFixedT(exportLanguage, 'tools')('boltTable.totalWashers')}: {boltSummary.reduce((sum, b) => sum + b.washerCount, 0)}
                 </span>
               </div>
             </div>
@@ -2867,10 +2863,10 @@ export default function ToolsScreen({
               color: '#92400e',
               fontSize: '13px'
             }}>
-              <strong>⚠️ {boltSummary.length} erinevat polti leitud</strong>
+              <strong>{t('tools:scan.foundBolts', { count: boltSummary.length })}</strong>
               <br />
               <span style={{ fontSize: '12px' }}>
-                Tabel kuvatakse max {MAX_TABLE_DISPLAY_ROWS} rea korral. Kasuta "Ekspordi Excel" allalaadimiseks.
+                {t('tools:labels.tableMaxRowsWarning', { max: MAX_TABLE_DISPLAY_ROWS })}
               </span>
             </div>
           )}
@@ -2886,13 +2882,13 @@ export default function ToolsScreen({
           >
             {expandedSection === 'markup' ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
             <FiTag size={18} style={{ color: '#f59e0b' }} />
-            <h3>Poltide markupid</h3>
+            <h3>{t('tools:sections.boltMarkups')}</h3>
           </div>
 
           {expandedSection === 'markup' && (
             <>
               <p className="tools-section-desc">
-                Lisa poltidele markupid Bolt Name väärtusega. Max {MAX_MARKUPS_PER_BATCH} markupit korraga.
+                {t('tools:sections.boltMarkupsDesc', { max: MAX_MARKUPS_PER_BATCH })}
               </p>
 
               <div className="tools-buttons-grid">
@@ -2907,7 +2903,7 @@ export default function ToolsScreen({
                   ) : (
                     <FiTag size={14} style={{ color: '#22c55e' }} />
                   )}
-                  <span>Lisa</span>
+                  <span>{t('tools:buttons.add')}</span>
                 </button>
 
                 <button
@@ -2920,7 +2916,7 @@ export default function ToolsScreen({
                   ) : (
                     <FiTrash2 size={14} />
                   )}
-                  <span>Eemalda</span>
+                  <span>{t('tools:buttons.remove')}</span>
                 </button>
               </div>
             </>
@@ -2935,13 +2931,13 @@ export default function ToolsScreen({
           >
             {expandedSection === 'marker' ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
             <FiDroplet size={18} style={{ color: '#8b5cf6' }} />
-            <h3>Märgista</h3>
+            <h3>{t('tools:sections.marker')}</h3>
           </div>
 
           {expandedSection === 'marker' && (
             <>
               <p className="tools-section-desc">
-                Värvi detailid staatuse järgi. Vali värv ja klõpsa "Värvi" nuppu.
+                {t('tools:sections.markerDesc')}
               </p>
 
               {/* Refresh button */}
@@ -2957,7 +2953,7 @@ export default function ToolsScreen({
                   ) : (
                     <FiRefreshCw size={14} />
                   )}
-                  <span>Uuenda andmed</span>
+                  <span>{t('tools:buttons.refreshData')}</span>
                 </button>
               </div>
 
@@ -2997,7 +2993,7 @@ export default function ToolsScreen({
                           width: '32px', height: '32px', padding: 0, border: '2px solid #d1d5db',
                           borderRadius: '6px', cursor: hasItems ? 'pointer' : 'not-allowed'
                         }}
-                        title="Vali värv"
+                        title={t('tools:labels.selectColor')}
                       />
 
                       {/* Label */}
@@ -3013,7 +3009,7 @@ export default function ToolsScreen({
                         }}
                         onMouseEnter={(e) => canClick && (e.currentTarget.style.color = '#1d4ed8')}
                         onMouseLeave={(e) => hasItems && (e.currentTarget.style.color = '#2563eb')}
-                        title={hasItems ? `Klõpsa ${category.count} detaili märgistamiseks` : 'Pole detaile'}
+                        title={hasItems ? t('tools:labels.clickToMark', { count: category.count }) : t('tools:labels.noDetails')}
                       >
                         {category.label}
                       </div>
@@ -3030,7 +3026,7 @@ export default function ToolsScreen({
                         }}
                         onMouseEnter={(e) => canClick && (e.currentTarget.style.opacity = '0.85')}
                         onMouseLeave={(e) => canClick && (e.currentTarget.style.opacity = '1')}
-                        title={hasItems ? `Klõpsa ${category.count} detaili märgistamiseks` : 'Pole detaile'}
+                        title={hasItems ? t('tools:labels.clickToMark', { count: category.count }) : t('tools:labels.noDetails')}
                       >
                         {category.count}
                       </div>
@@ -3049,7 +3045,7 @@ export default function ToolsScreen({
                         }}
                       >
                         {isColoring ? <FiLoader className="spinning" size={12} /> : <FiDroplet size={12} />}
-                        <span>Värvi</span>
+                        <span>{t('tools:buttons.color')}</span>
                       </button>
                     </div>
                   );
@@ -3063,7 +3059,7 @@ export default function ToolsScreen({
                 color: '#6b7280',
                 lineHeight: 1.4
               }}>
-                Värvimisel muudetakse ülejäänud mudel valgeks ja valitud kategooria detailid värviliseks. <strong>Klõpsa kategooria nimel</strong> detailide kiireks märgistamiseks.
+                <span dangerouslySetInnerHTML={{ __html: t('tools:labels.colorInfoText') }} />
               </p>
             </>
           )}
@@ -3077,13 +3073,13 @@ export default function ToolsScreen({
           >
             {expandedSection === 'markeerija' ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
             <FiTag size={18} style={{ color: '#0891b2' }} />
-            <h3>Markeerija</h3>
+            <h3>{t('tools:sections.markeerija')}</h3>
           </div>
 
           {expandedSection === 'markeerija' && (
             <>
               <p className="tools-section-desc">
-                Loo tekst-markupid valitud detailidele. Määra kuni 3 rida tekstimalli koos property-väärtustega.
+                {t('tools:sections.markeerijDesc')}
               </p>
 
               {/* Presets section - compact row */}
@@ -3115,7 +3111,7 @@ export default function ToolsScreen({
                     background: '#fff'
                   }}
                 >
-                  <option value="">Eelseadistus...</option>
+                  <option value="">{t('tools:presets.selectPreset')}</option>
                   {markeerijPresets.map(preset => (
                     <option key={preset.id} value={preset.id}>
                       {preset.name} {preset.is_shared ? '(j)' : ''}
@@ -3137,7 +3133,7 @@ export default function ToolsScreen({
                     color: '#1e40af',
                     cursor: 'pointer'
                   }}
-                  title="Salvesta praegused seaded uue eelseadistusena"
+                  title={t('tools:presets.saveCurrentAsNew')}
                 >
                   <FiSave size={14} />
                 </button>
@@ -3158,14 +3154,14 @@ export default function ToolsScreen({
                           color: markeerijPresets.find(p => p.id === selectedPresetId)?.is_shared ? '#065f46' : '#92400e',
                           cursor: 'pointer'
                         }}
-                        title={markeerijPresets.find(p => p.id === selectedPresetId)?.is_shared ? 'Peata jagamine' : 'Jaga kõigiga'}
+                        title={markeerijPresets.find(p => p.id === selectedPresetId)?.is_shared ? t('tools:presets.stopSharing') : t('tools:presets.shareWithAll')}
                       >
                         <FiShare2 size={14} />
                       </button>
                     )}
                     <button
                       onClick={() => {
-                        if (window.confirm('Kas oled kindel, et soovid selle eelseadistuse kustutada?')) {
+                        if (window.confirm(t('tools:presets.deleteConfirm'))) {
                           deletePreset(selectedPresetId);
                         }
                       }}
@@ -3180,7 +3176,7 @@ export default function ToolsScreen({
                         color: '#dc2626',
                         cursor: 'pointer'
                       }}
-                      title="Kustuta eelseadistus"
+                      title={t('tools:presets.deletePreset')}
                     >
                       <FiTrash2 size={14} />
                     </button>
@@ -3210,10 +3206,10 @@ export default function ToolsScreen({
                     width: '320px',
                     boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
                   }}>
-                    <h3 style={{ margin: '0 0 16px', fontSize: '16px', color: '#1f2937' }}>Salvesta eelseadistus</h3>
+                    <h3 style={{ margin: '0 0 16px', fontSize: '16px', color: '#1f2937' }}>{t('tools:presets.savePreset')}</h3>
                     <input
                       type="text"
-                      placeholder="Eelseadistuse nimi"
+                      placeholder={t('tools:presets.presetName')}
                       value={newPresetName}
                       onChange={(e) => setNewPresetName(e.target.value)}
                       style={{
@@ -3242,7 +3238,7 @@ export default function ToolsScreen({
                           onChange={(e) => setNewPresetShared(e.target.checked)}
                           style={{ width: '16px', height: '16px' }}
                         />
-                        Jaga kõigi kasutajatega
+                        {t('tools:presets.shareWithAllUsers')}
                       </label>
                     )}
                     <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
@@ -3263,7 +3259,7 @@ export default function ToolsScreen({
                           cursor: 'pointer'
                         }}
                       >
-                        Tühista
+                        {t('common:buttons.cancel')}
                       </button>
                       <button
                         onClick={saveNewPreset}
@@ -3279,7 +3275,7 @@ export default function ToolsScreen({
                           cursor: newPresetName.trim() && !presetLoading ? 'pointer' : 'not-allowed'
                         }}
                       >
-                        {presetLoading ? 'Salvestamine...' : 'Salvesta'}
+                        {presetLoading ? t('tools:presets.saving') : t('tools:presets.save')}
                       </button>
                     </div>
                   </div>
@@ -3306,8 +3302,8 @@ export default function ToolsScreen({
                   color: markeerijSelectedCount > 0 ? '#065f46' : '#92400e'
                 }}>
                   {markeerijSelectedCount > 0
-                    ? `${markeerijSelectedCount} detaili valitud`
-                    : 'Vali mudelist detailid'}
+                    ? t('tools:labels.detailsSelected', { count: markeerijSelectedCount })
+                    : t('tools:labels.selectDetailsFromModel')}
                 </div>
                 {/* Tühjenda button - same height as selection count */}
                 <button
@@ -3327,10 +3323,10 @@ export default function ToolsScreen({
                     cursor: (markeerijaSett.line1Template || markeerijaSett.line2Template || markeerijaSett.line3Template) ? 'pointer' : 'not-allowed',
                     whiteSpace: 'nowrap'
                   }}
-                  title="Eemalda kõik väljad mallidest"
+                  title={t('tools:buttons.clearTemplates')}
                 >
                   <FiX size={12} />
-                  Tühjenda
+                  {t('tools:buttons.clear')}
                 </button>
               </div>
 
@@ -3347,7 +3343,7 @@ export default function ToolsScreen({
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
                   <FiEye size={14} style={{ color: '#0891b2' }} />
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#0e7490' }}>Eelvaade</span>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#0e7490' }}>{t('tools:labels.preview')}</span>
                 </div>
                 <div style={{
                   background: '#fff',
@@ -3363,7 +3359,7 @@ export default function ToolsScreen({
                 }}>
                   {markeerijPreviewLines.length > 0
                     ? markeerijPreviewLines.join('\n')
-                    : 'Lisa mallile välju, et näha eelvaadet...'}
+                    : t('tools:labels.addFieldsForPreview')}
                 </div>
               </div>
 
@@ -3376,7 +3372,7 @@ export default function ToolsScreen({
                     onClick={() => setMarkeerijFocusedLine(lineKey)}
                   >
                     <label className="template-label-above" style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#4b5563' }}>
-                      Rida {idx + 1}
+                      {t('tools:labels.line', { n: idx + 1 })}
                     </label>
                     <div
                       key={`${lineKey}-${refreshMarkeerijLineHtml[lineKey]}`}
@@ -3390,7 +3386,7 @@ export default function ToolsScreen({
                       onDrop={(e) => handleMarkeerijContentDrop(e, lineKey)}
                       onDragOver={handleMarkeerijDragOver}
                       dangerouslySetInnerHTML={{ __html: markeerijTemplateToHtml(markeerijaSett[lineKey]) || '<span class="template-placeholder-text"></span>' }}
-                      data-placeholder="Lohista siia välju või kirjuta tekst..."
+                      data-placeholder={t('tools:labels.dragFieldsOrType')}
                       style={{
                         minHeight: '38px',
                         padding: '8px 10px',
@@ -3419,7 +3415,7 @@ export default function ToolsScreen({
                 {/* Row 1: Color picker - preset swatches */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '11px', color: '#4b5563' }}>Teksti & joonte värv:</span>
+                    <span style={{ fontSize: '11px', color: '#4b5563' }}>{t('tools:labels.textAndLineColor')}</span>
                     <div
                       style={{
                         width: '20px',
@@ -3467,7 +3463,7 @@ export default function ToolsScreen({
 
                 {/* Row 2: Height input */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '11px', color: autoStaggerHeight ? '#9ca3af' : '#4b5563', minWidth: '130px' }}>Teksti kõrgus detailist:</span>
+                  <span style={{ fontSize: '11px', color: autoStaggerHeight ? '#9ca3af' : '#4b5563', minWidth: '130px' }}>{t('tools:labels.textHeightFromDetail')}</span>
                   <input
                     type="number"
                     min="1"
@@ -3489,7 +3485,7 @@ export default function ToolsScreen({
                   />
                   <span style={{ fontSize: '11px', color: autoStaggerHeight ? '#9ca3af' : '#6b7280' }}>cm</span>
                   <button
-                    onClick={() => alert('Kui palju kõrgemal detailist markup tekst kuvatakse. Kehtib kui "Auto kõrgused" pole sisse lülitatud.')}
+                    onClick={() => alert(t('tools:tooltips.heightInfo'))}
                     style={{
                       background: 'none',
                       border: 'none',
@@ -3506,7 +3502,7 @@ export default function ToolsScreen({
 
                 {/* Row 3: Position selection */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '11px', color: '#4b5563', minWidth: '130px' }}>Markupi paiknemine:</span>
+                  <span style={{ fontSize: '11px', color: '#4b5563', minWidth: '130px' }}>{t('tools:labels.markupPosition')}</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     {(['left', 'center', 'right'] as const).map((pos) => (
                       <button
@@ -3521,14 +3517,14 @@ export default function ToolsScreen({
                           color: markupPosition === pos ? '#0891b2' : '#6b7280',
                           cursor: 'pointer'
                         }}
-                        title={pos === 'left' ? 'Vasak serv' : pos === 'right' ? 'Parem serv' : 'Keskele'}
+                        title={pos === 'left' ? t('tools:labels.leftEdge') : pos === 'right' ? t('tools:labels.rightEdge') : t('tools:labels.center')}
                       >
                         {pos === 'left' ? '◀' : pos === 'right' ? '▶' : '●'}
                       </button>
                     ))}
                   </div>
                   <button
-                    onClick={() => alert('Määrab, kas markup paigutatakse detaili vasakusse, keskele või paremasse serva. Arvestab mudeli hetke vaatepunkti.')}
+                    onClick={() => alert(t('tools:tooltips.positionInfo'))}
                     style={{
                       background: 'none',
                       border: 'none',
@@ -3545,7 +3541,7 @@ export default function ToolsScreen({
 
                 {/* Row 4: Auto height stagger */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '11px', color: '#4b5563', minWidth: '130px' }}>Auto kõrgused:</span>
+                  <span style={{ fontSize: '11px', color: '#4b5563', minWidth: '130px' }}>{t('tools:labels.autoHeights')}</span>
                   <label style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -3559,11 +3555,11 @@ export default function ToolsScreen({
                       style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                     />
                     <span style={{ fontSize: '11px', color: autoStaggerHeight ? '#0891b2' : '#6b7280', fontWeight: autoStaggerHeight ? 500 : 400 }}>
-                      {autoStaggerHeight ? 'Sees' : 'Väljas'}
+                      {autoStaggerHeight ? t('tools:labels.on') : t('tools:labels.off')}
                     </span>
                   </label>
                   <button
-                    onClick={() => alert('Kui sisse lülitatud, siis lähestikku olevad markupid (< 4m vahe) saavad automaatselt erinevad kõrgused:\n\n• 1. markup: 20 cm\n• 2. markup: 140 cm\n• 3. markup: 280 cm\n• jne.\n\nSee aitab vältida markupite kattumist.')}
+                    onClick={() => alert(t('tools:tooltips.autoHeightInfo'))}
                     style={{
                       background: 'none',
                       border: 'none',
@@ -3590,7 +3586,7 @@ export default function ToolsScreen({
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
                   <input
                     type="text"
-                    placeholder="Otsi välju..."
+                    placeholder={t('tools:labels.searchFields')}
                     value={markeerijaPropSearch}
                     onChange={(e) => setMarkeerijaPropSearch(e.target.value)}
                     style={{
@@ -3607,7 +3603,7 @@ export default function ToolsScreen({
                 {/* Property chips grouped by property set */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {markeerijFields.length === 0 && !markeerijFieldsLoading && (
-                    <span style={{ fontSize: '11px', color: '#9ca3af' }}>Vali mudelist detail, et näha propertisid</span>
+                    <span style={{ fontSize: '11px', color: '#9ca3af' }}>{t('tools:labels.selectDetailForProperties')}</span>
                   )}
                   {(() => {
                     // Filter available fields
@@ -3629,8 +3625,8 @@ export default function ToolsScreen({
 
                     // Sort groups: 'Andmebaas' always last, others alphabetically
                     const sortedGroups = Object.keys(groupedFields).sort((a, b) => {
-                      if (a === 'Andmebaas') return 1;
-                      if (b === 'Andmebaas') return -1;
+                      if (a === t('tools:fields.database')) return 1;
+                      if (b === t('tools:fields.database')) return -1;
                       return a.localeCompare(b);
                     });
 
@@ -3640,7 +3636,7 @@ export default function ToolsScreen({
                         <div style={{
                           fontSize: '10px',
                           fontWeight: 600,
-                          color: groupName === 'Andmebaas' ? '#059669' : '#6b7280',
+                          color: groupName === t('tools:fields.database') ? '#059669' : '#6b7280',
                           textTransform: 'uppercase',
                           letterSpacing: '0.5px',
                           marginBottom: '6px',
@@ -3651,7 +3647,7 @@ export default function ToolsScreen({
                           alignItems: 'center',
                           gap: '6px'
                         }}>
-                          {groupName === 'Andmebaas' && <FiDatabase size={10} />}
+                          {groupName === t('tools:fields.database') && <FiDatabase size={10} />}
                           {groupName}
                         </div>
                         {/* Fields in this group */}
@@ -3661,9 +3657,9 @@ export default function ToolsScreen({
                             let bgColor = '#dbeafe';
                             let borderColor = '#3b82f6';
                             let textColor = '#1e40af';
-                            if (field.group === 'Andmebaas') {
+                            if (field.group === t('tools:fields.database')) {
                               bgColor = '#d1fae5'; borderColor = '#10b981'; textColor = '#065f46';
-                            } else if (field.group === 'Kinnitustarvikud') {
+                            } else if (field.group === t('tools:fields.fasteners')) {
                               bgColor = '#ffedd5'; borderColor = '#f97316'; textColor = '#c2410c';
                             }
                             return (
@@ -3705,7 +3701,7 @@ export default function ToolsScreen({
                     ));
                   })()}
                   {availableMarkeerijFields.length === 0 && markeerijFields.length > 0 && (
-                    <span style={{ fontSize: '11px', color: '#9ca3af' }}>Kõik väljad kasutatud</span>
+                    <span style={{ fontSize: '11px', color: '#9ca3af' }}>{t('tools:labels.allFieldsUsed')}</span>
                   )}
                 </div>
               </div>
@@ -3739,7 +3735,7 @@ export default function ToolsScreen({
                   ) : (
                     <FiTag size={16} />
                   )}
-                  <span>Genereeri sildid ({markeerijSelectedCount})</span>
+                  <span>{t('tools:buttons.generateLabels', { count: markeerijSelectedCount })}</span>
                 </button>
 
                 {/* Remove markups button - same row, similar styling */}
@@ -3761,19 +3757,19 @@ export default function ToolsScreen({
                     cursor: removeLoading ? 'not-allowed' : 'pointer',
                     whiteSpace: 'nowrap'
                   }}
-                  title="Eemalda kõik markupid mudelist"
+                  title={t('tools:buttons.removeAllMarkups')}
                 >
                   {removeLoading ? (
                     <FiLoader className="spinning" size={16} />
                   ) : (
                     <FiTrash2 size={16} />
                   )}
-                  <span>Eemalda</span>
+                  <span>{t('tools:buttons.remove')}</span>
                 </button>
               </div>
 
               {/* Kinnitustarvikud (fasteners) button - shown when bolt fields are available */}
-              {markeerijFields.some(f => f.group === 'Kinnitustarvikud') && (
+              {markeerijFields.some(f => f.group === t('tools:fields.fasteners')) && (
                 <div style={{ marginTop: '12px' }}>
                   <button
                     onClick={handleAddKinnitustarvikudMarkups}
@@ -3795,14 +3791,14 @@ export default function ToolsScreen({
                       color: '#fff',
                       cursor: (markeerijSelectedCount > 0 && !kinnitustarvikudLoading) ? 'pointer' : 'not-allowed'
                     }}
-                    title="Loo markupid kinnitustarvikutele (poldid washer count = 0)"
+                    title={t('tools:labels.fastenersDesc')}
                   >
                     {kinnitustarvikudLoading ? (
                       <FiLoader className="spinning" size={14} />
                     ) : (
                       <FiTag size={14} />
                     )}
-                    <span>Loo kinnitustarvikute markupid ({markeerijSelectedCount})</span>
+                    <span>{t('tools:buttons.createFastenerMarkups', { count: markeerijSelectedCount })}</span>
                   </button>
                   <p style={{
                     marginTop: '6px',
@@ -3810,7 +3806,7 @@ export default function ToolsScreen({
                     color: '#9ca3af',
                     lineHeight: 1.3
                   }}>
-                    Loob markupid alamdetailide poltidele, kus washer count = 0
+                    {t('tools:labels.fastenersDesc')}
                   </p>
                 </div>
               )}
@@ -3822,7 +3818,7 @@ export default function ToolsScreen({
                 color: '#6b7280',
                 lineHeight: 1.4
               }}>
-                Lohista välju ridadele või klõpsa lisamiseks. Klõpsa × eemaldamiseks. Max {MAX_MARKUPS_PER_BATCH} markupit korraga.
+                {t('tools:labels.dragFieldsHint', { max: MAX_MARKUPS_PER_BATCH })}
               </p>
               </>
               )}
@@ -3838,7 +3834,7 @@ export default function ToolsScreen({
           >
             {expandedSection === 'steps' ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
             <FiList size={18} style={{ color: '#0891b2' }} />
-            <h3>Sammude markeerija</h3>
+            <h3>{t('tools:sections.stepsMarker')}</h3>
             {stepsMarkups.size > 0 && (
               <span style={{
                 marginLeft: 'auto',
@@ -3857,14 +3853,14 @@ export default function ToolsScreen({
           {expandedSection === 'steps' && (
             <>
               <p className="tools-section-desc">
-                Vali mudelist detailid järjest ja igale luuakse automaatselt järjekorranumbri markup. Hoia CTRL all mitu detaili valimiseks.
+                {t('tools:sections.stepsMarkerDesc')}
               </p>
 
               {/* Settings row */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '16px' }}>
                 {/* Mode selector: Numbers or Letters */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '12px', color: '#4b5563', minWidth: '80px' }}>Režiim:</span>
+                  <span style={{ fontSize: '12px', color: '#4b5563', minWidth: '80px' }}>{t('tools:labels.mode')}</span>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <button
                       onClick={() => setStepsMode('numbers')}
@@ -3903,7 +3899,7 @@ export default function ToolsScreen({
                 {/* Color picker - preset swatches */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '12px', color: '#4b5563', minWidth: '80px' }}>Värv:</span>
+                    <span style={{ fontSize: '12px', color: '#4b5563', minWidth: '80px' }}>{t('tools:labels.colorLabel')}</span>
                     <div
                       style={{
                         width: '20px',
@@ -3952,7 +3948,7 @@ export default function ToolsScreen({
 
                 {/* Height input */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '12px', color: stepsAutoHeight ? '#9ca3af' : '#4b5563', minWidth: '80px' }}>Kõrgus:</span>
+                  <span style={{ fontSize: '12px', color: stepsAutoHeight ? '#9ca3af' : '#4b5563', minWidth: '80px' }}>{t('tools:labels.heightLabel')}</span>
                   <input
                     type="number"
                     value={stepsHeight}
@@ -3975,7 +3971,7 @@ export default function ToolsScreen({
 
                 {/* Auto height toggle */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '12px', color: '#4b5563', minWidth: '80px' }}>Auto kõrgused:</span>
+                  <span style={{ fontSize: '12px', color: '#4b5563', minWidth: '80px' }}>{t('tools:labels.autoHeights')}</span>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
                     <input
                       type="checkbox"
@@ -3988,11 +3984,11 @@ export default function ToolsScreen({
                       color: stepsAutoHeight ? '#0891b2' : '#6b7280',
                       fontWeight: stepsAutoHeight ? 500 : 400
                     }}>
-                      {stepsAutoHeight ? 'Sees' : 'Väljas'}
+                      {stepsAutoHeight ? t('tools:labels.on') : t('tools:labels.off')}
                     </span>
                   </label>
                   <button
-                    onClick={() => alert('Kui sisse lülitatud, siis lähestikku olevad markupid (< 4m vahe) saavad automaatselt erinevad kõrgused:\n\n• 1. markup: 20 cm\n• 2. markup: 140 cm\n• 3. markup: 280 cm\n• jne.\n\nSee aitab vältida markupite kattumist.')}
+                    onClick={() => alert(t('tools:tooltips.autoHeightInfo'))}
                     style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', color: '#9ca3af' }}
                     title="Info"
                     type="button"
@@ -4037,12 +4033,12 @@ export default function ToolsScreen({
                   {stepsActive ? (
                     <>
                       <FiPause size={16} />
-                      Peata märkimine
+                      {t('tools:buttons.stopMarking')}
                     </>
                   ) : (
                     <>
                       <FiPlay size={16} />
-                      Alusta märkimist
+                      {t('tools:buttons.startMarking')}
                     </>
                   )}
                 </button>
@@ -4066,11 +4062,11 @@ export default function ToolsScreen({
                       animation: 'pulse 2s infinite'
                     }} />
                     <span style={{ fontSize: '12px', fontWeight: 500 }}>
-                      Märkimine aktiivne - vali mudelist detaile
+                      {t('tools:labels.markingActive')}
                     </span>
                   </div>
                   <p style={{ fontSize: '11px', color: '#4b5563', marginTop: '4px' }}>
-                    Järgmine samm: {stepsMode === 'numbers'
+                    {t('tools:labels.nextStep')} {stepsMode === 'numbers'
                       ? stepsCounter + 1
                       : String.fromCharCode(65 + (stepsCounter % 26)) + (stepsCounter >= 26 ? String(Math.floor(stepsCounter / 26)) : '')}
                   </p>
@@ -4089,7 +4085,7 @@ export default function ToolsScreen({
                   borderRadius: '8px'
                 }}>
                   <span style={{ fontSize: '12px', color: '#5b21b6' }}>
-                    <strong>{stepsMarkups.size}</strong> sammu markeeritud
+                    {t('tools:labels.stepsMarked', { count: stepsMarkups.size })}
                   </span>
                   <button
                     onClick={async () => {
@@ -4122,7 +4118,7 @@ export default function ToolsScreen({
                     }}
                   >
                     <FiTrash2 size={12} />
-                    Eemalda sammud
+                    {t('tools:buttons.removeSteps')}
                   </button>
                 </div>
               )}
@@ -4134,7 +4130,7 @@ export default function ToolsScreen({
                 color: '#6b7280',
                 lineHeight: 1.4
               }}>
-                Hoia CTRL all ja klõpsa detailidel järjest. Kui valid detaili maha, eemaldatakse ka markup. Uuesti alustamiseks peata ja alusta uuesti.
+                {t('tools:labels.stepsHint')}
               </p>
             </>
           )}
@@ -4150,9 +4146,9 @@ export default function ToolsScreen({
               style={{ cursor: 'pointer' }}
             >
               <FiMapPin size={18} style={{ color: '#16a34a' }} />
-              <h3>GPS Location Search</h3>
+              <h3>{t('tools:sections.gpsSearch')}</h3>
               <span style={{ marginLeft: 'auto', fontSize: 12, color: '#6b7280' }}>
-                Ava →
+                {t('tools:gpsSearch.open')}
               </span>
             </div>
           </div>
@@ -4165,13 +4161,13 @@ export default function ToolsScreen({
           >
             {expandedSection === 'partdb' ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
             <FiDatabase size={18} style={{ color: '#6366f1' }} />
-            <h3>Detaili andmebaas</h3>
+            <h3>{t('tools:sections.partDatabase')}</h3>
           </div>
 
           {expandedSection === 'partdb' && (
             <>
               <p className="tools-section-desc">
-                Vaata kõiki andmeid ühe konkreetse detaili kohta: tarnegraafik, saabumised, paigaldused, inspektsioonid jm.
+                {t('tools:sections.partDatabaseDesc')}
               </p>
               <PartDatabasePanel
                 api={api}

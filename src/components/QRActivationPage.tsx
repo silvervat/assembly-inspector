@@ -159,22 +159,22 @@ export default function QRActivationPage({ qrCodeId }: QRActivationPageProps) {
           </h2>
           <div style={styles.detailBox}>
             <div style={styles.detailLabel}>{t('qrActivation.castUnitMark')}</div>
-            <div style={styles.detailValue}>{qrData.assembly_mark || 'Unknown'}</div>
+            <div style={styles.detailValue}>{qrData.assembly_mark || t('qrActivation.unknown')}</div>
           </div>
           {qrData.product_name && (
             <div style={styles.detailBox}>
-              <div style={styles.detailLabel}>Product</div>
+              <div style={styles.detailLabel}>{t('qrActivation.product')}</div>
               <div style={styles.detailValue}>{qrData.product_name}</div>
             </div>
           )}
           {qrData.weight && (
             <div style={styles.detailBox}>
-              <div style={styles.detailLabel}>Weight</div>
+              <div style={styles.detailLabel}>{t('qrActivation.weight')}</div>
               <div style={styles.detailValue}>{qrData.weight.toFixed(1)} kg</div>
             </div>
           )}
           <div style={{ ...styles.detailBox, background: '#d1fae5' }}>
-            <div style={styles.detailLabel}>Found by</div>
+            <div style={styles.detailLabel}>{t('qrActivation.foundBy')}</div>
             <div style={styles.detailValue}>{qrData.activated_by_name}</div>
             <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
               {qrData.activated_at ? new Date(qrData.activated_at).toLocaleString('en-GB') : ''}
@@ -191,11 +191,11 @@ export default function QRActivationPage({ qrCodeId }: QRActivationPageProps) {
       <div style={styles.container}>
         <div style={{ ...styles.card, borderColor: '#ef4444' }}>
           <FiAlertCircle size={48} color="#ef4444" />
-          <h2 style={{ color: '#ef4444', margin: '16px 0 8px' }}>Expired</h2>
-          <p>This QR code has expired</p>
+          <h2 style={{ color: '#ef4444', margin: '16px 0 8px' }}>{t('qrActivation.expired')}</h2>
+          <p>{t('qrActivation.expiredText')}</p>
           <div style={styles.detailBox}>
             <div style={styles.detailLabel}>{t('qrActivation.castUnitMark')}</div>
-            <div style={styles.detailValue}>{qrData.assembly_mark || 'Unknown'}</div>
+            <div style={styles.detailValue}>{qrData.assembly_mark || t('qrActivation.unknown')}</div>
           </div>
         </div>
       </div>
@@ -207,36 +207,36 @@ export default function QRActivationPage({ qrCodeId }: QRActivationPageProps) {
     <div style={styles.container}>
       <div style={styles.card}>
         <FiMapPin size={48} color="#3b82f6" />
-        <h2 style={{ color: '#1f2937', margin: '16px 0 8px' }}>Confirm Part Found</h2>
+        <h2 style={{ color: '#1f2937', margin: '16px 0 8px' }}>{t('qrActivation.confirmPartFound')}</h2>
 
         <div style={styles.detailBox}>
           <div style={styles.detailLabel}>{t('qrActivation.castUnitMark')}</div>
-          <div style={styles.detailValue}>{qrData.assembly_mark || 'Unknown'}</div>
+          <div style={styles.detailValue}>{qrData.assembly_mark || t('qrActivation.unknown')}</div>
         </div>
 
         {qrData.product_name && (
           <div style={styles.detailBox}>
-            <div style={styles.detailLabel}>Product</div>
+            <div style={styles.detailLabel}>{t('qrActivation.product')}</div>
             <div style={styles.detailValue}>{qrData.product_name}</div>
           </div>
         )}
 
         {qrData.weight && (
           <div style={styles.detailBox}>
-            <div style={styles.detailLabel}>Weight</div>
+            <div style={styles.detailLabel}>{t('qrActivation.weight')}</div>
             <div style={styles.detailValue}>{qrData.weight.toFixed(1)} kg</div>
           </div>
         )}
 
         <div style={{ width: '100%', marginTop: '16px' }}>
           <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, color: '#374151' }}>
-            Your Name
+            {t('qrActivation.yourName')}
           </label>
           <input
             type="text"
             value={activatorName}
             onChange={(e) => setActivatorName(e.target.value)}
-            placeholder="Enter your name"
+            placeholder={t('qrActivation.enterYourName')}
             style={styles.input}
             autoFocus
           />
@@ -254,18 +254,18 @@ export default function QRActivationPage({ qrCodeId }: QRActivationPageProps) {
           {activating ? (
             <>
               <FiLoader size={20} style={{ animation: 'spin 1s linear infinite' }} />
-              <span>Confirming...</span>
+              <span>{t('qrActivation.confirming')}</span>
             </>
           ) : (
             <>
               <FiCheckCircle size={20} />
-              <span>Confirm - Part Found!</span>
+              <span>{t('qrActivation.confirmFound')}</span>
             </>
           )}
         </button>
 
         <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '16px', textAlign: 'center' }}>
-          Created by: {qrData.created_by_name}
+          {t('qrActivation.createdBy')} {qrData.created_by_name}
         </p>
       </div>
 

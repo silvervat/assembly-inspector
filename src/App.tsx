@@ -34,12 +34,13 @@ import {
 } from './utils/navigationHelper';
 import { initOfflineQueue } from './utils/offlineQueue';
 import { isSuperAdminEmail, createSuperAdminUser } from './constants/roles';
+import i18n from './i18n';
 import './App.css';
 
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.4.13';
+export const APP_VERSION = '3.4.14';
 
 // Trimble Connect kasutaja info
 interface TrimbleConnectUser {
@@ -131,14 +132,14 @@ if (zoomId && !isPopupMode) {
 
     if (error || !zoomTarget) {
       console.error('🔗 [ZOOM] Zoom target not found:', error);
-      alert('Link is invalid or expired / Link ei ole kehtiv või on aegunud');
+      alert(i18n.t('app.linkInvalidOrExpired'));
       return;
     }
 
     // Check if expired
     if (new Date(zoomTarget.expires_at) < new Date()) {
       console.log('🔗 [ZOOM] Zoom target expired');
-      alert('This link has expired / See link on aegunud');
+      alert(i18n.t('app.linkExpired'));
       // Mark as consumed
       await supabase.from('zoom_targets').update({ consumed: true }).eq('id', zoomId);
       return;
@@ -525,11 +526,11 @@ export default function App() {
                 if (calibrationModeRef.current === 'pickingPoint1') {
                   setCalibrationPoint1({ x: pos.x, y: pos.y, z: pos.z });
                   setCalibrationMode('pickingPoint2');
-                  setGlobalToast({ message: 'Punkt 1 salvestatud! Vali nüüd punkt 2.', type: 'success' });
+                  setGlobalToast({ message: t('app.point1Saved'), type: 'success' });
                 } else if (calibrationModeRef.current === 'pickingPoint2') {
                   setCalibrationPoint2({ x: pos.x, y: pos.y, z: pos.z });
                   setCalibrationMode('off');
-                  setGlobalToast({ message: 'Punkt 2 salvestatud! Kalibreerimine lõpetatud.', type: 'success' });
+                  setGlobalToast({ message: t('app.point2Saved'), type: 'success' });
                   // Deactivate measurement tool
                   connected.viewer.activateTool('reset').catch(console.error);
                 }
@@ -701,7 +702,7 @@ export default function App() {
 
             if (expiredTargets && expiredTargets.length > 0) {
               console.log('🔗 [ZOOM] Found expired zoom target');
-              setError('Link on aegunud. Palun küsi uus link.');
+              setError(t('app.linkExpiredRequestNew'));
               // Mark expired target as consumed
               await supabase
                 .from('zoom_targets')
@@ -750,10 +751,10 @@ export default function App() {
               await checkPendingNavigation(connected);
             } else if (dbError || !dbUser) {
               console.warn('User not found in trimble_ex_users:', userData.email);
-              setAuthError(`Kasutaja "${userData.email}" ei ole registreeritud. Võta ühendust administraatoriga.`);
+              setAuthError(t('app.userNotRegistered', { email: userData.email }));
             } else if (dbUser.is_active === false) {
               console.warn('User account is inactive:', userData.email);
-              setAuthError(`Kasutaja "${userData.email}" konto on deaktiveeritud. Võta ühendust administraatoriga.`);
+              setAuthError(t('app.userDeactivated', { email: userData.email }));
             } else {
               console.log('User authenticated:', dbUser);
               setUser(dbUser);
@@ -762,16 +763,16 @@ export default function App() {
               await checkPendingNavigation(connected);
             }
           } else {
-            setAuthError('Trimble Connect kasutaja email ei ole saadaval.');
+            setAuthError(t('app.tcEmailNotAvailable'));
           }
         } catch (e) {
           console.error('Could not get TC user:', e);
-          setAuthError('Trimble Connect kasutaja info laadimine ebaõnnestus.');
+          setAuthError(t('app.tcUserLoadFailed'));
         }
 
         setLoading(false);
       } catch (err: any) {
-        setError(err?.message || 'Ühenduse viga Trimble Connect\'iga');
+        setError(err?.message || t('app.connectionError'));
         console.error('Connection error:', err);
         setLoading(false);
       }
@@ -813,7 +814,7 @@ export default function App() {
 
     } catch (e) {
       console.error('Navigation error:', e);
-      setNavigationStatus('Navigeerimine ebaõnnestus');
+      setNavigationStatus(t('app.navigationFailed'));
       setTimeout(() => {
         setNavigationStatus('');
         setIsNavigating(false);
@@ -851,7 +852,7 @@ export default function App() {
       let foundByLowercase = colorWhiteCacheRef.current;
 
       if (foundByLowercase.size === 0) {
-        setColorWhiteProgress({ message: 'Valmistan ette värvimist', percent: 0 });
+        setColorWhiteProgress({ message: t('app.preparingColoring'), percent: 0 });
 
         // Fetch from database
         const PAGE_SIZE = 5000;
@@ -891,7 +892,7 @@ export default function App() {
 
           // Update progress (0-50% for fetching)
           const fetchPercent = totalCount > 0 ? Math.round((fetchedCount / totalCount) * 50) : 25;
-          setColorWhiteProgress({ message: 'Valmistan ette värvimist', percent: fetchPercent });
+          setColorWhiteProgress({ message: t('app.preparingColoring'), percent: fetchPercent });
 
           if (data.length < PAGE_SIZE) break;
         }
@@ -903,7 +904,7 @@ export default function App() {
           return;
         }
 
-        setColorWhiteProgress({ message: 'Valmistan ette värvimist', percent: 50 });
+        setColorWhiteProgress({ message: t('app.preparingColoring'), percent: 50 });
 
         // Find objects in loaded models
         const foundObjects = await findObjectsInLoadedModels(api, allGuids);
@@ -919,7 +920,7 @@ export default function App() {
       } else {
         console.log(`[COLOR WHITE] Using cache with ${foundByLowercase.size} objects`);
         // Show progress even when using cache
-        setColorWhiteProgress({ message: 'Värvin mudelit', percent: 50 });
+        setColorWhiteProgress({ message: t('app.coloringModel'), percent: 50 });
         // Small delay to ensure overlay renders
         await new Promise(resolve => setTimeout(resolve, 50));
       }
@@ -955,7 +956,7 @@ export default function App() {
 
           // Update progress (50-100% for coloring)
           const colorPercent = 50 + Math.round((coloredCount / totalToColor) * 50);
-          setColorWhiteProgress({ message: 'Värvin mudelit', percent: colorPercent });
+          setColorWhiteProgress({ message: t('app.coloringModel'), percent: colorPercent });
         }
       }
 
@@ -2655,7 +2656,7 @@ export default function App() {
   if (loading) {
     return (
       <div className="container">
-        <div className="loading">Ühendatakse Trimble Connect'iga...</div>
+        <div className="loading">{t('app.connectingToTrimble')}</div>
         <VersionFooter />
       </div>
     );
@@ -2665,10 +2666,10 @@ export default function App() {
     return (
       <div className="container">
         <div className="error">
-          <h3>Viga</h3>
+          <h3>{t('app.error')}</h3>
           <p>{error}</p>
           <p style={{ fontSize: 12, opacity: 0.7 }}>
-            Veendu, et laiendus on avatud Trimble Connect keskkonnas.
+            {t('app.ensureExtensionOpen')}
           </p>
         </div>
         <VersionFooter />
@@ -2679,7 +2680,7 @@ export default function App() {
   if (!api) {
     return (
       <div className="container">
-        API pole saadaval
+        {t('app.apiNotAvailable')}
         <VersionFooter />
       </div>
     );
@@ -2691,11 +2692,11 @@ export default function App() {
       <div className="container">
         <div className="auth-error-card">
           <div className="auth-error-icon">🔒</div>
-          <h3>Ligipääs keelatud</h3>
+          <h3>{t('app.accessDenied')}</h3>
           <p>{authError}</p>
           {tcUser && (
             <div className="auth-error-email">
-              Sinu email: <strong>{tcUser.email}</strong>
+              {t('app.yourEmail')} <strong>{tcUser.email}</strong>
             </div>
           )}
         </div>
@@ -2707,7 +2708,7 @@ export default function App() {
   if (!user) {
     return (
       <div className="container">
-        <div className="loading">Autentimine...</div>
+        <div className="loading">{t('app.authenticating')}</div>
         <VersionFooter />
       </div>
     );

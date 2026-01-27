@@ -2664,9 +2664,9 @@ export default function InspectorScreen({
         <div className="not-in-plan-warning">
           <FiAlertCircle size={20} />
           <div className="not-in-plan-content">
-            <span className="not-in-plan-title">Antud detail puudub inspektsiooni kavast</span>
+            <span className="not-in-plan-title">{t('inspector.detailNotInPlan')}</span>
             <span className="not-in-plan-desc">
-              Valitud detaili ei leitud selle inspektsiooni tüübi kavast
+              {t('inspector.detailNotInPlanDesc')}
             </span>
           </div>
         </div>
@@ -2676,16 +2676,16 @@ export default function InspectorScreen({
         <div className="selection-info">
           <h3>
             {inspectionMode === 'poldid'
-              ? `Valitud: ${selectedObjects.length} poldikomplekt${selectedObjects.length > 1 ? 'i' : ''}`
-              : `Valitud: ${selectedObjects.length} detail${selectedObjects.length > 1 ? 'i' : ''}`}
+              ? (selectedObjects.length > 1 ? t('inspector.selectedBoltsPlural', { count: selectedObjects.length }) : t('inspector.selectedBolts', { count: selectedObjects.length }))
+              : (selectedObjects.length > 1 ? t('inspector.selectedDetailsPlural', { count: selectedObjects.length }) : t('inspector.selectedDetails', { count: selectedObjects.length }))}
           </h3>
           {selectedObjects.map((obj, idx) => (
             <div key={idx} className="selected-item">
               <div className="selected-mark-container">
                 <span className="selected-mark">
                   {inspectionMode === 'poldid'
-                    ? (obj.boltName || 'Bolt Name puudub')
-                    : (obj.assemblyMark || 'Mark puudub')}
+                    ? (obj.boltName || t('inspector.boltNameMissing'))
+                    : (obj.assemblyMark || t('inspector.markMissing'))}
                 </span>
                 {obj.productName && inspectionMode !== 'poldid' && (
                   <span className="selected-product-name">{obj.productName}</span>
@@ -2693,18 +2693,18 @@ export default function InspectorScreen({
               </div>
               {inspectionMode === 'poldid' && obj.boltStandard && (
                 <div className="selected-bolt-standard">
-                  Bolt standard: {obj.boltStandard}
-                  {obj.boltStandard.includes('4014') && <span className="bolt-thread-type">osakeere</span>}
-                  {obj.boltStandard.includes('4017') && <span className="bolt-thread-type">täiskeere</span>}
+                  {t('inspector.boltStandard', { standard: obj.boltStandard })}
+                  {obj.boltStandard.includes('4014') && <span className="bolt-thread-type">{t('inspector.partialThread')}</span>}
+                  {obj.boltStandard.includes('4017') && <span className="bolt-thread-type">{t('inspector.fullThread')}</span>}
                 </div>
               )}
               {inspectionMode === 'poldid' && (
                 <div className="bolt-details">
                   {obj.boltCount && (
                     <div className="bolt-detail-row">
-                      <span>Bolt count: {obj.boltCount}</span>
+                      <span>{t('inspector.boltCount', { count: parseInt(obj.boltCount) || 0 })}</span>
                       {obj.nutCount && parseInt(obj.nutCount) > parseInt(obj.boltCount) && (
-                        <span className="bolt-warning">⚠️ topelt mutrid?</span>
+                        <span className="bolt-warning">⚠️ {t('inspector.doubleMuts')}</span>
                       )}
                     </div>
                   )}
@@ -2720,14 +2720,14 @@ export default function InspectorScreen({
                   )}
                   {obj.slottedHoleX && parseFloat(obj.slottedHoleX) !== 0 && (
                     <div className="bolt-detail-row">
-                      <span>Slotted hole X: {parseFloat(obj.slottedHoleX).toFixed(1)}</span>
-                      <span className="bolt-warning">⚠️ suur seib?</span>
+                      <span>{t('inspector.slottedHoleX', { value: parseFloat(obj.slottedHoleX).toFixed(1) })}</span>
+                      <span className="bolt-warning">⚠️ {t('inspector.largeBolt')}</span>
                     </div>
                   )}
                   {obj.slottedHoleY && parseFloat(obj.slottedHoleY) !== 0 && (
                     <div className="bolt-detail-row">
-                      <span>Slotted hole Y: {parseFloat(obj.slottedHoleY).toFixed(1)}</span>
-                      <span className="bolt-warning">⚠️ suur seib?</span>
+                      <span>{t('inspector.slottedHoleY', { value: parseFloat(obj.slottedHoleY).toFixed(1) })}</span>
+                      <span className="bolt-warning">⚠️ {t('inspector.largeBolt')}</span>
                     </div>
                   )}
                 </div>
@@ -2755,21 +2755,21 @@ export default function InspectorScreen({
             )}
             {assignedPlan.category && (
               <div className="plan-card-row">
-                <span className="plan-card-label">Tüüp:</span>
+                <span className="plan-card-label">{t('inspector.typeLabel')}</span>
                 <span className="plan-card-value">{assignedPlan.category.name}</span>
               </div>
             )}
             <div className="plan-card-row">
               <span className="plan-card-label">Assembly mode:</span>
               <span className={`plan-card-value mode-badge ${assignedPlan.assembly_selection_mode ? 'on' : 'off'}`}>
-                {assignedPlan.assembly_selection_mode ? 'SEES' : 'VÄLJAS'}
+                {assignedPlan.assembly_selection_mode ? t('inspector.assemblyModeOn') : t('inspector.assemblyModeOff')}
               </span>
             </div>
             {assignedPlan.planner_notes && (
               <div className="plan-card-notes">
                 <div className="plan-notes-header">
                   <FiAlertCircle className="plan-notes-icon" />
-                  <span>Märkmed:</span>
+                  <span>{t('inspector.notesLabel')}</span>
                 </div>
                 <div className="plan-notes-content">{assignedPlan.planner_notes}</div>
               </div>
@@ -2778,7 +2778,7 @@ export default function InspectorScreen({
             {/* Checkpoint loading indicator */}
             {loadingCheckpoints && (
               <div className="plan-card-checkpoints">
-                <span className="loading-checkpoints">Laadin kontrollpunkte...</span>
+                <span className="loading-checkpoints">{t('inspector.loadingCheckpoints')}</span>
               </div>
             )}
           </div>
@@ -2787,7 +2787,7 @@ export default function InspectorScreen({
 
       {/* Checkpoint loading indicator for inspection_type mode */}
       {inspectionMode === 'inspection_type' && loadingCheckpoints && (
-        <div className="loading-checkpoints-inline">Laadin kontrollpunkte...</div>
+        <div className="loading-checkpoints-inline">{t('inspector.loadingCheckpoints')}</div>
       )}
 
       {/* Checkpoint Form - show when checkpoints are available */}
@@ -2902,12 +2902,12 @@ export default function InspectorScreen({
       {inspectionListMode === 'none' && inspectionMode !== 'inspection_type' && (
       <>
         <div className="instructions">
-          <h4>Juhised:</h4>
+          <h4>{t('inspector.instructionsTitle')}</h4>
           <ol>
-            <li>Vali 3D vaates üks detail</li>
-            <li>Kontrolli Assembly Mark</li>
-            <li>Vajuta "Inspekteeri"</li>
-            <li>Detail värvitakse mustaks</li>
+            <li>{t('inspector.instruction1')}</li>
+            <li>{t('inspector.instruction2')}</li>
+            <li>{t('inspector.instruction3')}</li>
+            <li>{t('inspector.instruction4')}</li>
           </ol>
         </div>
 
@@ -2918,7 +2918,7 @@ export default function InspectorScreen({
             onChange={(e) => setAutoClosePanel(e.target.checked)}
           />
           <span className="toggle-switch"></span>
-          Sulge paneel pärast inspekteerimist
+          {t('inspector.autoClosePanel')}
         </label>
       </>
       )}
