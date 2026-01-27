@@ -8145,7 +8145,7 @@ export default function OrganizerScreen({
       };
 
       setGroupsImportProgress({
-        phase: 'Töötlen detaile...',
+        phase: t('organizer:importProgress.processingItems'),
         current: 0,
         total: totalItems,
         percent: 0
@@ -9029,7 +9029,7 @@ export default function OrganizerScreen({
               <span
                 className="org-color-dot"
                 style={{ backgroundColor: `rgb(${node.color.r}, ${node.color.g}, ${node.color.b})`, cursor: isEffectivelyLocked ? 'not-allowed' : 'pointer', opacity: isEffectivelyLocked ? 0.6 : 1 }}
-                title={isEffectivelyLocked ? '🔒 Grupp on lukustatud - värvi muutmine keelatud' : 'Klõpsa värvi muutmiseks'}
+                title={isEffectivelyLocked ? t('organizer:ui.lockedColorChangeDisabled') : t('organizer:ui.clickToChangeColor')}
               />
               {colorPickerGroupId === node.id && !isEffectivelyLocked && (
                 <div className="org-color-picker-popup" onClick={(e) => e.stopPropagation()}>
@@ -9859,7 +9859,7 @@ export default function OrganizerScreen({
                                   ? handleTagFieldDoubleClick(item.id, field.id, val)
                                   : handleFieldDoubleClick(item.id, field.id, String(val || ''));
                               }}
-                              title={isLongText ? (isTextExpanded ? 'Klõpsa kokku tõmbamiseks' : textValue) : 'Topeltklõps muutmiseks'}
+                              title={isLongText ? (isTextExpanded ? t('organizer:ui.clickToCollapse') : textValue) : t('organizer:ui.doubleClickToEdit')}
                             >
                               {isLongText && !isTextExpanded
                                 ? textValue.substring(0, 30) + '...'
@@ -10024,7 +10024,7 @@ export default function OrganizerScreen({
               className={`org-icon-btn color-btn ${colorByGroup ? 'active' : ''}`}
               onClick={() => colorByGroup ? resetColors() : colorModelByGroups()}
               disabled={coloringInProgress || groups.length === 0}
-              title={colorByGroup ? 'Lähtesta värvid' : 'Värvi gruppide kaupa'}
+              title={colorByGroup ? t('organizer:ui.resetColors') : t('organizer:ui.colorByGroups')}
             >
               {colorByGroup ? <FiRefreshCw size={15} /> : <FiDroplet size={15} />}
             </button>
@@ -10083,7 +10083,7 @@ export default function OrganizerScreen({
                     value={searchFilterGroup}
                     onChange={(e) => setSearchFilterGroup(e.target.value)}
                   >
-                    <option value="all">Kõik grupid</option>
+                    <option value="all">{t('organizer:search.all')}</option>
                     {groups.map(g => (
                       <option key={g.id} value={g.id}>{'—'.repeat(g.level)} {g.name}</option>
                     ))}
@@ -10095,10 +10095,10 @@ export default function OrganizerScreen({
                     value={searchFilterColumn}
                     onChange={(e) => setSearchFilterColumn(e.target.value)}
                   >
-                    <option value="all">Kõik veerud</option>
-                    <option value="mark">Mark</option>
-                    <option value="product">Toode</option>
-                    <option value="weight">Kaal</option>
+                    <option value="all">{t('organizer:search.allColumns')}</option>
+                    <option value="mark">{t('organizer:excelHeaders.mark')}</option>
+                    <option value="product">{t('organizer:excelHeaders.product')}</option>
+                    <option value="weight">{t('organizer:excelHeaders.weight')}</option>
                     {allCustomFields.map(f => (
                       <option key={f.id} value={f.id}>{f.name}</option>
                     ))}
@@ -10362,7 +10362,7 @@ export default function OrganizerScreen({
               {/* Parent group selector - show when creating subgroup */}
               {!editingGroup && formParentId && groups.length > 0 && (
                 <div className="org-field">
-                  <label>Ülemgrupp *</label>
+                  <label>{t('organizer:excel.parentGroupHeader')} *</label>
                   <select value={formParentId || ''} onChange={(e) => setFormParentId(e.target.value || null)}>
                     {groups.filter(g => g.level < 2).map(g => (
                       <option key={g.id} value={g.id}>{'—'.repeat(g.level)} {g.name}</option>
@@ -10379,7 +10379,7 @@ export default function OrganizerScreen({
                 <textarea value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder="Valikuline kirjeldus" rows={2} />
               </div>
               <div className="org-field">
-                <label>Värv</label>
+                <label>{t('organizer:color.selectColor')}</label>
                 <div className="org-color-picker">
                   {PRESET_COLORS.map((c, i) => (
                     <button
@@ -10405,7 +10405,7 @@ export default function OrganizerScreen({
                       <span className="option-icon">🌐</span>
                       <span className="option-text">
                         <strong>Kogu projekt</strong>
-                        <small>Kõik projekti liikmed näevad</small>
+                        <small>{t('organizer:groupInfo.wholeProject')}</small>
                       </span>
                     </label>
                     <label className={`org-sharing-option ${formSharingMode === 'shared' ? 'selected' : ''}`}>
@@ -10746,10 +10746,10 @@ export default function OrganizerScreen({
                                     onClick={(e) => e.stopPropagation()}
                                   >
                                     <div style={{ padding: '6px 10px', borderBottom: '1px solid #e5e7eb', fontSize: '10px', color: '#6b7280', fontWeight: 500 }}>
-                                      Komakohad
+                                      {t('organizer:groupForm.decimals')}
                                     </div>
                                     {[
-                                      { value: undefined, label: 'Kõik' },
+                                      { value: undefined, label: t('organizer:groupForm.allDecimals') },
                                       { value: 0, label: '0' },
                                       { value: 1, label: '1' },
                                       { value: 2, label: '2' },
@@ -10975,8 +10975,8 @@ export default function OrganizerScreen({
             </div>
             <div className="org-modal-body">
               <div className="org-field">
-                <label>Välja nimi *</label>
-                <input type="text" value={fieldName} onChange={(e) => setFieldName(e.target.value)} placeholder="nt. Kommentaarid, Hind" autoFocus />
+                <label>{t('organizer:groupForm.fieldName')}</label>
+                <input type="text" value={fieldName} onChange={(e) => setFieldName(e.target.value)} placeholder={t('organizer:groupForm.fieldPlaceholder')} autoFocus />
               </div>
               <div className="org-field">
                 <label>{t('organizer:field.type')}</label>
@@ -11051,7 +11051,7 @@ export default function OrganizerScreen({
                 )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   {customFields.length === 0 ? (
-                    <p className="org-empty-hint">Lisavälju pole veel lisatud</p>
+                    <p className="org-empty-hint">{t('organizer:field.noFieldsYet')}</p>
                   ) : (
                     customFields.map((f, idx) => (
                       <div
@@ -11214,7 +11214,7 @@ export default function OrganizerScreen({
           <div className="org-modal-overlay" onClick={handleCancel}>
             <div className="org-modal" onClick={e => e.stopPropagation()}>
               <div className="org-modal-header">
-                <h2>Täida kohustuslikud väljad</h2>
+                <h2>{t('organizer:field.enterValue')}</h2>
                 <button onClick={handleCancel}><FiX size={18} /></button>
               </div>
               <div className="org-modal-body">
@@ -11501,7 +11501,7 @@ export default function OrganizerScreen({
                       type={f.type === 'date' ? 'date' : f.type === 'number' || f.type === 'currency' ? 'number' : 'text'}
                       value={bulkFieldValues[f.id] || ''}
                       onChange={(e) => setBulkFieldValues(prev => ({ ...prev, [f.id]: e.target.value }))}
-                      placeholder={f.type === 'date' ? '' : 'Jäta tühjaks, et mitte muuta'}
+                      placeholder={f.type === 'date' ? '' : t('organizer:bulkEditModal.leaveEmptyToSkip')}
                     />
                   )}
                 </div>
@@ -11661,7 +11661,7 @@ export default function OrganizerScreen({
             id: `customField_${f.id}`,
             label: f.name,
             placeholder: `{customField_${f.id}}`,
-            preview: firstItem?.custom_properties?.[f.id] || 'Näidis'
+            preview: firstItem?.custom_properties?.[f.id] || t('organizer:markupModal.preview')
           }))
         ];
 
@@ -11692,7 +11692,7 @@ export default function OrganizerScreen({
             result = result.replace(/\{productName\}/g, firstItem?.product_name || 'BEAM');
             for (const field of customFields) {
               const regex = new RegExp(`\\{customField_${field.id}\\}`, 'g');
-              result = result.replace(regex, firstItem?.custom_properties?.[field.id] || 'Näidis');
+              result = result.replace(regex, firstItem?.custom_properties?.[field.id] || t('organizer:markupModal.preview'));
             }
             return result.replace(/\s+/g, ' ').trim();
           };
@@ -12042,7 +12042,7 @@ export default function OrganizerScreen({
                         </button>
                       ))
                     ) : (
-                      <span className="markup-all-fields-used">Kõik väljad kasutatud</span>
+                      <span className="markup-all-fields-used">{t('organizer:markupModal.allFieldsUsed')}</span>
                     )}
                   </div>
 
@@ -12057,14 +12057,14 @@ export default function OrganizerScreen({
                 {/* Separator and height row */}
                 <div className="markup-settings-row">
                   <div className="markup-separator-row">
-                    <label>Eraldaja:</label>
+                    <label>{t('organizer:markupModal.separator')}</label>
                     <div className="separator-options">
                       {[
-                        { value: 'newline', label: '↵', title: 'Uus rida' },
-                        { value: 'space', label: '␣', title: 'Tühik' },
-                        { value: 'comma', label: ',', title: 'Koma' },
-                        { value: 'dash', label: '-', title: 'Kriips' },
-                        { value: 'pipe', label: '|', title: 'Püstkriips' }
+                        { value: 'newline', label: '↵', title: t('organizer:markupModal.newline') },
+                        { value: 'space', label: '␣', title: t('organizer:markupModal.space') },
+                        { value: 'comma', label: ',', title: t('organizer:markupModal.comma') },
+                        { value: 'dash', label: '-', title: t('organizer:markupModal.dash') },
+                        { value: 'pipe', label: '|', title: t('organizer:markupModal.pipe') }
                       ].map(opt => (
                         <button
                           key={opt.value}
@@ -12242,7 +12242,7 @@ export default function OrganizerScreen({
           <div className="org-modal-overlay" onClick={() => { setShowImportModal(false); setImportGroupId(null); }}>
             <div className="org-modal" onClick={e => e.stopPropagation()}>
               <div className="org-modal-header">
-                <h2>Impordi GUID</h2>
+                <h2>{t('organizer:guidImport.title')}</h2>
                 <button onClick={() => { setShowImportModal(false); setImportGroupId(null); }}><FiX size={18} /></button>
               </div>
               <div className="org-modal-body">
@@ -12317,7 +12317,7 @@ export default function OrganizerScreen({
           <div className="org-modal-overlay" onClick={() => { setShowExcelImportModal(false); setExcelImportGroupId(null); }}>
             <div className="org-modal" onClick={e => e.stopPropagation()}>
               <div className="org-modal-header">
-                <h2>Impordi Excelist</h2>
+                <h2>{t('organizer:excelImport.title')}</h2>
                 <button onClick={() => { setShowExcelImportModal(false); setExcelImportGroupId(null); }}><FiX size={18} /></button>
               </div>
               <div className="org-modal-body">

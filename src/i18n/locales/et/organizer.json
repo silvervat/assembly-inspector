@@ -61,7 +61,9 @@
   },
   "search": {
     "placeholder": "Otsi kõikidest gruppidest...",
-    "all": "Kõik"
+    "all": "Kõik",
+    "allColumns": "Kõik veerud",
+    "allGroups": "Kõik grupid"
   },
   "excel": {
     "fileEmpty": "Excel fail on tühi",
@@ -344,7 +346,8 @@
     "addingMarkups": "Loon",
     "removingMarkups": "Eemaldan",
     "markupsProgress": "markupe: {{current}} / {{total}}",
-    "line": "Rida {{n}}"
+    "line": "Rida {{n}}",
+    "allFieldsUsed": "Kõik väljad kasutatud"
   },
   "linkExpiry": {
     "title": "Lingi kehtivus",

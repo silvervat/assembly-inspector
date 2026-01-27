@@ -3424,10 +3424,10 @@ export default function AdminScreen({
             { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
             { animationTime: 300 }
           );
-          setMessage('Detail valitud mudelis');
+          setMessage(t('qr.detailSelected'));
         }
       } else {
-        setMessage('Detaili ei leitud mudelis');
+        setMessage(t('qr.detailNotFound'));
       }
     } catch (e) {
       console.error('Error selecting object:', e);
@@ -3449,7 +3449,7 @@ export default function AdminScreen({
       }
 
       setQrCodes(prev => prev.filter(qr => qr.id !== id));
-      setMessage('QR kood kustutatud');
+      setMessage(t('qr.qrDeleted'));
     } catch (e) {
       console.error('Error deleting QR:', e);
       setMessage(t('errors.deleteError'));
@@ -3799,7 +3799,7 @@ export default function AdminScreen({
           const popup = window.open(positionerUrl, 'positioner', 'width=420,height=700,scrollbars=yes');
 
           if (popup) {
-            setMessage('Avatakse positsioneerija eraldi aknas...');
+            setMessage(t('positioner.openingPositioner'));
           } else {
             // Popup blocked - fallback to manual input
             addDebugLog('Popup blocked, showing manual input');
@@ -3876,18 +3876,18 @@ export default function AdminScreen({
   const openGoogleMaps = useCallback(() => {
     // Open Google Maps which will show user's current location
     window.open('https://www.google.com/maps/@0,0,2z', '_blank');
-    setMessage('Ava Google Maps, tee "long press" oma asukohale ja kopeeri koordinaadid');
+    setMessage(t('qrScanner.openGoogleMaps'));
   }, []);
 
   // Draw position circle on model (10m radius red circle)
   const drawPositionCircle = useCallback(async (position: DetailPosition) => {
     if (!position.latitude || !position.longitude) {
-      setMessage('Positsioonil puuduvad koordinaadid');
+      setMessage(t('positioner.missingCoordinates'));
       return;
     }
 
     try {
-      setMessage('Teisendan GPS koordinaate...');
+      setMessage(t('positioner.convertingCoordinates'));
 
       // Convert GPS (WGS84) to Belgian Lambert 72 (model coordinates)
       const modelCoords = wgs84ToBelgianLambert72(position.latitude, position.longitude);
@@ -3932,7 +3932,7 @@ export default function AdminScreen({
       // Draw a 10m radius red circle using markup API
       const markupApi = (api as any).markup;
       if (!markupApi?.addFreelineMarkups) {
-        setMessage('Markup API pole saadaval');
+        setMessage(t('positioner.markupApiNotAvailable'));
         return;
       }
 
@@ -4000,14 +4000,14 @@ export default function AdminScreen({
 
     } catch (e: any) {
       console.error('Error drawing position:', e);
-      setMessage('Viga asukoha joonistamisel: ' + e.message);
+      setMessage(t('positioner.drawError', { error: e.message }));
     }
   }, [api, projectId]);
 
   // Remove position markup circle
   const removePositionMarkup = useCallback(async (position: DetailPosition) => {
     if (!position.markup_id) {
-      setMessage('Markup puudub');
+      setMessage(t('positioner.markupMissing'));
       return;
     }
 
@@ -4028,7 +4028,7 @@ export default function AdminScreen({
         p.id === position.id ? { ...p, markup_id: null } : p
       ));
 
-      setMessage('Markup eemaldatud');
+      setMessage(t('positioner.markupRemoved'));
     } catch (e: any) {
       console.error('Error removing markup:', e);
       setMessage(t('errors.markupRemoveError'));
@@ -4038,12 +4038,12 @@ export default function AdminScreen({
   // Add text marker at GPS position
   const addGpsMarker = useCallback(async (position: DetailPosition) => {
     if (!position.latitude || !position.longitude) {
-      setMessage('GPS koordinaadid puuduvad');
+      setMessage(t('positioner.gpsCoordsMissing'));
       return;
     }
 
     try {
-      setMessage('Lisan markeri...');
+      setMessage(t('positioner.addingMarker'));
 
       // Convert GPS to model coordinates
       const modelCoords = wgs84ToBelgianLambert72(position.latitude, position.longitude);
@@ -4084,7 +4084,7 @@ export default function AdminScreen({
       // Add text markup
       const markupApi = api.markup as any;
       if (!markupApi?.addTextMarkup) {
-        setMessage('Text markup API pole saadaval');
+        setMessage(t('positioner.textMarkupApiNotAvailable'));
         return;
       }
 
@@ -4098,12 +4098,12 @@ export default function AdminScreen({
       if (result && result.length > 0) {
         setMessage(`✅ Marker lisatud: ${position.assembly_mark || position.guid.slice(0, 8)}`);
       } else {
-        setMessage('Marker loodud');
+        setMessage(t('positioner.markerCreated'));
       }
 
     } catch (e: any) {
       console.error('Error adding GPS marker:', e);
-      setMessage('Viga markeri lisamisel: ' + e.message);
+      setMessage(t('positioner.markerAddError', { error: e.message }));
     }
   }, [api, projectId]);
 
@@ -4135,10 +4135,10 @@ export default function AdminScreen({
             { modelObjectIds: [{ modelId: foundItem.modelId, objectRuntimeIds: [foundItem.runtimeId] }] },
             { animationTime: 300 }
           );
-          setMessage('Detail valitud mudelis');
+          setMessage(t('qr.detailSelected'));
         }
       } else {
-        setMessage('Detaili ei leitud mudelis');
+        setMessage(t('qr.detailNotFound'));
       }
     } catch (e) {
       console.error('Error selecting detail:', e);
@@ -4158,7 +4158,7 @@ export default function AdminScreen({
 
       if (error) throw error;
       setPositions(prev => prev.filter(p => p.id !== position.id));
-      setMessage('Positsioon kustutatud');
+      setMessage(t('positioner.positionDeleted'));
     } catch (e) {
       console.error('Error deleting position:', e);
       setMessage(t('errors.deleteError'));
@@ -4194,7 +4194,7 @@ export default function AdminScreen({
   // Save current camera position
   const saveCameraPosition = async () => {
     if (!cameraFormData.name.trim()) {
-      setMessage('Nimi on kohustuslik');
+      setMessage(t('resources.nameRequired'));
       return;
     }
 
@@ -4223,7 +4223,7 @@ export default function AdminScreen({
           .eq('id', editingCameraPosition.id);
 
         if (error) throw error;
-        setMessage('Kaamera positsioon uuendatud');
+        setMessage(t('camera.positionUpdated'));
       } else {
         // Create new position with current camera state + color settings
         const cameraStateWithColors = {
@@ -4243,7 +4243,7 @@ export default function AdminScreen({
           });
 
         if (error) throw error;
-        setMessage('Kaamera positsioon salvestatud');
+        setMessage(t('camera.positionSaved'));
       }
 
       setShowCameraForm(false);
@@ -4281,7 +4281,7 @@ export default function AdminScreen({
         .eq('id', positionId);
 
       if (error) throw error;
-      setMessage('Kaamera positsioon kustutatud');
+      setMessage(t('camera.positionDeleted'));
       await loadCameraPositions();
     } catch (e: any) {
       console.error('Error deleting camera position:', e);
@@ -4320,7 +4320,7 @@ export default function AdminScreen({
         .eq('id', position.id);
 
       if (error) throw error;
-      setMessage('Kaamera positsioon uuendatud praeguse vaatega');
+      setMessage(t('camera.updatedWithCurrentView'));
       await loadCameraPositions();
     } catch (e: any) {
       console.error('Error updating camera state:', e);
@@ -4408,7 +4408,7 @@ export default function AdminScreen({
           guid_set: data.guid_set || 'Tekla Common',
           guid_prop: data.guid_prop || 'GUID',
         });
-        setMessage('Seaded laetud andmebaasist');
+        setMessage(t('settings.settingsLoaded'));
       } else {
         setMessage(t('settings.usingDefaultSettings'));
       }
@@ -4462,7 +4462,7 @@ export default function AdminScreen({
       }
       // Clear the cache so other components reload the new mappings
       clearMappingsCache(projectId);
-      setMessage('✓ Seaded salvestatud!');
+      setMessage('✓ ' + t('settings.settingsSaved'));
     } catch (e: any) {
       console.error('Error saving property mappings:', e);
       setMessage(t('errors.saveError', { error: e.message }));
@@ -4474,7 +4474,7 @@ export default function AdminScreen({
   // Scan model for all available properties (uses current selection)
   const scanAvailableProperties = useCallback(async () => {
     setPropertiesScanning(true);
-    setMessage('Skanneerin valitud objektide propertiseid...');
+    setMessage(t('properties.scanning'));
     setAvailableProperties([]);
 
     try {
@@ -4557,13 +4557,13 @@ export default function AdminScreen({
 
       setAvailableProperties(propertiesList);
       if (propertiesList.length === 0) {
-        setMessage('Valitud objektidel pole propertiseid. Proovi valida teisi objekte.');
+        setMessage(t('properties.noProperties'));
       } else {
-        setMessage(`Leitud ${propertiesList.length} property't valitud objektidest`);
+        setMessage(t('properties.foundProperties', { count: propertiesList.length }));
       }
     } catch (e: any) {
       console.error('Error scanning properties:', e);
-      setMessage(`Viga skanneerimisel: ${e.message}`);
+      setMessage(t('properties.scanError', { error: e.message }));
     } finally {
       setPropertiesScanning(false);
     }
@@ -4572,7 +4572,7 @@ export default function AdminScreen({
   // Discover properties for selected objects
   const discoverProperties = useCallback(async () => {
     setIsLoading(true);
-    setMessage('Otsin propertiseid...');
+    setMessage(t('properties.searching'));
     setSelectedObjects([]);
 
     try {

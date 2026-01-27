@@ -4113,7 +4113,7 @@ export default function ArrivedDeliveriesScreen({
                           onClick={() => startArrival(vehicle.id)}
                           disabled={saving}
                         >
-                          <FiTruck /> Alusta saabumise registreerimist
+                          <FiTruck /> {t('arrivals.startArrivalRegistration')}
                         </button>
                       </div>
                     ) : (
@@ -4134,7 +4134,7 @@ export default function ArrivedDeliveriesScreen({
                               <>
                                 <span style={{ color: '#92400e', fontSize: '12px', fontWeight: 500 }}>
                                   <FiEdit2 style={{ marginRight: '4px' }} />
-                                  Redigeerimise režiim {hasUnsavedChanges && '• Salvestamata muudatused'}
+                                  {t('arrivals.editModeLabel')} {hasUnsavedChanges && `• ${t('arrivals.unsavedChangesLabel')}`}
                                 </span>
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                   <button
@@ -4171,7 +4171,7 @@ export default function ArrivedDeliveriesScreen({
                             ) : (
                               <>
                                 <span style={{ color: '#64748b', fontSize: '12px' }}>
-                                  Vaatamisrežiim - muutmiseks vajuta "Muuda"
+                                  {t('arrivals.viewingModeHint')}
                                 </span>
                                 <button
                                   onClick={() => startEditArrival(arrivedVehicle)}
@@ -5646,7 +5646,7 @@ export default function ArrivedDeliveriesScreen({
                     }}
                   >
                     <FiEdit2 size={11} />
-                    Muuda staatusi
+                    {t('arrivals.changeStatusBtn')}
                   </button>
                 ) : (
                   <>
@@ -5665,7 +5665,7 @@ export default function ArrivedDeliveriesScreen({
                         cursor: 'pointer'
                       }}
                     >
-                      Tühista
+                      {t('arrivals.cancelEdit')}
                     </button>
                     <button
                       onClick={async () => {
@@ -5776,7 +5776,7 @@ export default function ArrivedDeliveriesScreen({
                       }}
                     >
                       <FiSave size={11} />
-                      Salvesta {itemsListPendingChanges.size > 0 && `(${itemsListPendingChanges.size})`}
+                      {t('buttons.save')} {itemsListPendingChanges.size > 0 && `(${itemsListPendingChanges.size})`}
                     </button>
                   </>
                 )}
@@ -5837,7 +5837,7 @@ export default function ArrivedDeliveriesScreen({
                   {/* Comment field */}
                   <div>
                     <textarea
-                      placeholder="Kommentaar (valikuline)..."
+                      placeholder={t('arrivals.commentOptionalPlaceholder')}
                       value={massArrivalComment}
                       onChange={(e) => setMassArrivalComment(e.target.value)}
                       style={{
@@ -6008,7 +6008,7 @@ export default function ArrivedDeliveriesScreen({
                         cursor: 'pointer'
                       }}
                     >
-                      Tühista
+                      {t('buttons.cancel')}
                     </button>
                   </div>
                 </div>
@@ -6035,10 +6035,10 @@ export default function ArrivedDeliveriesScreen({
                 color: '#64748b',
                 textTransform: 'uppercase'
               }}>
-                <SortHeader field="mark" label="Mark" />
-                <SortHeader field="vehicle" label="Veok / Aeg" />
+                <SortHeader field="mark" label={t('arrivals.markLabel')} />
+                <SortHeader field="vehicle" label={`${t('arrivals.vehicleLabel')} / ${t('time.time')}`} />
                 <div style={{ textAlign: 'center' }}>
-                  <SortHeader field="status" label="Staatus" />
+                  <SortHeader field="status" label={t('arrivals.statusLabel')} />
                 </div>
               </div>
 
@@ -7131,7 +7131,7 @@ export default function ArrivedDeliveriesScreen({
             </div>
             <div className="modal-footer">
               <button className="cancel-btn" onClick={() => { setShowAddItemModal(false); setAddItemSearchTerm(''); }}>
-                Tühista
+                {t('buttons.cancel')}
               </button>
               <button
                 className="confirm-btn"
@@ -7205,7 +7205,7 @@ export default function ArrivedDeliveriesScreen({
             </div>
             <div className="modal-footer">
               <button className="cancel-btn" onClick={() => setShowUnplannedVehicleModal(false)}>
-                Tühista
+                {t('buttons.cancel')}
               </button>
               <button
                 className="confirm-btn"
@@ -7304,7 +7304,7 @@ export default function ArrivedDeliveriesScreen({
             </div>
             <div className="modal-footer">
               <button className="cancel-btn" onClick={() => { setShowModelSelectionModal(false); setModelNewItems([]); }}>
-                Tühista
+                {t('buttons.cancel')}
               </button>
               <button
                 className="confirm-btn"

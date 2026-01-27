@@ -5197,7 +5197,6 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const exportToExcel = () => {
     const sortedItems = getAllItemsSorted();
     const totalItems = sortedItems.length;
-    const isEnglish = exportLanguage === 'en';
     const te = (key: string) => t(key, { lng: exportLanguage });
 
     if (totalItems === 0) {
