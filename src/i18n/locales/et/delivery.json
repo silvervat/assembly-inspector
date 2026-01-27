@@ -102,6 +102,7 @@
     "exportExcel": "Ekspordi Excel",
     "importExcel": "Impordi Excel",
     "colorByDate": "Värvi kuupäeva järgi",
+    "colorByTimeline": "Värvi ajatelje järgi",
     "colorByVehicle": "Värvi veoki järgi",
     "colorWhite": "Värvi valgeks",
     "selectInModel": "Vali mudelis",

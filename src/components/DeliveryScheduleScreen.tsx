@@ -689,7 +689,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   ]);
 
   // Color mode for model visualization - default to vehicle coloring
-  const [colorMode, setColorMode] = useState<'none' | 'vehicle' | 'date'>('vehicle');
+  const [colorMode, setColorMode] = useState<'none' | 'vehicle' | 'date' | 'timeline'>('vehicle');
   const [showColorMenu, setShowColorMenu] = useState(false);
   const [showImportExportMenu, setShowImportExportMenu] = useState(false);
   const [showPlaybackMenu, setShowPlaybackMenu] = useState(false);
@@ -6631,6 +6631,64 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             setMessage(`Värvin kuupäevad... ${coloredCount}/${colorGuids.size}`);
           }
         }
+      } else if (mode === 'timeline') {
+        // Timeline coloring: past=green, today=blue, future=dark gray
+        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+        const TIMELINE_COLORS = {
+          past:   { r: 34, g: 197, b: 94, a: 255 },   // green
+          today:  { r: 59, g: 130, b: 246, a: 255 },   // blue
+          future: { r: 75, g: 85, b: 99, a: 255 }      // dark gray
+        };
+
+        setVehicleColors({});
+        setDateColors({});
+
+        // Build runtime ID mapping
+        const scheduleByGuid = new Map<string, { modelId: string; runtimeId: number }>();
+        for (const item of itemsToColor) {
+          const guid = item.guid_ifc || item.guid;
+          if (guid && foundObjects.has(guid)) {
+            scheduleByGuid.set(guid, foundObjects.get(guid)!);
+          }
+        }
+
+        // Group items by timeline category
+        const byCategory: Record<'past' | 'today' | 'future', Record<string, number[]>> = {
+          past: {}, today: {}, future: {}
+        };
+
+        for (const vehicle of vehicles) {
+          const date = vehicle.scheduled_date;
+          if (!date) continue;
+
+          const category: 'past' | 'today' | 'future' =
+            date < today ? 'past' : date === today ? 'today' : 'future';
+
+          const vehicleItems = itemsToColor.filter(i => i.vehicle_id === vehicle.id);
+          for (const item of vehicleItems) {
+            const guid = item.guid_ifc || item.guid;
+            if (guid && scheduleByGuid.has(guid)) {
+              const found = scheduleByGuid.get(guid)!;
+              if (!byCategory[category][found.modelId]) byCategory[category][found.modelId] = [];
+              byCategory[category][found.modelId].push(found.runtimeId);
+            }
+          }
+        }
+
+        // Apply colors per category
+        let coloredCount = 0;
+        for (const [category, byModel] of Object.entries(byCategory) as ['past' | 'today' | 'future', Record<string, number[]>][]) {
+          const color = TIMELINE_COLORS[category];
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color }
+            );
+            coloredCount += runtimeIds.length;
+            setMessage(`Värvin ajatelje... ${coloredCount}/${colorGuids.size}`);
+          }
+        }
       }
 
       setMessage(`✓ Värvitud! Valged=${whiteCount}, Graafikudetaile=${colorGuids.size}`);
@@ -6659,6 +6717,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         color = vehicleColors[targetVehicleId];
       } else if (colorMode === 'date' && targetDate) {
         color = dateColors[targetDate];
+      } else if (colorMode === 'timeline' && targetDate) {
+        const today = new Date().toISOString().slice(0, 10);
+        if (targetDate < today) color = { r: 34, g: 197, b: 94 };       // green
+        else if (targetDate === today) color = { r: 59, g: 130, b: 246 }; // blue
+        else color = { r: 75, g: 85, b: 99 };                             // dark gray
       }
 
       // If no color found in existing colors, generate one continuing the sequence
@@ -8880,6 +8943,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 >
                   <FiCalendar size={14} /> {t('toolbar.colorByDate')}
                   {colorMode === 'date' && <FiCheck size={14} />}
+                </button>
+                <button
+                  className={colorMode === 'timeline' ? 'active' : ''}
+                  onClick={() => applyColorMode(colorMode === 'timeline' ? 'none' : 'timeline')}
+                >
+                  <FiClock size={14} /> {t('toolbar.colorByTimeline')}
+                  {colorMode === 'timeline' && <FiCheck size={14} />}
                 </button>
               </div>
             )}
