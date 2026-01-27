@@ -1,6 +1,8 @@
 /**
  * GPS Location Search Modal
  * Tool for finding and tracking precast elements on construction site using GPS
+ *
+ * IMPORTANT: Due to iframe geolocation restrictions, this tool opens in a separate window
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -8,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { WorkspaceAPI } from 'trimble-connect-workspace-api';
 import {
   FiX, FiMapPin, FiSearch, FiCheck, FiRefreshCw, FiNavigation,
-  FiMap, FiTarget, FiCrosshair
+  FiMap, FiTarget, FiCrosshair, FiExternalLink, FiAlertCircle
 } from 'react-icons/fi';
 import { supabase, DeliveryItem } from '../supabase';
 import { useGpsTracking, GpsSignalQuality } from '../hooks/useGpsTracking';
@@ -18,11 +20,12 @@ import {
 } from '../utils/coordinateUtils';
 
 interface GpsLocationSearchModalProps {
-  api: WorkspaceAPI;
+  api: WorkspaceAPI | null;
   projectId: string;
   userEmail: string;
   userName?: string;
   onClose: () => void;
+  isPopupMode?: boolean; // When true, runs as standalone page in popup window
 }
 
 interface DetailWithGps extends DeliveryItem {
@@ -47,10 +50,15 @@ export default function GpsLocationSearchModal({
   projectId,
   userEmail,
   userName,
-  onClose
+  onClose,
+  isPopupMode = false
 }: GpsLocationSearchModalProps) {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { t: _t } = useTranslation('tools');
+
+  // If not in popup mode, show option to open in new window (due to iframe GPS restrictions)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [showOpenPrompt, _setShowOpenPrompt] = useState(!isPopupMode);
 
   // GPS tracking
   const {
@@ -245,7 +253,9 @@ export default function GpsLocationSearchModal({
       }
 
       // Add markups to model using Trimble API
-      await (api.markup as any)?.addTextMarkup?.(markups);
+      if (api) {
+        await (api.markup as any)?.addTextMarkup?.(markups);
+      }
 
       setMessage(`✅ ${markups.length} markerit lisatud mudelile`);
       setSelectedItems(new Set());
@@ -281,13 +291,148 @@ export default function GpsLocationSearchModal({
 
   const signalInfo = SIGNAL_COLORS[signalQuality];
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal gps-search-modal"
-        onClick={e => e.stopPropagation()}
-        style={{ maxWidth: 800, width: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
-      >
+  // Open GPS search in a new window (to bypass iframe restrictions)
+  const openInNewWindow = useCallback(() => {
+    const baseUrl = window.location.origin + (import.meta.env.BASE_URL || '/');
+    const gpsUrl = `${baseUrl}?popup=gpssearch&projectId=${encodeURIComponent(projectId)}&userEmail=${encodeURIComponent(userEmail)}&userName=${encodeURIComponent(userName || '')}`;
+    window.open(gpsUrl, 'gpssearch', 'width=900,height=700,scrollbars=yes');
+    onClose(); // Close the placeholder modal
+  }, [projectId, userEmail, userName, onClose]);
+
+  // If not in popup mode and showing prompt, render the "open in new window" UI
+  if (showOpenPrompt && !isPopupMode) {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div
+          className="modal"
+          onClick={e => e.stopPropagation()}
+          style={{ maxWidth: 450, width: '90%' }}
+        >
+          {/* Header */}
+          <div className="modal-header" style={{ borderBottom: '1px solid #e5e7eb' }}>
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <FiMapPin style={{ color: '#16a34a' }} />
+              GPS Location Search
+            </h2>
+            <button className="close-btn" onClick={onClose}>
+              <FiX />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div style={{ padding: 24 }}>
+            {/* Info about popup */}
+            <div style={{
+              textAlign: 'center',
+              padding: 24,
+              background: '#eff6ff',
+              borderRadius: 12,
+              marginBottom: 16
+            }}>
+              <FiExternalLink size={40} style={{ color: '#2563eb', marginBottom: 12 }} />
+              <div style={{ fontSize: 15, fontWeight: 600, color: '#1e40af', marginBottom: 8 }}>
+                GPS vajab eraldi akent
+              </div>
+              <p style={{ fontSize: 13, color: '#3b82f6', margin: 0 }}>
+                Trimble Connect piirab GPS kasutamist. Asukoha tuvastamiseks avaneb tööriist eraldi brauseri aknas.
+              </p>
+            </div>
+
+            {/* Why popup is needed */}
+            <div style={{
+              background: '#fef3c7',
+              borderRadius: 8,
+              padding: 12,
+              marginBottom: 20,
+              fontSize: 12,
+              color: '#92400e',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 8
+            }}>
+              <FiAlertCircle style={{ flexShrink: 0, marginTop: 2 }} />
+              <div>
+                Brauserid blokeerivad GPS-i iframes turvalisuse kaalutlustel. Eraldi aken võimaldab GPS-i kasutada.
+              </div>
+            </div>
+
+            {/* Open button */}
+            <button
+              onClick={openInNewWindow}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                width: '100%',
+                padding: 14,
+                background: '#16a34a',
+                color: 'white',
+                border: 'none',
+                borderRadius: 8,
+                cursor: 'pointer',
+                fontSize: 14,
+                fontWeight: 500
+              }}
+            >
+              <FiExternalLink />
+              Ava GPS Location Search
+            </button>
+          </div>
+
+          {/* Footer */}
+          <div style={{
+            display: 'flex',
+            gap: 8,
+            padding: '16px 24px',
+            background: '#f8fafc',
+            borderTop: '1px solid #e2e8f0'
+          }}>
+            <button
+              onClick={onClose}
+              style={{
+                flex: 1,
+                padding: 12,
+                background: 'white',
+                border: '1px solid #e2e8f0',
+                borderRadius: 8,
+                cursor: 'pointer',
+                fontSize: 13
+              }}
+            >
+              Tühista
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Popup mode or user chose to continue - render full GPS search UI
+  // Wrap in different container for popup mode
+  const containerStyle = isPopupMode
+    ? { minHeight: '100vh', background: '#f9fafb', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }
+    : {};
+
+  const contentWrapper = (content: React.ReactNode) => {
+    if (isPopupMode) {
+      return <div style={containerStyle}>{content}</div>;
+    }
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div
+          className="modal gps-search-modal"
+          onClick={e => e.stopPropagation()}
+          style={{ maxWidth: 800, width: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
+        >
+          {content}
+        </div>
+      </div>
+    );
+  };
+
+  return contentWrapper(
+    <>
         {/* Header */}
         <div className="modal-header" style={{ borderBottom: '1px solid #e5e7eb' }}>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -595,11 +740,10 @@ export default function GpsLocationSearchModal({
           <div style={{ fontSize: 12, color: '#6b7280' }}>
             {filteredItems.length} elementi • {filteredItems.filter(i => i.gps_latitude).length} GPS positsiooniga
           </div>
-          <button className="cancel-btn" onClick={onClose}>
+          <button className="cancel-btn" onClick={isPopupMode ? () => window.close() : onClose}>
             Sulge
           </button>
         </div>
-      </div>
-    </div>
+    </>
   );
 }
