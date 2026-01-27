@@ -9,7 +9,9 @@
     "timeout": "Request timed out",
     "unauthorized": "You are not authorized to do this",
     "forbidden": "Access denied",
-    "notFound": "Not found"
+    "notFound": "Not found",
+    "projectIdMissing": "Project ID missing",
+    "userNotLoggedIn": "User is not logged in"
   },
   "model": {
     "noModelsLoaded": "No models loaded",
@@ -51,5 +53,60 @@
   "color": {
     "error": "Error coloring",
     "dbError": "Error reading from Supabase"
+  },
+  "offline": {
+    "indexedDbError": "IndexedDB error",
+    "addToQueueError": "Error adding to queue",
+    "loadItemsError": "Error loading items",
+    "updateStatusError": "Error updating status",
+    "findItemError": "Error finding item",
+    "deleteItemError": "Error deleting item",
+    "clearQueueError": "Error clearing queue",
+    "itemsFailed": "{{count}} items failed",
+    "syncError": "Synchronization error"
+  },
+  "bulk": {
+    "approveError": "Error approving",
+    "commentRequiredReturn": "Comment is required when returning",
+    "returnError": "Error returning",
+    "commentRequiredReject": "Comment is required when rejecting",
+    "rejectError": "Error rejecting",
+    "statusChangeError": "Error changing status",
+    "assignError": "Error assigning"
+  },
+  "coordinates": {
+    "loadSettingsError": "Error loading settings",
+    "updateSettingsError": "Error updating settings",
+    "saveCalibrationError": "Error saving calibration",
+    "resetCalibrationError": "Error resetting calibration"
+  },
+  "calibration": {
+    "loadPointsError": "Error loading points",
+    "addPointError": "Error adding point",
+    "updatePointError": "Error updating point",
+    "deletePointError": "Error deleting point",
+    "minPointsRequired": "At least 2 active points are required for calibration",
+    "unsupportedSystem": "Coordinate system does not support calibration",
+    "calculationError": "Error calculating calibration"
+  },
+  "history": {
+    "loadError": "Error loading history",
+    "loadLifecycleError": "Error loading lifecycle history"
+  },
+  "profile": {
+    "loadError": "Error loading profile",
+    "updateError": "Error updating profile",
+    "signatureUploadError": "Error uploading signature",
+    "signatureDeleteError": "Error deleting signature"
+  },
+  "navigation": {
+    "checkingModel": "Checking model...",
+    "loadingModel": "Loading model...",
+    "modelLoadFailed": "Failed to load model",
+    "searchingByGuid": "Searching object by GUID...",
+    "coloringObjects": "Coloring objects...",
+    "navigatingToObject": "Navigating to object...",
+    "navigatedTo": "Navigated to: {{mark}}",
+    "navigationFailed": "Navigation failed"
   }
 }
