@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase, HistoryEntry, AuditAction } from '../supabase';
 
 // Icon mapping for audit actions
@@ -75,6 +76,7 @@ export interface UseInspectionHistoryResult {
  * Uses the get_inspection_history() database function
  */
 export function useInspectionHistory(planItemId: string | null): UseInspectionHistoryResult {
+  const { t } = useTranslation('errors');
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +129,7 @@ export function useInspectionHistory(planItemId: string | null): UseInspectionHi
       setHistory(transformedHistory);
     } catch (err) {
       console.error('Error loading inspection history:', err);
-      setError(err instanceof Error ? err.message : 'Viga ajaloo laadimisel');
+      setError(err instanceof Error ? err.message : t('history.loadError'));
     } finally {
       setLoading(false);
     }
@@ -145,6 +147,7 @@ export function useInspectionHistory(planItemId: string | null): UseInspectionHi
  * Uses the get_element_full_history() database function
  */
 export function useElementFullHistory(guid: string | null, projectId: string | null) {
+  const { t } = useTranslation('errors');
   const [history, setHistory] = useState<Array<{
     event_type: string;
     event_at: string;
@@ -180,7 +183,7 @@ export function useElementFullHistory(guid: string | null, projectId: string | n
       setHistory(data || []);
     } catch (err) {
       console.error('Error loading element history:', err);
-      setError(err instanceof Error ? err.message : 'Viga elutsükli ajaloo laadimisel');
+      setError(err instanceof Error ? err.message : t('history.loadLifecycleError'));
     } finally {
       setLoading(false);
     }

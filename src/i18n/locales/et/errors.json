@@ -9,7 +9,9 @@
     "timeout": "Päring aegus",
     "unauthorized": "Sul pole õigust seda teha",
     "forbidden": "Ligipääs keelatud",
-    "notFound": "Ei leitud"
+    "notFound": "Ei leitud",
+    "projectIdMissing": "Projekti ID puudub",
+    "userNotLoggedIn": "Kasutaja pole sisselogitud"
   },
   "model": {
     "noModelsLoaded": "Ühtegi mudelit pole laaditud",
@@ -51,5 +53,60 @@
   "color": {
     "error": "Viga värvimisel",
     "dbError": "Viga Supabase lugemisel"
+  },
+  "offline": {
+    "indexedDbError": "IndexedDB viga",
+    "addToQueueError": "Viga järjekorda lisamisel",
+    "loadItemsError": "Viga kirjete laadimisel",
+    "updateStatusError": "Viga staatuse uuendamisel",
+    "findItemError": "Viga kirje leidmisel",
+    "deleteItemError": "Viga kustutamisel",
+    "clearQueueError": "Viga järjekorra tühjendamisel",
+    "itemsFailed": "{{count}} kirjet ebaõnnestus",
+    "syncError": "Sünkroniseerimise viga"
+  },
+  "bulk": {
+    "approveError": "Viga kinnitamisel",
+    "commentRequiredReturn": "Kommentaar on kohustuslik tagasi suunamisel",
+    "returnError": "Viga tagasi suunamisel",
+    "commentRequiredReject": "Kommentaar on kohustuslik tagasi lükkamisel",
+    "rejectError": "Viga tagasi lükkamisel",
+    "statusChangeError": "Viga staatuse muutmisel",
+    "assignError": "Viga määramisel"
+  },
+  "coordinates": {
+    "loadSettingsError": "Viga seadete laadimisel",
+    "updateSettingsError": "Viga seadete uuendamisel",
+    "saveCalibrationError": "Viga kalibreerimise salvestamisel",
+    "resetCalibrationError": "Viga kalibreerimise lähtestamisel"
+  },
+  "calibration": {
+    "loadPointsError": "Viga punktide laadimisel",
+    "addPointError": "Viga punkti lisamisel",
+    "updatePointError": "Viga punkti uuendamisel",
+    "deletePointError": "Viga punkti kustutamisel",
+    "minPointsRequired": "Kalibreerimiseks on vaja vähemalt 2 aktiivset punkti",
+    "unsupportedSystem": "Koordinaatsüsteem ei toeta kalibreerimist",
+    "calculationError": "Viga kalibreerimise arvutamisel"
+  },
+  "history": {
+    "loadError": "Viga ajaloo laadimisel",
+    "loadLifecycleError": "Viga elutsükli ajaloo laadimisel"
+  },
+  "profile": {
+    "loadError": "Viga profiili laadimisel",
+    "updateError": "Viga profiili uuendamisel",
+    "signatureUploadError": "Viga allkirja üleslaadimisel",
+    "signatureDeleteError": "Viga allkirja kustutamisel"
+  },
+  "navigation": {
+    "checkingModel": "Kontrollin mudelit...",
+    "loadingModel": "Laadin mudelit...",
+    "modelLoadFailed": "Mudeli laadimine ebaõnnestus",
+    "searchingByGuid": "Otsin objekti GUID järgi...",
+    "coloringObjects": "Värvin objekte...",
+    "navigatingToObject": "Navigeerin objektini...",
+    "navigatedTo": "Navigeeritud: {{mark}}",
+    "navigationFailed": "Navigeerimine ebaõnnestus"
   }
 }

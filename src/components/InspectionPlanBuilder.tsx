@@ -37,39 +37,39 @@ interface EditingCheckpoint extends Partial<InspectionCheckpoint> {
 
 // Color options for types/categories
 const COLOR_OPTIONS = [
-  { value: '#3B82F6', label: 'Sinine' },
-  { value: '#10B981', label: 'Roheline' },
-  { value: '#F59E0B', label: 'Kollane' },
-  { value: '#EF4444', label: 'Punane' },
-  { value: '#8B5CF6', label: 'Lilla' },
-  { value: '#EC4899', label: 'Roosa' },
-  { value: '#14B8A6', label: 'Türkiis' },
-  { value: '#F97316', label: 'Oranž' },
-  { value: '#6B7280', label: 'Hall' },
+  { value: '#3B82F6', labelKey: 'colors.blue' },
+  { value: '#10B981', labelKey: 'colors.green' },
+  { value: '#F59E0B', labelKey: 'colors.yellow' },
+  { value: '#EF4444', labelKey: 'colors.red' },
+  { value: '#8B5CF6', labelKey: 'colors.purple' },
+  { value: '#EC4899', labelKey: 'colors.pink' },
+  { value: '#14B8A6', labelKey: 'colors.teal' },
+  { value: '#F97316', labelKey: 'colors.orange' },
+  { value: '#6B7280', labelKey: 'colors.gray' },
 ];
 
 // Response color options
 const RESPONSE_COLORS = [
-  { value: 'green', label: 'Roheline (OK)', hex: '#10B981' },
-  { value: 'red', label: 'Punane (Probleem)', hex: '#EF4444' },
-  { value: 'yellow', label: 'Kollane (Hoiatus)', hex: '#F59E0B' },
-  { value: 'blue', label: 'Sinine (Info)', hex: '#3B82F6' },
-  { value: 'orange', label: 'Oranž', hex: '#F97316' },
-  { value: 'gray', label: 'Hall (Neutraalne)', hex: '#6B7280' },
+  { value: 'green', labelKey: 'colors.greenOk', hex: '#10B981' },
+  { value: 'red', labelKey: 'colors.redProblem', hex: '#EF4444' },
+  { value: 'yellow', labelKey: 'colors.yellowWarning', hex: '#F59E0B' },
+  { value: 'blue', labelKey: 'colors.blueInfo', hex: '#3B82F6' },
+  { value: 'orange', labelKey: 'colors.orange', hex: '#F97316' },
+  { value: 'gray', labelKey: 'colors.grayNeutral', hex: '#6B7280' },
 ];
 
 // Icon options
 const ICON_OPTIONS = [
-  { value: 'clipboard-check', label: 'Kontroll' },
-  { value: 'shield-check', label: 'Kvaliteet' },
-  { value: 'wrench', label: 'Remont' },
-  { value: 'eye', label: 'Visuaalne' },
-  { value: 'ruler', label: 'Mõõtmine' },
-  { value: 'camera', label: 'Foto' },
-  { value: 'file-text', label: 'Dokument' },
-  { value: 'alert-triangle', label: 'Hoiatus' },
-  { value: 'check-circle', label: 'Kinnitus' },
-  { value: 'tool', label: 'Tööriist' },
+  { value: 'clipboard-check', labelKey: 'icons.clipboard-check' },
+  { value: 'shield-check', labelKey: 'icons.shield-check' },
+  { value: 'wrench', labelKey: 'icons.wrench' },
+  { value: 'eye', labelKey: 'icons.eye' },
+  { value: 'ruler', labelKey: 'icons.ruler' },
+  { value: 'camera', labelKey: 'icons.camera' },
+  { value: 'file-text', labelKey: 'icons.file-text' },
+  { value: 'alert-triangle', labelKey: 'icons.alert-triangle' },
+  { value: 'check-circle', labelKey: 'icons.check-circle' },
+  { value: 'tool', labelKey: 'icons.tool' },
 ];
 
 // ============================================
@@ -187,7 +187,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
 
   const saveType = async () => {
     if (!editingType || !editingType.name?.trim() || !editingType.code?.trim()) {
-      setMessage({ type: 'error', text: 'Nimi ja kood on kohustuslikud' });
+      setMessage({ type: 'error', text: t('builder.nameAndCodeRequired') });
       return;
     }
 
@@ -209,14 +209,14 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
           .from('inspection_types')
           .insert(typeData);
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Kategooria loodud!' });
+        setMessage({ type: 'success', text: t('builder.categoryCreated') });
       } else {
         const { error } = await supabase
           .from('inspection_types')
           .update(typeData)
           .eq('id', editingType.id);
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Kategooria uuendatud!' });
+        setMessage({ type: 'success', text: t('builder.categoryUpdated') });
       }
 
       await loadData();
@@ -224,14 +224,14 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
       setEditMode('none');
     } catch (e) {
       console.error('Error saving type:', e);
-      setMessage({ type: 'error', text: 'Viga salvestamisel' });
+      setMessage({ type: 'error', text: t('builder.errorSaving') });
     } finally {
       setSaving(false);
     }
   };
 
   const deleteType = async (typeId: string) => {
-    if (!confirm('Kas oled kindel? See kustutab ka kõik seotud tüübid ja kontrollpunktid.')) {
+    if (!confirm(t('builder.deleteTypeConfirm'))) {
       return;
     }
 
@@ -241,11 +241,11 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
         .delete()
         .eq('id', typeId);
       if (error) throw error;
-      setMessage({ type: 'success', text: 'Kategooria kustutatud' });
+      setMessage({ type: 'success', text: t('builder.categoryDeleted') });
       await loadData();
     } catch (e) {
       console.error('Error deleting type:', e);
-      setMessage({ type: 'error', text: 'Viga kustutamisel' });
+      setMessage({ type: 'error', text: t('builder.errorDeleting') });
     }
   };
 
@@ -278,7 +278,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
 
   const saveCategory = async () => {
     if (!editingCategory || !editingCategory.name?.trim() || !editingCategory.code?.trim()) {
-      setMessage({ type: 'error', text: 'Nimi ja kood on kohustuslikud' });
+      setMessage({ type: 'error', text: t('builder.nameAndCodeRequired') });
       return;
     }
 
@@ -302,14 +302,14 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
           .from('inspection_categories')
           .insert(categoryData);
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Tüüp loodud!' });
+        setMessage({ type: 'success', text: t('builder.typeCreated') });
       } else {
         const { error } = await supabase
           .from('inspection_categories')
           .update(categoryData)
           .eq('id', editingCategory.id);
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Tüüp uuendatud!' });
+        setMessage({ type: 'success', text: t('builder.typeUpdated') });
       }
 
       await loadData();
@@ -317,14 +317,14 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
       setEditMode('none');
     } catch (e) {
       console.error('Error saving category:', e);
-      setMessage({ type: 'error', text: 'Viga salvestamisel' });
+      setMessage({ type: 'error', text: t('builder.errorSaving') });
     } finally {
       setSaving(false);
     }
   };
 
   const deleteCategory = async (categoryId: string) => {
-    if (!confirm('Kas oled kindel? See kustutab ka kõik seotud kontrollpunktid.')) {
+    if (!confirm(t('builder.deleteCategoryConfirm'))) {
       return;
     }
 
@@ -334,11 +334,11 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
         .delete()
         .eq('id', categoryId);
       if (error) throw error;
-      setMessage({ type: 'success', text: 'Tüüp kustutatud' });
+      setMessage({ type: 'success', text: t('builder.typeDeleted') });
       await loadData();
     } catch (e) {
       console.error('Error deleting category:', e);
-      setMessage({ type: 'error', text: 'Viga kustutamisel' });
+      setMessage({ type: 'error', text: t('builder.errorDeleting') });
     }
   };
 
@@ -366,7 +366,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
         allow_multiple: false,
         response_options: [
           { value: 'ok', label: 'OK', color: 'green', requiresPhoto: false, requiresComment: false },
-          { value: 'nok', label: 'Ei vasta', color: 'red', requiresPhoto: true, requiresComment: true }
+          { value: 'nok', label: t('builder.defaultNok', 'Ei vasta'), color: 'red', requiresPhoto: true, requiresComment: true }
         ],
         comment_enabled: true,
         end_user_can_comment: true,
@@ -384,12 +384,12 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
 
   const saveCheckpoint = async () => {
     if (!editingCheckpoint || !editingCheckpoint.name?.trim() || !editingCheckpoint.code?.trim()) {
-      setMessage({ type: 'error', text: 'Nimi ja kood on kohustuslikud' });
+      setMessage({ type: 'error', text: t('builder.nameAndCodeRequired') });
       return;
     }
 
     if (!editingCheckpoint.response_options || editingCheckpoint.response_options.length === 0) {
-      setMessage({ type: 'error', text: 'Lisa vähemalt üks vastusvariant' });
+      setMessage({ type: 'error', text: t('builder.addAtLeastOneOption') });
       return;
     }
 
@@ -423,14 +423,14 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
           .from('inspection_checkpoints')
           .insert(checkpointData);
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Kontrollpunkt loodud!' });
+        setMessage({ type: 'success', text: t('builder.checkpointCreated') });
       } else {
         const { error } = await supabase
           .from('inspection_checkpoints')
           .update(checkpointData)
           .eq('id', editingCheckpoint.id);
         if (error) throw error;
-        setMessage({ type: 'success', text: 'Kontrollpunkt uuendatud!' });
+        setMessage({ type: 'success', text: t('builder.checkpointUpdated') });
       }
 
       await loadData();
@@ -438,14 +438,14 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
       setEditMode('none');
     } catch (e) {
       console.error('Error saving checkpoint:', e);
-      setMessage({ type: 'error', text: 'Viga salvestamisel' });
+      setMessage({ type: 'error', text: t('builder.errorSaving') });
     } finally {
       setSaving(false);
     }
   };
 
   const deleteCheckpoint = async (checkpointId: string) => {
-    if (!confirm('Kas oled kindel, et soovid selle kontrollpunkti kustutada?')) {
+    if (!confirm(t('builder.deleteCheckpointConfirm'))) {
       return;
     }
 
@@ -455,11 +455,11 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
         .delete()
         .eq('id', checkpointId);
       if (error) throw error;
-      setMessage({ type: 'success', text: 'Kontrollpunkt kustutatud' });
+      setMessage({ type: 'success', text: t('builder.checkpointDeleted') });
       await loadData();
     } catch (e) {
       console.error('Error deleting checkpoint:', e);
-      setMessage({ type: 'error', text: 'Viga kustutamisel' });
+      setMessage({ type: 'error', text: t('builder.errorDeleting') });
     }
   };
 
@@ -549,7 +549,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
       <div className="inspection-plan-builder">
         <div className="builder-loading">
           <div className="spinner" />
-          <span>Laadin...</span>
+          <span>{t('builder.loading')}</span>
         </div>
       </div>
     );
@@ -560,8 +560,8 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
       {/* Header */}
       <div className="builder-header">
         <div className="header-left">
-          <h1>Kontrollkavade haldus</h1>
-          <span className="subtitle">Kategooriad, tüübid ja kontrollpunktid</span>
+          <h1>{t('builder.managementTitle')}</h1>
+          <span className="subtitle">{t('builder.subtitle')}</span>
         </div>
         <div className="header-right">
           <button className="close-btn" onClick={onClose}>
@@ -582,11 +582,11 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
         {/* Sidebar - Type/Category tree */}
         <div className="builder-sidebar">
           <div className="sidebar-header">
-            <h2>Struktuur</h2>
+            <h2>{t('builder.structure')}</h2>
             <button
               className="add-btn"
               onClick={() => openTypeEditor()}
-              title="Lisa uus kategooria"
+              title={t('builder.addNewCategory')}
             >
               <FiPlus size={16} />
             </button>
@@ -615,10 +615,10 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                     {getCategoriesForType(type.id).length}
                   </span>
                   <div className="item-actions">
-                    <button onClick={(e) => { e.stopPropagation(); openTypeEditor(type); }} title="Muuda">
+                    <button onClick={(e) => { e.stopPropagation(); openTypeEditor(type); }} title={t('builder.edit')}>
                       <FiEdit2 size={12} />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); deleteType(type.id); }} title="Kustuta">
+                    <button onClick={(e) => { e.stopPropagation(); deleteType(type.id); }} title={t('builder.delete')}>
                       <FiTrash2 size={12} />
                     </button>
                   </div>
@@ -644,10 +644,10 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                             {getCheckpointsForCategory(category.id).length}
                           </span>
                           <div className="item-actions">
-                            <button onClick={(e) => { e.stopPropagation(); openCategoryEditor(type.id, category); }} title="Muuda">
+                            <button onClick={(e) => { e.stopPropagation(); openCategoryEditor(type.id, category); }} title={t('builder.edit')}>
                               <FiEdit2 size={12} />
                             </button>
-                            <button onClick={(e) => { e.stopPropagation(); deleteCategory(category.id); }} title="Kustuta">
+                            <button onClick={(e) => { e.stopPropagation(); deleteCategory(category.id); }} title={t('builder.delete')}>
                               <FiTrash2 size={12} />
                             </button>
                           </div>
@@ -665,10 +665,10 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                                 <span className="item-name">{checkpoint.name}</span>
                                 <span className="checkpoint-code">{checkpoint.code}</span>
                                 <div className="item-actions" onClick={(e) => e.stopPropagation()}>
-                                  <button onClick={() => openCheckpointEditor(category.id, checkpoint)} title="Muuda">
+                                  <button onClick={() => openCheckpointEditor(category.id, checkpoint)} title={t('builder.edit')}>
                                     <FiEdit2 size={12} />
                                   </button>
-                                  <button onClick={() => deleteCheckpoint(checkpoint.id)} title="Kustuta">
+                                  <button onClick={() => deleteCheckpoint(checkpoint.id)} title={t('builder.delete')}>
                                     <FiTrash2 size={12} />
                                   </button>
                                 </div>
@@ -678,7 +678,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                               className="add-checkpoint-btn"
                               onClick={() => openCheckpointEditor(category.id)}
                             >
-                              <FiPlus size={12} /> Lisa kontrollpunkt
+                              <FiPlus size={12} /> {t('builder.addCheckpoint')}
                             </button>
                           </div>
                         )}
@@ -688,7 +688,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                       className="add-category-btn"
                       onClick={() => openCategoryEditor(type.id)}
                     >
-                      <FiPlus size={12} /> Lisa tüüp
+                      <FiPlus size={12} /> {t('builder.addType')}
                     </button>
                   </div>
                 )}
@@ -697,9 +697,9 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
 
             {types.filter(t => t.is_active).length === 0 && (
               <div className="empty-tree">
-                <p>Kontrollikava kategooriaid pole veel loodud.</p>
+                <p>{t('builder.noCategoriesYet')}</p>
                 <button onClick={() => openTypeEditor()}>
-                  <FiPlus size={16} /> Loo esimene kategooria
+                  <FiPlus size={16} /> {t('builder.createFirstCategory')}
                 </button>
               </div>
             )}
@@ -711,8 +711,8 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
           {editMode === 'none' && (
             <div className="editor-placeholder">
               <FiSettings size={48} />
-              <h3>Vali element muutmiseks</h3>
-              <p>Vali vasakult puust kategooria, tüüp või kontrollpunkt, et seda muuta.</p>
+              <h3>{t('builder.selectElementToEdit')}</h3>
+              <p>{t('builder.selectElementToEditDesc')}</p>
             </div>
           )}
 
@@ -720,44 +720,44 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
           {editMode === 'type' && editingType && (
             <div className="editor-panel">
               <div className="editor-header">
-                <h2>{editingType.isNew ? 'Uus inspektsiooni kategooria' : 'Muuda kategooriat'}</h2>
+                <h2>{editingType.isNew ? t('builder.newInspectionCategory') : t('builder.editCategory')}</h2>
               </div>
 
               <div className="editor-form">
                 <div className="form-row">
-                  <label>Kood *</label>
+                  <label>{t('builder.codeLabel')}</label>
                   <input
                     type="text"
                     value={editingType.code || ''}
                     onChange={(e) => setEditingType({ ...editingType, code: e.target.value.toUpperCase() })}
-                    placeholder="nt. BOLT, WELD, VISUAL"
+                    placeholder={t('builder.codePlaceholder')}
                     maxLength={20}
                   />
-                  <span className="help-text">Lühike unikaalne identifikaator</span>
+                  <span className="help-text">{t('builder.codeHelpText')}</span>
                 </div>
 
                 <div className="form-row">
-                  <label>Nimi *</label>
+                  <label>{t('builder.nameLabel')}</label>
                   <input
                     type="text"
                     value={editingType.name || ''}
                     onChange={(e) => setEditingType({ ...editingType, name: e.target.value })}
-                    placeholder="nt. Poltide kontroll"
+                    placeholder={t('builder.namePlaceholder')}
                   />
                 </div>
 
                 <div className="form-row">
-                  <label>Kirjeldus</label>
+                  <label>{t('builder.descriptionLabel')}</label>
                   <textarea
                     value={editingType.description || ''}
                     onChange={(e) => setEditingType({ ...editingType, description: e.target.value })}
-                    placeholder="Kirjelda kontrollitüübi eesmärki..."
+                    placeholder={t('builder.describeGoal')}
                     rows={3}
                   />
                 </div>
 
                 <div className="form-row">
-                  <label>Värv</label>
+                  <label>{t('builder.colorLabel')}</label>
                   <div className="color-picker">
                     {COLOR_OPTIONS.map(color => (
                       <button
@@ -765,20 +765,20 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                         className={`color-option ${editingType.color === color.value ? 'selected' : ''}`}
                         style={{ backgroundColor: color.value }}
                         onClick={() => setEditingType({ ...editingType, color: color.value })}
-                        title={color.label}
+                        title={t(color.labelKey)}
                       />
                     ))}
                   </div>
                 </div>
 
                 <div className="form-row">
-                  <label>Ikoon</label>
+                  <label>{t('builder.iconLabel')}</label>
                   <select
                     value={editingType.icon || 'clipboard-check'}
                     onChange={(e) => setEditingType({ ...editingType, icon: e.target.value })}
                   >
                     {ICON_OPTIONS.map(icon => (
-                      <option key={icon.value} value={icon.value}>{icon.label}</option>
+                      <option key={icon.value} value={icon.value}>{t(icon.labelKey)}</option>
                     ))}
                   </select>
                 </div>
@@ -790,17 +790,17 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                       checked={editingType.is_active ?? true}
                       onChange={(e) => setEditingType({ ...editingType, is_active: e.target.checked })}
                     />
-                    Aktiivne
+                    {t('builder.activeLabel')}
                   </label>
                 </div>
               </div>
 
               <div className="editor-actions">
                 <button className="cancel-btn" onClick={() => { setEditingType(null); setEditMode('none'); }}>
-                  Tühista
+                  {t('builder.cancel')}
                 </button>
                 <button className="save-btn" onClick={saveType} disabled={saving}>
-                  {saving ? 'Salvestan...' : <><FiSave size={16} /> Salvesta</>}
+                  {saving ? t('builder.saving') : <><FiSave size={16} /> {t('builder.save')}</>}
                 </button>
               </div>
             </div>
@@ -810,43 +810,43 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
           {editMode === 'category' && editingCategory && (
             <div className="editor-panel">
               <div className="editor-header">
-                <h2>{editingCategory.isNew ? 'Uus inspektsiooni tüüp' : 'Muuda tüüpi'}</h2>
+                <h2>{editingCategory.isNew ? t('builder.newInspectionType') : t('builder.editType')}</h2>
               </div>
 
               <div className="editor-form">
                 <div className="form-row">
-                  <label>Kood *</label>
+                  <label>{t('builder.codeLabel')}</label>
                   <input
                     type="text"
                     value={editingCategory.code || ''}
                     onChange={(e) => setEditingCategory({ ...editingCategory, code: e.target.value.toUpperCase() })}
-                    placeholder="nt. GENERAL, BOLTS, WELDS"
+                    placeholder={t('builder.categoryCodePlaceholder')}
                     maxLength={20}
                   />
                 </div>
 
                 <div className="form-row">
-                  <label>Nimi *</label>
+                  <label>{t('builder.nameLabel')}</label>
                   <input
                     type="text"
                     value={editingCategory.name || ''}
                     onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
-                    placeholder="nt. Üldkontroll"
+                    placeholder={t('builder.categoryNamePlaceholder')}
                   />
                 </div>
 
                 <div className="form-row">
-                  <label>Kirjeldus</label>
+                  <label>{t('builder.descriptionLabel')}</label>
                   <textarea
                     value={editingCategory.description || ''}
                     onChange={(e) => setEditingCategory({ ...editingCategory, description: e.target.value })}
-                    placeholder="Kirjelda tüübi sisu..."
+                    placeholder={t('builder.describeContent')}
                     rows={2}
                   />
                 </div>
 
                 <div className="form-row">
-                  <label>Värv</label>
+                  <label>{t('builder.colorLabel')}</label>
                   <div className="color-picker">
                     {COLOR_OPTIONS.map(color => (
                       <button
@@ -854,7 +854,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                         className={`color-option ${editingCategory.color === color.value ? 'selected' : ''}`}
                         style={{ backgroundColor: color.value }}
                         onClick={() => setEditingCategory({ ...editingCategory, color: color.value })}
-                        title={color.label}
+                        title={t(color.labelKey)}
                       />
                     ))}
                   </div>
@@ -867,9 +867,9 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                       checked={editingCategory.is_required ?? false}
                       onChange={(e) => setEditingCategory({ ...editingCategory, is_required: e.target.checked })}
                     />
-                    Kohustuslik tüüp
+                    {t('builder.requiredType')}
                   </label>
-                  <span className="help-text">Kõik selle tüübi kontrollpunktid tuleb läbida</span>
+                  <span className="help-text">{t('builder.requiredTypeHelpText')}</span>
                 </div>
 
                 <div className="form-row checkbox-row">
@@ -879,17 +879,17 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                       checked={editingCategory.is_active ?? true}
                       onChange={(e) => setEditingCategory({ ...editingCategory, is_active: e.target.checked })}
                     />
-                    Aktiivne
+                    {t('builder.activeLabel')}
                   </label>
                 </div>
               </div>
 
               <div className="editor-actions">
                 <button className="cancel-btn" onClick={() => { setEditingCategory(null); setEditMode('none'); }}>
-                  Tühista
+                  {t('builder.cancel')}
                 </button>
                 <button className="save-btn" onClick={saveCategory} disabled={saving}>
-                  {saving ? 'Salvestan...' : <><FiSave size={16} /> Salvesta</>}
+                  {saving ? t('builder.saving') : <><FiSave size={16} /> {t('builder.save')}</>}
                 </button>
               </div>
             </div>
@@ -899,60 +899,60 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
           {editMode === 'checkpoint' && editingCheckpoint && (
             <div className="editor-panel checkpoint-editor">
               <div className="editor-header">
-                <h2>{editingCheckpoint.isNew ? 'Uus kontrollpunkt' : 'Muuda kontrollpunkti'}</h2>
+                <h2>{editingCheckpoint.isNew ? t('builder.newCheckpoint') : t('builder.editCheckpoint')}</h2>
                 <button
                   className="preview-btn"
                   onClick={() => setPreviewCheckpoint(editingCheckpoint as InspectionCheckpoint)}
-                  title="Eelvaade"
+                  title={t('builder.preview')}
                 >
-                  <FiEye size={16} /> Eelvaade
+                  <FiEye size={16} /> {t('builder.preview')}
                 </button>
               </div>
 
               <div className="editor-form checkpoint-form">
                 {/* Basic info */}
                 <div className="form-section">
-                  <h3>Põhiandmed</h3>
+                  <h3>{t('builder.basicInfo')}</h3>
 
                   <div className="form-row-group">
                     <div className="form-row">
-                      <label>Kood *</label>
+                      <label>{t('builder.codeLabel')}</label>
                       <input
                         type="text"
                         value={editingCheckpoint.code || ''}
                         onChange={(e) => setEditingCheckpoint({ ...editingCheckpoint, code: e.target.value.toUpperCase() })}
-                        placeholder="nt. CHK-001"
+                        placeholder={t('builder.checkpointCodePlaceholder')}
                         maxLength={20}
                       />
                     </div>
 
                     <div className="form-row">
-                      <label>Nimi *</label>
+                      <label>{t('builder.nameLabel')}</label>
                       <input
                         type="text"
                         value={editingCheckpoint.name || ''}
                         onChange={(e) => setEditingCheckpoint({ ...editingCheckpoint, name: e.target.value })}
-                        placeholder="nt. Visuaalne kontroll"
+                        placeholder={t('builder.checkpointNamePlaceholder')}
                       />
                     </div>
                   </div>
 
                   <div className="form-row">
-                    <label>Küsimus / Kirjeldus</label>
+                    <label>{t('builder.questionDescription')}</label>
                     <textarea
                       value={editingCheckpoint.description || ''}
                       onChange={(e) => setEditingCheckpoint({ ...editingCheckpoint, description: e.target.value })}
-                      placeholder="Mida kontrollitakse? Mis küsimus esitatakse inspektorile?"
+                      placeholder={t('builder.questionText')}
                       rows={2}
                     />
                   </div>
 
                   <div className="form-row">
-                    <label>Juhised inspektorile</label>
+                    <label>{t('builder.instructionsLabel')}</label>
                     <textarea
                       value={editingCheckpoint.instructions || ''}
                       onChange={(e) => setEditingCheckpoint({ ...editingCheckpoint, instructions: e.target.value })}
-                      placeholder="Kuidas kontrolli läbi viia? Mida jälgida?"
+                      placeholder={t('builder.guideText')}
                       rows={3}
                     />
                   </div>
@@ -961,9 +961,9 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                 {/* Response options */}
                 <div className="form-section">
                   <div className="section-header">
-                    <h3>Vastusvariandid</h3>
+                    <h3>{t('builder.responseOptions')}</h3>
                     <button className="add-btn small" onClick={addResponseOption}>
-                      <FiPlus size={14} /> Lisa
+                      <FiPlus size={14} /> {t('builder.add')}
                     </button>
                   </div>
 
@@ -990,7 +990,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                           className="option-value"
                           value={option.value}
                           onChange={(e) => updateResponseOption(idx, { value: e.target.value })}
-                          placeholder="Väärtus"
+                          placeholder={t('builder.valuePlaceholder')}
                         />
 
                         <input
@@ -998,7 +998,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                           className="option-label"
                           value={option.label}
                           onChange={(e) => updateResponseOption(idx, { label: e.target.value })}
-                          placeholder="Silt (kuvatakse kasutajale)"
+                          placeholder={t('builder.labelPlaceholder')}
                         />
 
                         <select
@@ -1007,11 +1007,11 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                           onChange={(e) => updateResponseOption(idx, { color: e.target.value as any })}
                         >
                           {RESPONSE_COLORS.map(c => (
-                            <option key={c.value} value={c.value}>{c.label}</option>
+                            <option key={c.value} value={c.value}>{t(c.labelKey)}</option>
                           ))}
                         </select>
 
-                        <label className="option-checkbox" title="Nõuab fotot">
+                        <label className="option-checkbox" title={t('builder.requiresPhoto')}>
                           <input
                             type="checkbox"
                             checked={option.requiresPhoto}
@@ -1020,7 +1020,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                           <FiCamera size={14} />
                         </label>
 
-                        <label className="option-checkbox" title="Nõuab kommentaari">
+                        <label className="option-checkbox" title={t('builder.requiresComment')}>
                           <input
                             type="checkbox"
                             checked={option.requiresComment}
@@ -1032,7 +1032,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                         <button
                           className="option-remove"
                           onClick={() => removeResponseOption(idx)}
-                          title="Eemalda"
+                          title={t('builder.remove')}
                         >
                           <FiTrash2 size={14} />
                         </button>
@@ -1041,25 +1041,25 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                   </div>
 
                   <div className="form-row">
-                    <label>Kuvatüüp</label>
+                    <label>{t('builder.displayType')}</label>
                     <select
                       value={editingCheckpoint.display_type || 'radio'}
                       onChange={(e) => setEditingCheckpoint({ ...editingCheckpoint, display_type: e.target.value as any })}
                     >
-                      <option value="radio">Raadionupud (üks valik)</option>
-                      <option value="checkbox">Märkeruudud (mitu valikut)</option>
-                      <option value="dropdown">Rippmenüü</option>
+                      <option value="radio">{t('builder.radioButtons')}</option>
+                      <option value="checkbox">{t('builder.checkboxes')}</option>
+                      <option value="dropdown">{t('builder.dropdown')}</option>
                     </select>
                   </div>
                 </div>
 
                 {/* Photo settings */}
                 <div className="form-section">
-                  <h3>Foto seaded</h3>
+                  <h3>{t('builder.photoSettings')}</h3>
 
                   <div className="form-row-group">
                     <div className="form-row">
-                      <label>Min fotosid</label>
+                      <label>{t('builder.minPhotos')}</label>
                       <input
                         type="number"
                         min={0}
@@ -1070,7 +1070,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                     </div>
 
                     <div className="form-row">
-                      <label>Max fotosid</label>
+                      <label>{t('builder.maxPhotos')}</label>
                       <input
                         type="number"
                         min={0}
@@ -1084,7 +1084,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
 
                 {/* Comment settings */}
                 <div className="form-section">
-                  <h3>Kommentaari seaded</h3>
+                  <h3>{t('builder.commentSettings')}</h3>
 
                   <div className="form-row checkbox-row">
                     <label>
@@ -1093,7 +1093,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                         checked={editingCheckpoint.comment_enabled ?? true}
                         onChange={(e) => setEditingCheckpoint({ ...editingCheckpoint, comment_enabled: e.target.checked })}
                       />
-                      Kommenteerimine lubatud
+                      {t('builder.commentEnabled')}
                     </label>
                   </div>
 
@@ -1104,14 +1104,14 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                         checked={editingCheckpoint.end_user_can_comment ?? true}
                         onChange={(e) => setEditingCheckpoint({ ...editingCheckpoint, end_user_can_comment: e.target.checked })}
                       />
-                      Kasutaja saab lisada kommentaari
+                      {t('builder.userCanComment')}
                     </label>
                   </div>
                 </div>
 
                 {/* Other settings */}
                 <div className="form-section">
-                  <h3>Muud seaded</h3>
+                  <h3>{t('builder.otherSettings')}</h3>
 
                   <div className="form-row checkbox-row">
                     <label>
@@ -1120,7 +1120,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                         checked={editingCheckpoint.is_required ?? false}
                         onChange={(e) => setEditingCheckpoint({ ...editingCheckpoint, is_required: e.target.checked })}
                       />
-                      Kohustuslik kontrollpunkt
+                      {t('builder.requiredCheckpoint')}
                     </label>
                   </div>
 
@@ -1131,7 +1131,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                         checked={editingCheckpoint.requires_assembly_selection ?? false}
                         onChange={(e) => setEditingCheckpoint({ ...editingCheckpoint, requires_assembly_selection: e.target.checked })}
                       />
-                      Nõuab mudelist elemendi valimist
+                      {t('builder.requiresModelSelection')}
                     </label>
                   </div>
 
@@ -1142,7 +1142,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                         checked={editingCheckpoint.is_active ?? true}
                         onChange={(e) => setEditingCheckpoint({ ...editingCheckpoint, is_active: e.target.checked })}
                       />
-                      Aktiivne
+                      {t('builder.activeLabel')}
                     </label>
                   </div>
                 </div>
@@ -1150,10 +1150,10 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
 
               <div className="editor-actions">
                 <button className="cancel-btn" onClick={() => { setEditingCheckpoint(null); setEditMode('none'); }}>
-                  Tühista
+                  {t('builder.cancel')}
                 </button>
                 <button className="save-btn" onClick={saveCheckpoint} disabled={saving}>
-                  {saving ? 'Salvestan...' : <><FiSave size={16} /> Salvesta</>}
+                  {saving ? t('builder.saving') : <><FiSave size={16} /> {t('builder.save')}</>}
                 </button>
               </div>
             </div>
@@ -1166,20 +1166,20 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
         <div className="preview-modal-overlay" onClick={() => setPreviewCheckpoint(null)}>
           <div className="preview-modal" onClick={(e) => e.stopPropagation()}>
             <div className="preview-header">
-              <h3>Eelvaade</h3>
+              <h3>{t('builder.preview')}</h3>
               <button onClick={() => setPreviewCheckpoint(null)}>
                 <FiX size={20} />
               </button>
             </div>
             <div className="preview-content">
               <div className="checkpoint-preview">
-                <div className="preview-name">{previewCheckpoint.name || 'Nimeta kontrollpunkt'}</div>
+                <div className="preview-name">{previewCheckpoint.name || t('builder.unnamedCheckpoint')}</div>
                 {previewCheckpoint.description && (
                   <div className="preview-description">{previewCheckpoint.description}</div>
                 )}
                 {previewCheckpoint.instructions && (
                   <div className="preview-instructions">
-                    <strong>Juhised:</strong> {previewCheckpoint.instructions}
+                    <strong>{t('builder.instructionsPreview')}</strong> {previewCheckpoint.instructions}
                   </div>
                 )}
 
@@ -1199,8 +1199,8 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                         }}
                       />
                       <span>{option.label || option.value}</span>
-                      {option.requiresPhoto && <FiCamera size={12} title="Nõuab fotot" />}
-                      {option.requiresComment && <FiMessageSquare size={12} title="Nõuab kommentaari" />}
+                      {option.requiresPhoto && <FiCamera size={12} title={t('builder.requiresPhoto')} />}
+                      {option.requiresComment && <FiMessageSquare size={12} title={t('builder.requiresComment')} />}
                     </div>
                   ))}
                 </div>
@@ -1209,7 +1209,7 @@ export const InspectionPlanBuilder: React.FC<InspectionPlanBuilderProps> = ({
                   <div className="preview-photos-info">
                     <FiCamera size={14} />
                     <span>
-                      Fotosid: {previewCheckpoint.photos_min ?? 0} - {previewCheckpoint.photos_max ?? 5}
+                      {t('builder.photosRange')} {previewCheckpoint.photos_min ?? 0} - {previewCheckpoint.photos_max ?? 5}
                     </span>
                   </div>
                 )}

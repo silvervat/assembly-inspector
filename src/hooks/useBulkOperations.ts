@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase, BulkOperationResult } from '../supabase';
 
 export interface UseBulkOperationsOptions {
@@ -23,6 +24,7 @@ export interface UseBulkOperationsResult {
  * Provides functions for bulk approve, return, reject, status change, and assign
  */
 export function useBulkOperations(options: UseBulkOperationsOptions): UseBulkOperationsResult {
+  const { t } = useTranslation('errors');
   const { projectId: _projectId, userEmail, userName } = options;
   void _projectId; // Available for future use
   const [processing, setProcessing] = useState(false);
@@ -68,7 +70,7 @@ export function useBulkOperations(options: UseBulkOperationsOptions): UseBulkOpe
       };
     } catch (err) {
       console.error('Error in bulk approve:', err);
-      setError(err instanceof Error ? err.message : 'Viga kinnitamisel');
+      setError(err instanceof Error ? err.message : t('bulk.approveError'));
       return null;
     } finally {
       setProcessing(false);
@@ -84,7 +86,7 @@ export function useBulkOperations(options: UseBulkOperationsOptions): UseBulkOpe
   ): Promise<BulkOperationResult | null> => {
     if (ids.length === 0) return null;
     if (!comment || comment.trim() === '') {
-      setError('Kommentaar on kohustuslik tagasi suunamisel');
+      setError(t('bulk.commentRequiredReturn'));
       return null;
     }
 
@@ -118,7 +120,7 @@ export function useBulkOperations(options: UseBulkOperationsOptions): UseBulkOpe
       };
     } catch (err) {
       console.error('Error in bulk return:', err);
-      setError(err instanceof Error ? err.message : 'Viga tagasi suunamisel');
+      setError(err instanceof Error ? err.message : t('bulk.returnError'));
       return null;
     } finally {
       setProcessing(false);
@@ -134,7 +136,7 @@ export function useBulkOperations(options: UseBulkOperationsOptions): UseBulkOpe
   ): Promise<BulkOperationResult | null> => {
     if (ids.length === 0) return null;
     if (!comment || comment.trim() === '') {
-      setError('Kommentaar on kohustuslik tagasi lükkamisel');
+      setError(t('bulk.commentRequiredReject'));
       return null;
     }
 
@@ -168,7 +170,7 @@ export function useBulkOperations(options: UseBulkOperationsOptions): UseBulkOpe
       };
     } catch (err) {
       console.error('Error in bulk reject:', err);
-      setError(err instanceof Error ? err.message : 'Viga tagasi lükkamisel');
+      setError(err instanceof Error ? err.message : t('bulk.rejectError'));
       return null;
     } finally {
       setProcessing(false);
@@ -220,7 +222,7 @@ export function useBulkOperations(options: UseBulkOperationsOptions): UseBulkOpe
       };
     } catch (err) {
       console.error('Error in bulk status change:', err);
-      setError(err instanceof Error ? err.message : 'Viga staatuse muutmisel');
+      setError(err instanceof Error ? err.message : t('bulk.statusChangeError'));
       return null;
     } finally {
       setProcessing(false);
@@ -267,7 +269,7 @@ export function useBulkOperations(options: UseBulkOperationsOptions): UseBulkOpe
       };
     } catch (err) {
       console.error('Error in bulk assign:', err);
-      setError(err instanceof Error ? err.message : 'Viga määramisel');
+      setError(err instanceof Error ? err.message : t('bulk.assignError'));
       return null;
     } finally {
       setProcessing(false);

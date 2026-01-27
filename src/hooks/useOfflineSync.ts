@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase, OfflineUploadStatus } from '../supabase';
 
 // IndexedDB database name and version
@@ -38,6 +39,7 @@ export interface UseOfflineSyncResult {
  * Uses IndexedDB for local storage and automatically syncs when online
  */
 export function useOfflineSync(projectId: string): UseOfflineSyncResult {
+  const { t } = useTranslation('errors');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
@@ -57,7 +59,7 @@ export function useOfflineSync(projectId: string): UseOfflineSyncResult {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
 
       request.onerror = () => {
-        reject(new Error('IndexedDB viga'));
+        reject(new Error(t('offline.indexedDbError')));
       };
 
       request.onsuccess = () => {
@@ -121,7 +123,7 @@ export function useOfflineSync(projectId: string): UseOfflineSyncResult {
       };
 
       request.onerror = () => {
-        reject(new Error('Viga järjekorda lisamisel'));
+        reject(new Error(t('offline.addToQueueError')));
       };
     });
   }, [initDB, countPending]);
@@ -141,7 +143,7 @@ export function useOfflineSync(projectId: string): UseOfflineSyncResult {
       };
 
       request.onerror = () => {
-        reject(new Error('Viga kirjete laadimisel'));
+        reject(new Error(t('offline.loadItemsError')));
       };
     });
   }, [initDB]);
@@ -171,13 +173,13 @@ export function useOfflineSync(projectId: string): UseOfflineSyncResult {
             countPending();
             resolve();
           };
-          putRequest.onerror = () => reject(new Error('Viga staatuse uuendamisel'));
+          putRequest.onerror = () => reject(new Error(t('offline.updateStatusError')));
         } else {
           resolve();
         }
       };
 
-      getRequest.onerror = () => reject(new Error('Viga kirje leidmisel'));
+      getRequest.onerror = () => reject(new Error(t('offline.findItemError')));
     });
   }, [initDB, countPending]);
 
@@ -195,7 +197,7 @@ export function useOfflineSync(projectId: string): UseOfflineSyncResult {
         resolve();
       };
 
-      request.onerror = () => reject(new Error('Viga kustutamisel'));
+      request.onerror = () => reject(new Error(t('offline.deleteItemError')));
     });
   }, [initDB, countPending]);
 
@@ -250,7 +252,7 @@ export function useOfflineSync(projectId: string): UseOfflineSyncResult {
       return true;
     } catch (err) {
       console.error('Error uploading item:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Tundmatu viga';
+      const errorMessage = err instanceof Error ? err.message : t('general.unknown');
       await updateItemStatus(item.id, 'failed', errorMessage);
       return false;
     }
@@ -295,11 +297,11 @@ export function useOfflineSync(projectId: string): UseOfflineSyncResult {
       }
 
       if (failed > 0) {
-        setError(`${failed} kirjet ebaõnnestus`);
+        setError(t('offline.itemsFailed', { count: failed }));
       }
     } catch (err) {
       console.error('Error during sync:', err);
-      setError(err instanceof Error ? err.message : 'Sünkroniseerimise viga');
+      setError(err instanceof Error ? err.message : t('offline.syncError'));
     } finally {
       setSyncing(false);
       syncingRef.current = false;
@@ -321,7 +323,7 @@ export function useOfflineSync(projectId: string): UseOfflineSyncResult {
         resolve();
       };
 
-      request.onerror = () => reject(new Error('Viga järjekorra tühjendamisel'));
+      request.onerror = () => reject(new Error(t('offline.clearQueueError')));
     });
   }, [initDB]);
 

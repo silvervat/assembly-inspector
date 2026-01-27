@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   supabase,
   CalibrationPoint,
@@ -47,6 +48,7 @@ export interface UseCalibrationPointsResult {
  * Hook for managing calibration points
  */
 export function useCalibrationPoints(projectId: string | null): UseCalibrationPointsResult {
+  const { t } = useTranslation('errors');
   const [points, setPoints] = useState<CalibrationPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,7 +76,7 @@ export function useCalibrationPoints(projectId: string | null): UseCalibrationPo
       setPoints((data || []) as CalibrationPoint[]);
     } catch (err) {
       console.error('Error loading calibration points:', err);
-      setError(err instanceof Error ? err.message : 'Viga punktide laadimisel');
+      setError(err instanceof Error ? err.message : t('calibration.loadPointsError'));
     } finally {
       setLoading(false);
     }
@@ -86,7 +88,7 @@ export function useCalibrationPoints(projectId: string | null): UseCalibrationPo
     userName?: string
   ): Promise<boolean> => {
     if (!projectId) {
-      setError('Projekti ID puudub');
+      setError(t('general.projectIdMissing'));
       return false;
     }
 
@@ -121,7 +123,7 @@ export function useCalibrationPoints(projectId: string | null): UseCalibrationPo
       return true;
     } catch (err) {
       console.error('Error adding calibration point:', err);
-      setError(err instanceof Error ? err.message : 'Viga punkti lisamisel');
+      setError(err instanceof Error ? err.message : t('calibration.addPointError'));
       return false;
     }
   }, [projectId, loadPoints]);
@@ -132,7 +134,7 @@ export function useCalibrationPoints(projectId: string | null): UseCalibrationPo
     updates: Partial<CalibrationPoint>
   ): Promise<boolean> => {
     if (!projectId) {
-      setError('Projekti ID puudub');
+      setError(t('general.projectIdMissing'));
       return false;
     }
 
@@ -150,7 +152,7 @@ export function useCalibrationPoints(projectId: string | null): UseCalibrationPo
       return true;
     } catch (err) {
       console.error('Error updating calibration point:', err);
-      setError(err instanceof Error ? err.message : 'Viga punkti uuendamisel');
+      setError(err instanceof Error ? err.message : t('calibration.updatePointError'));
       return false;
     }
   }, [projectId, loadPoints]);
@@ -158,7 +160,7 @@ export function useCalibrationPoints(projectId: string | null): UseCalibrationPo
   // Remove point
   const removePoint = useCallback(async (id: string): Promise<boolean> => {
     if (!projectId) {
-      setError('Projekti ID puudub');
+      setError(t('general.projectIdMissing'));
       return false;
     }
 
@@ -176,7 +178,7 @@ export function useCalibrationPoints(projectId: string | null): UseCalibrationPo
       return true;
     } catch (err) {
       console.error('Error removing calibration point:', err);
-      setError(err instanceof Error ? err.message : 'Viga punkti kustutamisel');
+      setError(err instanceof Error ? err.message : t('calibration.deletePointError'));
       return false;
     }
   }, [projectId, loadPoints]);
@@ -197,14 +199,14 @@ export function useCalibrationPoints(projectId: string | null): UseCalibrationPo
     const activePoints = points.filter(p => p.is_active);
 
     if (activePoints.length < 2) {
-      setError('Kalibreerimiseks on vaja vähemalt 2 aktiivset punkti');
+      setError(t('calibration.minPointsRequired'));
       return null;
     }
 
     // Find coordinate system
     const cs = COORDINATE_SYSTEMS.find(c => c.id === coordinateSystemId);
     if (!cs || !cs.epsg_code) {
-      setError('Koordinaatsüsteem ei toeta kalibreerimist');
+      setError(t('calibration.unsupportedSystem'));
       return null;
     }
 
@@ -222,7 +224,7 @@ export function useCalibrationPoints(projectId: string | null): UseCalibrationPo
       return result;
     } catch (err) {
       console.error('Error recalibrating:', err);
-      setError(err instanceof Error ? err.message : 'Viga kalibreerimise arvutamisel');
+      setError(err instanceof Error ? err.message : t('calibration.calculationError'));
       return null;
     }
   }, [points, updatePoint]);

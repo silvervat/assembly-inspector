@@ -547,11 +547,11 @@ export default function AdminScreen({
       try {
         await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
         await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
-        const result = { status: 'success' as const, message: 'Mudel lähtestatud!' };
+        const result = { status: 'success' as const, message: t('guid.modelReset') };
         setGuidControllerResult(result);
         return result;
       } catch (e: any) {
-        const result = { status: 'error' as const, message: e.message || 'Viga lähtestamisel' };
+        const result = { status: 'error' as const, message: e.message || t('errors.resetError') };
         setGuidControllerResult(result);
         return result;
       }
@@ -565,7 +565,7 @@ export default function AdminScreen({
       .filter(g => g.length > 0);
 
     if (guids.length === 0) {
-      const result = { status: 'error' as const, message: 'Sisesta vähemalt üks GUID!' };
+      const result = { status: 'error' as const, message: t('guid.enterAtLeastOne') };
       setGuidControllerResult(result);
       return result;
     }
@@ -577,7 +577,7 @@ export default function AdminScreen({
       // Get all loaded models
       const models = await api.viewer.getModels();
       if (!models || models.length === 0) {
-        const result = { status: 'error' as const, message: 'Mudeleid pole laaditud!' };
+        const result = { status: 'error' as const, message: t('viewer.noModelsLoaded') };
         setGuidControllerResult(result);
         setGuidControllerLoading(false);
         return result;
@@ -607,7 +607,7 @@ export default function AdminScreen({
       }
 
       if (foundObjects.length === 0) {
-        const result = { status: 'error' as const, message: `GUID-e ei leitud! (${guids.length} otsitud)` };
+        const result = { status: 'error' as const, message: t('viewer.noObjectsFound') + ` (${guids.length})` };
         setGuidControllerResult(result);
         setGuidControllerLoading(false);
         return result;
@@ -633,17 +633,17 @@ export default function AdminScreen({
         case 'zoom':
           await api.viewer.setSelection({ modelObjectIds }, 'set');
           await (api.viewer as any).zoomToObjects?.(modelObjectIds);
-          result = { status: 'success', message: `Zoomitud! (${totalFound} objekti)` };
+          result = { status: 'success', message: `Zoomed! (${totalFound})` };
           break;
 
         case 'select':
           await api.viewer.setSelection({ modelObjectIds }, 'set');
-          result = { status: 'success', message: `Valitud! (${totalFound} objekti)` };
+          result = { status: 'success', message: `Selected! (${totalFound})` };
           break;
 
         case 'isolate':
           await api.viewer.isolateEntities(isolateEntities);
-          result = { status: 'success', message: `Isoleeritud! (${totalFound} objekti)` };
+          result = { status: 'success', message: `Isolated! (${totalFound})` };
           break;
 
         case 'highlight':
@@ -654,11 +654,11 @@ export default function AdminScreen({
             { color: '#FF0000' }
           );
           await (api.viewer as any).zoomToObjects?.(modelObjectIds);
-          result = { status: 'success', message: `Esile tõstetud punasena! (${totalFound} objekti)` };
+          result = { status: 'success', message: `Highlighted! (${totalFound})` };
           break;
 
         default:
-          result = { status: 'error', message: 'Tundmatu toiming' };
+          result = { status: 'error', message: t('errors.unknownOperation') };
       }
 
       setGuidControllerResult(result);
@@ -666,7 +666,7 @@ export default function AdminScreen({
 
     } catch (e: any) {
       console.error('GUID action error:', e);
-      const result = { status: 'error' as const, message: e.message || 'Viga toimingu tegemisel' };
+      const result = { status: 'error' as const, message: e.message || t('errors.operationError') };
       setGuidControllerResult(result);
       return result;
     } finally {
@@ -1287,7 +1287,7 @@ export default function AdminScreen({
   // Process GUID import - find objects by MS GUID and select them
   const processGuidImport = useCallback(async () => {
     if (!guidImportText.trim()) {
-      setMessage('Sisesta vähemalt üks GUID (MS)');
+      setMessage(t('guid.enterAtLeastOneMs'));
       return;
     }
 
@@ -1426,11 +1426,11 @@ export default function AdminScreen({
   // Export all schedule data to Excel
   const exportAllScheduleData = async () => {
     setDataExportLoading(true);
-    setDataExportStatus('Laadin andmeid...');
+    setDataExportStatus(t('viewer.loadingData'));
 
     try {
       // 1. Load all model objects from database
-      setDataExportStatus('Laadin mudeli objekte...');
+      setDataExportStatus(t('viewer.loadingModelObjects'));
       const PAGE_SIZE = 5000;
       const allModelObjects: Array<{
         guid_ifc: string;
@@ -1455,7 +1455,7 @@ export default function AdminScreen({
         if (data.length < PAGE_SIZE) break;
       }
 
-      setDataExportStatus(`Leitud ${allModelObjects.length} mudeli objekti. Laadin graafikuid...`);
+      setDataExportStatus(`${allModelObjects.length} objects. ${t('viewer.loadingData')}`);
 
       // 2. Load delivery schedule items
       const { data: deliveryItems, error: delError } = await supabase
@@ -1481,7 +1481,7 @@ export default function AdminScreen({
 
       if (instError) throw instError;
 
-      setDataExportStatus('Koostan ekspordi faili...');
+      setDataExportStatus(t('exportAll') + '...');
 
       // Create lookup maps for faster matching
       const deliveryByGuid = new Map<string, typeof deliveryItems[0]>();
@@ -1583,7 +1583,7 @@ export default function AdminScreen({
       // Sort by assembly mark
       exportData.sort((a, b) => a.assemblyMark.localeCompare(b.assemblyMark));
 
-      setDataExportStatus(`Ekspordin ${exportData.length} rida...`);
+      setDataExportStatus(`${exportData.length} rows...`);
 
       // Create Excel workbook
       const wb = XLSX.utils.book_new();
@@ -1676,13 +1676,13 @@ export default function AdminScreen({
       // Download
       XLSX.writeFile(wb, fileName);
 
-      setDataExportStatus(`Ekspordi edukalt! ${exportData.length} rida.`);
-      setMessage(`Eksport õnnestus: ${fileName}`);
+      setDataExportStatus(t('database.exportSuccessRows', { count: exportData.length }));
+      setMessage(t('database.exportSuccess', { fileName }));
 
     } catch (error) {
       console.error('Export error:', error);
-      setDataExportStatus(`Viga: ${error instanceof Error ? error.message : String(error)}`);
-      setMessage(`Ekspordi viga: ${error instanceof Error ? error.message : String(error)}`);
+      setDataExportStatus(t('errors.genericError', { error: error instanceof Error ? error.message : String(error) }));
+      setMessage(t('database.exportError', { error: error instanceof Error ? error.message : String(error) }));
     } finally {
       setDataExportLoading(false);
     }
@@ -1753,7 +1753,7 @@ export default function AdminScreen({
       const selection = await api.viewer.getSelection();
 
       if (!selection || selection.length === 0) {
-        setModelObjectsStatus('Vali esmalt mudelis mõni detail!');
+        setModelObjectsStatus(t('database.selectDetailFirst'));
         setModelObjectsLoading(false);
         return;
       }
@@ -1764,7 +1764,7 @@ export default function AdminScreen({
         totalCount += sel.objectRuntimeIds?.length || 0;
       }
 
-      setModelObjectsStatus(`Laadin ${totalCount} objekti propertiseid...`);
+      setModelObjectsStatus(t('database.loadingObjectProperties', { count: totalCount }));
 
       // Collect all objects with their properties
       const allRecords: {
@@ -1894,7 +1894,7 @@ export default function AdminScreen({
       }
 
       if (allRecords.length === 0) {
-        setModelObjectsStatus('Ühtegi objekti ei leitud');
+        setModelObjectsStatus(t('viewer.noObjectsFound'));
         setModelObjectsLoading(false);
         return;
       }
@@ -1965,7 +1965,7 @@ export default function AdminScreen({
         const batchNum = Math.floor(i / BATCH_SIZE) + 1;
         const totalBatches = Math.ceil(uniqueRecords.length / BATCH_SIZE);
 
-        setModelObjectsStatus(`Salvestan partii ${batchNum}/${totalBatches} (${savedCount}/${uniqueRecords.length})...`);
+        setModelObjectsStatus(t('batchProgress', { current: savedCount, total: uniqueRecords.length }) + ` (${batchNum}/${totalBatches})...`);
 
         // Insert new records (old ones with same GUID were deleted above)
         const { error } = await supabase
@@ -1976,7 +1976,7 @@ export default function AdminScreen({
           console.error(`Batch ${batchNum} error:`, error);
           errorCount += batch.length;
           // Show error details immediately
-          setModelObjectsStatus(`Viga partii ${batchNum} salvestamisel: ${error.message}`);
+          setModelObjectsStatus(t('errors.saveError', { error: `batch ${batchNum}: ${error.message}` }));
         } else {
           savedCount += batch.length;
         }
@@ -1987,15 +1987,15 @@ export default function AdminScreen({
 
       const duplicateCount = allRecords.length - uniqueRecords.length;
       if (errorCount > 0) {
-        setModelObjectsStatus(`⚠️ Salvestatud ${savedCount}/${uniqueRecords.length} objekti (${errorCount} viga - vaata konsooli)`);
+        setModelObjectsStatus(`⚠️ ${savedCount}/${uniqueRecords.length} (${errorCount} errors - see console)`);
       } else {
         const marks = uniqueRecords.slice(0, 5).map(r => r.assembly_mark).filter(Boolean).join(', ');
         const more = uniqueRecords.length > 5 ? ` (+${uniqueRecords.length - 5} veel)` : '';
         const dupInfo = duplicateCount > 0 ? ` (${duplicateCount} duplikaati eemaldatud)` : '';
-        setModelObjectsStatus(`✓ Salvestatud ${savedCount} objekti: ${marks}${more}${dupInfo}`);
+        setModelObjectsStatus(`✓ ${t('sentToDatabase', { count: savedCount })}: ${marks}${more}${dupInfo}`);
       }
     } catch (e: any) {
-      setModelObjectsStatus(`Viga: ${e.message}`);
+      setModelObjectsStatus(t('errors.genericError', { error: e.message }));
       console.error('Save error:', e);
     } finally {
       setModelObjectsLoading(false);
@@ -2006,17 +2006,17 @@ export default function AdminScreen({
   // Uses Assembly Selection mode: enables it, selects all, gets parent assemblies
   const saveAllAssembliesToSupabase = useCallback(async () => {
     setModelObjectsLoading(true);
-    setModelObjectsStatus('Lülitan Assembly Selection sisse...');
+    setModelObjectsStatus(t('viewer.loadingModelObjects'));
 
     try {
       // Step 1: Enable Assembly Selection mode
       await (api.viewer as any).setSettings?.({ assemblySelection: true });
 
       // Step 2: Get all objects from all models
-      setModelObjectsStatus('Laadin mudeli objekte...');
+      setModelObjectsStatus(t('viewer.loadingModelObjects'));
       const allModelObjects = await api.viewer.getObjects();
       if (!allModelObjects || allModelObjects.length === 0) {
-        setModelObjectsStatus('Ühtegi mudelit pole laetud!');
+        setModelObjectsStatus(t('viewer.noModelsLoaded'));
         setModelObjectsLoading(false);
         return;
       }
@@ -2036,7 +2036,7 @@ export default function AdminScreen({
         }
       }
 
-      setModelObjectsStatus(`Valin ${totalObjects} objekti (Assembly Selection sees)...`);
+      setModelObjectsStatus(`${t('searchingObjects')} (${totalObjects})...`);
 
       // Step 4: Select all objects - with Assembly Selection ON, this consolidates to parent assemblies
       await api.viewer.setSelection({ modelObjectIds }, 'set');
@@ -2048,7 +2048,7 @@ export default function AdminScreen({
       const selection = await api.viewer.getSelection();
 
       if (!selection || selection.length === 0) {
-        setModelObjectsStatus('Valik on tühi! Kontrolli, kas mudel on laetud.');
+        setModelObjectsStatus(t('viewer.noModelsLoaded'));
         setModelObjectsLoading(false);
         return;
       }
@@ -2059,7 +2059,7 @@ export default function AdminScreen({
         assemblyCount += sel.objectRuntimeIds?.length || 0;
       }
 
-      setModelObjectsStatus(`Leitud ${assemblyCount} assembly-t. Laadin propertiseid...`);
+      setModelObjectsStatus(t('database.loadingObjectProperties', { count: assemblyCount }));
 
       // Helper to normalize property names
       const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
@@ -2098,7 +2098,7 @@ export default function AdminScreen({
           const parallelBatches = batches.slice(i, i + PARALLEL_BATCHES);
           const batchCount = parallelBatches.reduce((sum, b) => sum + b.length, 0);
 
-          setModelObjectsStatus(`Laadin propertiseid... ${processed}/${assemblyCount} (${PARALLEL_BATCHES}x paralleelselt)`);
+          setModelObjectsStatus(t('batchProgress', { current: processed, total: assemblyCount }));
 
           // Process multiple batches in parallel
           const batchResults = await Promise.all(
@@ -2191,7 +2191,7 @@ export default function AdminScreen({
       }
 
       if (allRecords.length === 0) {
-        setModelObjectsStatus('Ühtegi assembly-t ei leitud! Kontrolli, kas Assembly Selection on sees.');
+        setModelObjectsStatus(t('viewer.noAssembliesFound'));
         setModelObjectsLoading(false);
         return;
       }
@@ -2217,7 +2217,7 @@ export default function AdminScreen({
       console.log(`Deduplicated: ${allRecords.length} → ${uniqueRecords.length} records`);
 
       // Get existing records from database to compare
-      setModelObjectsStatus('Võrdlen andmebaasiga...');
+      setModelObjectsStatus(t('viewer.loadingData'));
       const guidsToCheck = uniqueRecords.map(r => r.guid_ifc).filter((g): g is string => !!g);
 
       let existingGuids = new Set<string>();
@@ -2258,7 +2258,7 @@ export default function AdminScreen({
 
       for (let i = 0; i < uniqueRecords.length; i += INSERT_BATCH_SIZE) {
         const batch = uniqueRecords.slice(i, i + INSERT_BATCH_SIZE);
-        setModelObjectsStatus(`Salvestan... ${savedCount}/${uniqueRecords.length}`);
+        setModelObjectsStatus(t('batchProgress', { current: savedCount, total: uniqueRecords.length }));
 
         const { error } = await supabase
           .from('trimble_model_objects')
@@ -2266,7 +2266,7 @@ export default function AdminScreen({
 
         if (error) {
           console.error(`KÕIK assemblyd batch error:`, error);
-          setModelObjectsStatus(`Viga salvesamisel: ${error.message}`);
+          setModelObjectsStatus(t('errors.saveError', { error: error.message }));
         } else {
           savedCount += batch.length;
         }
@@ -2289,7 +2289,7 @@ export default function AdminScreen({
       );
 
     } catch (e: any) {
-      setModelObjectsStatus(`Viga: ${e.message}`);
+      setModelObjectsStatus(t('errors.genericError', { error: e.message }));
       console.error('Save all error:', e);
     } finally {
       setModelObjectsLoading(false);
@@ -2298,12 +2298,12 @@ export default function AdminScreen({
 
   // Delete all model objects for this project
   const deleteAllModelObjects = useCallback(async () => {
-    if (!confirm('Kas oled kindel, et soovid KÕIK kirjed kustutada?')) {
+    if (!confirm(t('database.confirmDeleteAll'))) {
       return;
     }
 
     setModelObjectsLoading(true);
-    setModelObjectsStatus('Kustutan kirjeid...');
+    setModelObjectsStatus(t('database.deletingRecords'));
 
     try {
       const { error } = await supabase
@@ -2312,14 +2312,14 @@ export default function AdminScreen({
         .eq('trimble_project_id', projectId);
 
       if (error) {
-        setModelObjectsStatus(`Viga: ${error.message}`);
+        setModelObjectsStatus(t('errors.genericError', { error: error.message }));
       } else {
-        setModelObjectsStatus('✓ Kõik kirjed kustutatud!');
+        setModelObjectsStatus('✓ ' + t('database.allRecordsDeleted'));
         setModelObjectsCount(0);
         setModelObjectsLastUpdated(null);
       }
     } catch (e: any) {
-      setModelObjectsStatus(`Viga: ${e.message}`);
+      setModelObjectsStatus(t('errors.genericError', { error: e.message }));
     } finally {
       setModelObjectsLoading(false);
     }
@@ -2347,7 +2347,7 @@ export default function AdminScreen({
       if (error) throw error;
       setOrphanedItems(data || []);
     } catch (e: any) {
-      setMessage(`Viga orvude laadimisel: ${e.message}`);
+      setMessage(t('database.orphanLoadError', { error: e.message }));
     } finally {
       setOrphanedLoading(false);
     }
@@ -2357,7 +2357,7 @@ export default function AdminScreen({
   const deleteOrphanedItems = useCallback(async () => {
     if (!projectId) return;
     if (orphanedItems.length === 0) return;
-    if (!confirm(`Kas kustutada ${orphanedItems.length} orvuks jäänud detaili?`)) return;
+    if (!confirm(t('database.confirmDeleteOrphaned', { count: orphanedItems.length }))) return;
 
     setOrphanedLoading(true);
     try {
@@ -2369,9 +2369,9 @@ export default function AdminScreen({
 
       if (error) throw error;
       setOrphanedItems([]);
-      setMessage(`${orphanedItems.length} orvuks jäänud detaili kustutatud`);
+      setMessage(t('database.orphanedDeleted', { count: orphanedItems.length }));
     } catch (e: any) {
-      setMessage(`Viga kustutamisel: ${e.message}`);
+      setMessage(t('errors.deleteErrorWithMessage', { error: e.message }));
     } finally {
       setOrphanedLoading(false);
     }
@@ -2431,7 +2431,7 @@ export default function AdminScreen({
       });
     } catch (e: any) {
       console.error('Error loading delivery stats:', e);
-      setMessage(`Viga statistika laadimisel: ${e.message}`);
+      setMessage(t('database.statsLoadError', { error: e.message }));
     } finally {
       setDeliveryAdminLoading(false);
     }
@@ -2492,7 +2492,7 @@ export default function AdminScreen({
         .eq('trimble_project_id', projectId);
       if (sheetsLogsError) console.warn('Sheets logs delete error:', sheetsLogsError);
 
-      setMessage('✓ Kõik tarnegraafiku andmed kustutatud!');
+      setMessage('✓ ' + t('database.allDataDeleted'));
       setShowDeliveryDeleteConfirm(false);
       setDeliveryAdminStats({
         vehicles: 0,
@@ -2502,7 +2502,7 @@ export default function AdminScreen({
       });
     } catch (e: any) {
       console.error('Error deleting delivery data:', e);
-      setMessage(`Viga kustutamisel: ${e.message}`);
+      setMessage(t('errors.deleteErrorWithMessage', { error: e.message }));
     } finally {
       setDeliveryAdminLoading(false);
     }
@@ -2523,7 +2523,7 @@ export default function AdminScreen({
       setProjectUsers(data || []);
     } catch (e: any) {
       console.error('Error loading users:', e);
-      setMessage(`Viga kasutajate laadimisel: ${e.message}`);
+      setMessage(t('users.usersLoadError', { error: e.message }));
     } finally {
       setUsersLoading(false);
     }
@@ -2532,7 +2532,7 @@ export default function AdminScreen({
   // Save user (create or update)
   const saveUser = async () => {
     if (!userFormData.email.trim()) {
-      setMessage('Email on kohustuslik');
+      setMessage(t('users.emailRequired'));
       return;
     }
 
@@ -2581,7 +2581,7 @@ export default function AdminScreen({
           .eq('id', editingUser.id);
 
         if (error) throw error;
-        setMessage('Kasutaja uuendatud');
+        setMessage(t('users.userUpdated'));
       } else {
         // Create new user
         const { error } = await supabase
@@ -2593,7 +2593,7 @@ export default function AdminScreen({
           });
 
         if (error) throw error;
-        setMessage('Kasutaja lisatud');
+        setMessage(t('users.userAdded'));
       }
 
       setShowUserForm(false);
@@ -2602,7 +2602,7 @@ export default function AdminScreen({
       await loadProjectUsers();
     } catch (e: any) {
       console.error('Error saving user:', e);
-      setMessage(`Viga salvestamisel: ${e.message}`);
+      setMessage(t('errors.saveError', { error: e.message }));
     } finally {
       setUsersLoading(false);
     }
@@ -2639,7 +2639,7 @@ export default function AdminScreen({
 
   // Delete user
   const deleteUser = async (userId: string) => {
-    if (!confirm('Kas oled kindel, et soovid selle kasutaja kustutada?')) return;
+    if (!confirm(t('users.confirmDeleteUser'))) return;
 
     setUsersLoading(true);
     try {
@@ -2649,11 +2649,11 @@ export default function AdminScreen({
         .eq('id', userId);
 
       if (error) throw error;
-      setMessage('Kasutaja kustutatud');
+      setMessage(t('users.userDeleted'));
       await loadProjectUsers();
     } catch (e: any) {
       console.error('Error deleting user:', e);
-      setMessage(`Viga kustutamisel: ${e.message}`);
+      setMessage(t('errors.deleteErrorWithMessage', { error: e.message }));
     } finally {
       setUsersLoading(false);
     }
@@ -2668,7 +2668,7 @@ export default function AdminScreen({
       // Load team members from Trimble API
       const members = await (api.project as any).getMembers?.();
       if (!members || !Array.isArray(members)) {
-        setMessage('Meeskonna laadimine ebaõnnestus');
+        setMessage(t('users.teamLoadError'));
         return;
       }
 
@@ -2686,7 +2686,7 @@ export default function AdminScreen({
       );
 
       if (newMembers.length === 0) {
-        setMessage('Kõik meeskonna liikmed on juba andmebaasis');
+        setMessage(t('users.allTeamMembersInDb'));
         await loadProjectUsers();
         return;
       }
@@ -2709,11 +2709,11 @@ export default function AdminScreen({
 
       if (error) throw error;
 
-      setMessage(`${newMembers.length} meeskonna liiget lisatud`);
+      setMessage(t('users.teamMembersAdded', { count: newMembers.length }));
       await loadProjectUsers();
     } catch (e: any) {
       console.error('Error syncing team members:', e);
-      setMessage(`Viga meeskonna sünkroonimisel: ${e.message}`);
+      setMessage(t('users.teamSyncError', { error: e.message }));
     } finally {
       setUsersLoading(false);
     }
@@ -2740,7 +2740,7 @@ export default function AdminScreen({
       setProjectResources(data || []);
     } catch (e: any) {
       console.error('Error loading resources:', e);
-      setMessage(`Viga ressursside laadimisel: ${e.message}`);
+      setMessage(t('resources.loadError', { error: e.message }));
     } finally {
       setResourcesLoading(false);
     }
@@ -2910,16 +2910,16 @@ export default function AdminScreen({
 
       if (error) {
         if (error.code === '23505') {
-          setMessage('See ressurss on juba olemas');
+          setMessage(t('resources.resourceAlreadyExists'));
           return;
         }
         throw error;
       }
-      setMessage('Ressurss imporditud');
+      setMessage(t('resources.resourceImported'));
       await loadProjectResources();
     } catch (e: any) {
       console.error('Error importing resource:', e);
-      setMessage(`Viga importimisel: ${e.message}`);
+      setMessage(t('resources.importError', { error: e.message }));
     } finally {
       setResourcesSaving(false);
     }
@@ -2928,7 +2928,7 @@ export default function AdminScreen({
   // Save resource (create or update)
   const saveResource = async () => {
     if (!resourceFormData.name.trim()) {
-      setMessage('Nimi on kohustuslik');
+      setMessage(t('resources.nameRequired'));
       return;
     }
 
@@ -2948,17 +2948,17 @@ export default function AdminScreen({
             );
 
             if (updateCount > 0) {
-              setMessage(`✅ ${updateCount} paigaldust uuendatud (${oldName} → ${newName})`);
+              setMessage('✅ ' + t('resources.installationsUpdated', { count: updateCount, oldName, newName }));
               await loadInstallationResources(); // Reload to see changes
             } else {
-              setMessage('Muudatusi ei tehtud');
+              setMessage(t('resources.noChanges'));
             }
           } catch (e: any) {
             console.error('Error updating installations:', e);
-            setMessage(`Viga uuendamisel: ${e.message}`);
+            setMessage(t('errors.updateError', { error: e.message }));
           }
         } else {
-          setMessage('Nimi on sama, muudatusi ei tehtud');
+          setMessage(t('resources.nameSameNoChanges'));
         }
 
         setShowResourceForm(false);
@@ -2994,16 +2994,16 @@ export default function AdminScreen({
             );
 
             if (updateCount > 0) {
-              setMessage(`Ressurss uuendatud, ${updateCount} paigaldust uuendatud`);
+              setMessage(t('resources.updatedWithInstallations', { count: updateCount }));
             } else {
-              setMessage('Ressurss uuendatud');
+              setMessage(t('users.resourceUpdated'));
             }
           } catch (e: any) {
             console.error('Error updating installations:', e);
-            setMessage('Ressurss uuendatud (paigalduste uuendamine ebaõnnestus)');
+            setMessage(t('users.resourceUpdateFailed'));
           }
         } else {
-          setMessage('Ressurss uuendatud');
+          setMessage(t('users.resourceUpdated'));
         }
       } else {
         // Create new resource
@@ -3019,12 +3019,12 @@ export default function AdminScreen({
 
         if (error) {
           if (error.code === '23505') {
-            setMessage('See ressurss on juba olemas');
+            setMessage(t('resources.resourceAlreadyExists'));
             return;
           }
           throw error;
         }
-        setMessage('Ressurss lisatud');
+        setMessage(t('resources.resourceAdded'));
       }
 
       setShowResourceForm(false);
@@ -3033,7 +3033,7 @@ export default function AdminScreen({
       await loadProjectResources();
     } catch (e: any) {
       console.error('Error saving resource:', e);
-      setMessage(`Viga salvestamisel: ${e.message}`);
+      setMessage(t('errors.saveError', { error: e.message }));
     } finally {
       setResourcesSaving(false);
     }
@@ -3117,7 +3117,7 @@ export default function AdminScreen({
       await loadProjectResources();
     } catch (e: any) {
       console.error('Error toggling resource:', e);
-      setMessage(`Viga: ${e.message}`);
+      setMessage(t('errors.genericError', { error: e.message }));
     }
   };
 
@@ -3220,7 +3220,7 @@ export default function AdminScreen({
     try {
       const selection = await api.viewer.getSelection();
       if (!selection || selection.length === 0) {
-        setMessage('Vali mudelist detail');
+        setMessage(t('viewer.selectDetail'));
         setQrGenerating(false);
         return;
       }
@@ -3228,7 +3228,7 @@ export default function AdminScreen({
       const modelId = selection[0].modelId;
       const runtimeId = selection[0].objectRuntimeIds?.[0];
       if (!modelId || !runtimeId) {
-        setMessage('Vali üks detail');
+        setMessage(t('viewer.selectOneDetail'));
         setQrGenerating(false);
         return;
       }
@@ -3304,7 +3304,7 @@ export default function AdminScreen({
       }
 
       if (!guid) {
-        setMessage('Objektil puudub GUID');
+        setMessage(t('qr.objectMissingGuid'));
         setQrGenerating(false);
         return;
       }
@@ -3340,7 +3340,7 @@ export default function AdminScreen({
         .maybeSingle();
 
       if (existing) {
-        setMessage('QR kood juba eksisteerib selle detaili jaoks');
+        setMessage(t('qr.qrAlreadyExists'));
         setQrGenerating(false);
         return;
       }
@@ -3383,7 +3383,7 @@ export default function AdminScreen({
         created_at: newCode.created_at
       }, ...prev]);
 
-      setMessage('QR kood loodud!');
+      setMessage(t('qr.qrCreated'));
 
     } catch (e) {
       console.error('Error generating QR:', e);
@@ -3483,7 +3483,7 @@ export default function AdminScreen({
           ? { ...q, status: 'pending', activated_by_name: null, activated_at: null, qr_data_url: qrDataUrl }
           : q
       ));
-      setMessage('Leidmine lähtestatud - saab uuesti skännida');
+      setMessage(t('qrScanner.findingReset'));
     } catch (e) {
       console.error('Error resetting QR:', e);
       setMessage(t('errors.resetError'));
@@ -3584,7 +3584,7 @@ export default function AdminScreen({
       // Check if BarcodeDetector is available
       if (!('BarcodeDetector' in window)) {
         addDebugLog('ERROR: BarcodeDetector not supported');
-        setMessage('QR skänner pole selles brauseris toetatud. Kasuta Chrome\'i.');
+        setMessage(t('qrScanner.notSupported'));
         return;
       }
       addDebugLog('BarcodeDetector OK');
@@ -3592,7 +3592,7 @@ export default function AdminScreen({
       // Check if getUserMedia is available
       if (!navigator.mediaDevices?.getUserMedia) {
         addDebugLog('ERROR: getUserMedia not supported');
-        setMessage('Kaamera API pole toetatud.');
+        setMessage(t('positioner.cameraApiNotSupported'));
         return;
       }
       addDebugLog('getUserMedia OK');
@@ -3628,7 +3628,7 @@ export default function AdminScreen({
             videoRef.current.play().then(() => {
               addDebugLog('Video playing');
               // scannerActive already set at start
-              setMessage('Suuna kaamera QR koodile...');
+              setMessage(t('positioner.pointCameraAtQr'));
 
               // Start scanning loop
               let scanCount = 0;
@@ -3675,7 +3675,7 @@ export default function AdminScreen({
               addDebugLog('Scan loop started');
             }).catch(e => {
               addDebugLog(`ERROR: Video play failed: ${e.message}`);
-              setMessage('Video ei käivitu. Kontrolli kaamera õigusi.');
+              setMessage(t('qrScanner.videoError'));
             });
           }
         };
@@ -3689,11 +3689,11 @@ export default function AdminScreen({
     } catch (e: any) {
       addDebugLog(`ERROR: ${e.name}: ${e.message}`);
       if (e.name === 'NotAllowedError') {
-        setMessage('Kaamera ligipääs keelatud. Luba kaamera kasutamine brauseri seadetes.');
+        setMessage(t('qrScanner.cameraAccessDenied'));
       } else if (e.name === 'NotFoundError') {
-        setMessage('Kaamerat ei leitud. Kontrolli, et seadmel on kaamera.');
+        setMessage(t('positioner.cameraNotFound'));
       } else {
-        setMessage(`Kaamera viga: ${e.message}`);
+        setMessage(t('positioner.cameraError', { error: e.message }));
       }
     }
   }, []);
@@ -3741,7 +3741,7 @@ export default function AdminScreen({
         .single();
 
       if (qrError || !qrCode) {
-        setMessage('QR koodi ei leitud andmebaasist');
+        setMessage(t('qr.qrNotFoundInDb'));
         setPositionCapturing(false);
         return;
       }
@@ -3750,7 +3750,7 @@ export default function AdminScreen({
 
       // Request GPS location
       if (!navigator.geolocation) {
-        setMessage('GPS pole toetatud selles seadmes');
+        setMessage(t('qrScanner.gpsNotSupported'));
         setPositionCapturing(false);
         return;
       }
@@ -3806,7 +3806,7 @@ export default function AdminScreen({
             setPendingQrCode(qrCode);
             setManualLat('');
             setManualLng('');
-            setMessage('Popup blokeeritud. Sisesta koordinaadid käsitsi.');
+            setMessage(t('qrScanner.popupBlocked'));
           }
 
           setPositionCapturing(false);
@@ -3837,7 +3837,7 @@ export default function AdminScreen({
     }
 
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-      setMessage('Koordinaadid vahemikust väljas');
+      setMessage(t('qrScanner.coordinatesOutOfRange'));
       return;
     }
 
@@ -4252,7 +4252,7 @@ export default function AdminScreen({
       await loadCameraPositions();
     } catch (e: any) {
       console.error('Error saving camera position:', e);
-      setMessage(`Viga salvestamisel: ${e.message}`);
+      setMessage(t('errors.saveError', { error: e.message }));
     } finally {
       setCameraPositionsSaving(false);
     }
@@ -4285,7 +4285,7 @@ export default function AdminScreen({
       await loadCameraPositions();
     } catch (e: any) {
       console.error('Error deleting camera position:', e);
-      setMessage(`Viga kustutamisel: ${e.message}`);
+      setMessage(t('errors.deleteErrorWithMessage', { error: e.message }));
     } finally {
       setCameraPositionsLoading(false);
     }
@@ -4324,7 +4324,7 @@ export default function AdminScreen({
       await loadCameraPositions();
     } catch (e: any) {
       console.error('Error updating camera state:', e);
-      setMessage(`Viga uuendamisel: ${e.message}`);
+      setMessage(t('errors.updateError', { error: e.message }));
     } finally {
       setCameraPositionsLoading(false);
     }
@@ -4465,7 +4465,7 @@ export default function AdminScreen({
       setMessage('✓ Seaded salvestatud!');
     } catch (e: any) {
       console.error('Error saving property mappings:', e);
-      setMessage(`Viga salvestamisel: ${e.message}`);
+      setMessage(t('errors.saveError', { error: e.message }));
     } finally {
       setPropertyMappingsSaving(false);
     }
@@ -4482,7 +4482,7 @@ export default function AdminScreen({
       const selection = await api.viewer.getSelection();
 
       if (!selection || selection.length === 0) {
-        setMessage('Vali mudelist vähemalt üks detail ja proovi uuesti!');
+        setMessage(t('properties.selectAndRetry'));
         setPropertiesScanning(false);
         return;
       }
@@ -4580,7 +4580,7 @@ export default function AdminScreen({
       const selection = await api.viewer.getSelection();
 
       if (!selection || selection.length === 0) {
-        setMessage('Vali mudelist vähemalt üks detail!');
+        setMessage(t('properties.selectAtLeastOne'));
         setIsLoading(false);
         return;
       }
@@ -4862,7 +4862,7 @@ export default function AdminScreen({
       }
 
       setSelectedObjects(allObjects);
-      setMessage(`Leitud ${allObjects.length} objekti propertised`);
+      setMessage(t('properties.foundObjectProperties', { count: allObjects.length }));
 
       // Auto-expand first object's property sets
       if (allObjects.length > 0) {
@@ -4878,7 +4878,7 @@ export default function AdminScreen({
 
     } catch (error) {
       console.error('Property discovery failed:', error);
-      setMessage('Viga propertiste laadimisel: ' + (error as Error).message);
+      setMessage(t('properties.loadError', { error: (error as Error).message }));
     } finally {
       setIsLoading(false);
     }
@@ -4913,11 +4913,11 @@ export default function AdminScreen({
       }, 'set');
       console.log('📍 Selected child:', childRuntimeId);
 
-      setMessage(`✅ Valitud: ${childName} (Assembly Selection VÄLJAS)`);
+      setMessage('✅ ' + t('viewer.objectSelected', { name: childName }));
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
       console.error('Failed to zoom to child:', error);
-      setMessage('❌ Viga detaili valimisel: ' + (error as Error).message);
+      setMessage('❌ ' + t('properties.selectDetailError', { error: (error as Error).message }));
     }
   };
 
@@ -4925,7 +4925,7 @@ export default function AdminScreen({
   const copyToClipboard = () => {
     const text = safeStringify(selectedObjects, 2);
     navigator.clipboard.writeText(text).then(() => {
-      setMessage('Kopeeritud lõikelauale!');
+      setMessage(t('viewer.copiedToClipboard'));
       setTimeout(() => setMessage(''), 2000);
     });
   };
@@ -4944,7 +4944,7 @@ export default function AdminScreen({
   // Collect assembly data and bolt summaries from selected objects
   const collectAssemblyData = useCallback(async () => {
     setAssemblyListLoading(true);
-    setMessage('Kogun detailide andmeid...');
+    setMessage(t('properties.collectingData'));
     setAssemblyList([]);
     setBoltSummary([]);
 
@@ -4952,7 +4952,7 @@ export default function AdminScreen({
       const selection = await api.viewer.getSelection();
 
       if (!selection || selection.length === 0) {
-        setMessage('Vali mudelist vähemalt üks detail!');
+        setMessage(t('properties.selectAtLeastOne'));
         setAssemblyListLoading(false);
         return;
       }
@@ -5163,10 +5163,10 @@ export default function AdminScreen({
       setAssemblyList(assemblies);
       setBoltSummary(Array.from(boltMap.values()));
       setAdminView('assemblyList');
-      setMessage(`Leitud ${assemblies.length} detaili ja ${boltMap.size} erinevat polti`);
+      setMessage(t('properties.foundAssembliesAndBolts', { assemblies: assemblies.length, bolts: boltMap.size }));
     } catch (error) {
       console.error('Assembly collection failed:', error);
-      setMessage('Viga andmete kogumisel: ' + (error as Error).message);
+      setMessage(t('errors.dataCollectError') + ': ' + (error as Error).message);
     } finally {
       setAssemblyListLoading(false);
     }
@@ -5178,7 +5178,7 @@ export default function AdminScreen({
     const rows = assemblyList.map(a => `${a.castUnitMark}\t${a.productName}\t${a.weight}`);
     const text = [header, ...rows].join('\n');
     navigator.clipboard.writeText(text).then(() => {
-      setMessage('Detailide list kopeeritud!');
+      setMessage(t('properties.assemblyListCopied'));
       setTimeout(() => setMessage(''), 2000);
     });
   };
@@ -5191,7 +5191,7 @@ export default function AdminScreen({
     );
     const text = [header, ...rows].join('\n');
     navigator.clipboard.writeText(text).then(() => {
-      setMessage('Poltide kokkuvõte kopeeritud!');
+      setMessage(t('properties.boltSummaryCopied'));
       setTimeout(() => setMessage(''), 2000);
     });
   };
@@ -5413,7 +5413,7 @@ export default function AdminScreen({
       {showOrphanedPanel && (
         <div className="function-explorer">
           <div className="function-explorer-header">
-            <h3>Orvuks jäänud detailid</h3>
+            <h3>{t('database.orphanedItems')}</h3>
             <button className="close-btn" onClick={() => setShowOrphanedPanel(false)}>✕</button>
           </div>
           <div className="function-explorer-content">
@@ -5441,7 +5441,7 @@ export default function AdminScreen({
                     style={{ background: '#dc2626', color: 'white', padding: '6px 12px' }}
                   >
                     <FiTrash2 size={14} />
-                    <span>Kustuta kõik</span>
+                    <span>{t('database.deleteAll')}</span>
                   </button>
                 </div>
                 <div style={{ maxHeight: '300px', overflow: 'auto', fontSize: '12px' }}>
@@ -5607,7 +5607,7 @@ export default function AdminScreen({
                     try {
                       await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
                       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
-                      setGuidControllerResult({ status: 'success', message: 'Mudel lähtestatud!' });
+                      setGuidControllerResult({ status: 'success', message: t('guid.modelReset') });
                     } catch (e: any) {
                       setGuidControllerResult({ status: 'error', message: e.message });
                     }
@@ -12130,7 +12130,7 @@ export default function AdminScreen({
                         const textarea = document.getElementById('shapeCodeInput') as HTMLTextAreaElement;
                         const code = textarea?.value?.trim();
                         if (!code) {
-                          alert('Sisesta kujundi kood!');
+                          alert(t('enterShapeCode'));
                           return;
                         }
 
@@ -12224,7 +12224,7 @@ export default function AdminScreen({
                           }
 
                           if (freelineEntries.length === 0) {
-                            alert('Jooni ei leitud! Kontrolli formaati.');
+                            alert(t('errors.genericError', { error: 'No lines found. Check format.' }));
                             return;
                           }
 
@@ -12236,7 +12236,7 @@ export default function AdminScreen({
 
                           alert(`✅ Joonistatud ${totalLines} joont (${freelineEntries.length} kujundit)${basePointInfo}`);
                         } catch (e: any) {
-                          alert('Viga: ' + e.message);
+                          alert(t('errors.genericError', { error: e.message }));
                         }
                       }}
                       style={{
@@ -15042,11 +15042,11 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
             <div className="results-actions">
               <button className="btn-secondary" onClick={copyToClipboard}>
                 <FiCopy size={14} />
-                Kopeeri
+                {t('copy')}
               </button>
               <button className="btn-secondary" onClick={exportAsJson}>
                 <FiDownload size={14} />
-                Ekspordi JSON
+                {t('exportAll')} JSON
               </button>
             </div>
           </div>
@@ -15605,7 +15605,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                       className="copy-btn"
                       onClick={() => {
                         navigator.clipboard.writeText(guidImportResults.notFound.join('\n'));
-                        setMessage('Puuduvad GUID-d kopeeritud!');
+                        setMessage(t('properties.missingGuidsCopied'));
                         setTimeout(() => setMessage(''), 2000);
                       }}
                       style={{ padding: '4px 8px', fontSize: '12px' }}
@@ -15874,12 +15874,12 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   guid_set: 'Tekla Common',
                   guid_prop: 'GUID',
                 });
-                setMessage('Lähtestatud vaikimisi seadetele');
+                setMessage(t('settings.resetToDefaults'));
               }}
               style={{ background: '#6b7280', color: 'white' }}
             >
               <FiRefreshCw size={16} />
-              <span>Lähtesta vaikimisi</span>
+              <span>{t('settings.resetDefaults')}</span>
             </button>
           </div>
 
@@ -16011,7 +16011,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                                       [setKey]: prop.setName,
                                       [propKey]: prop.propName,
                                     }));
-                                    setMessage(`Määratud: ${prop.setName}.${prop.propName}`);
+                                    setMessage(t('settings.propertyMapped', { setName: prop.setName, propName: prop.propName }));
                                     e.target.value = '';
                                   }
                                 }}
@@ -17242,7 +17242,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   <FiDownload size={24} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Ekspordi kõik</h3>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>{t('exportAll')}</h3>
                   <p style={{ margin: 0, fontSize: '12px', opacity: 0.9 }}>Kõik graafikute andmed</p>
                 </div>
               </div>
@@ -17544,7 +17544,7 @@ div.style.cssText = 'position:fixed;top:10px;right:10px;background:white;padding
 div.innerHTML = '<h3 style="margin:0 0 10px">TC Icons</h3><button onclick="this.parentElement.remove()" style="position:absolute;top:5px;right:5px;border:none;background:#eee;cursor:pointer;padding:4px 8px;border-radius:4px;">✕</button>' + allIcons.map(ic => '<div style="display:flex;align-items:center;gap:10px;padding:5px;border-bottom:1px solid #eee;"><i class="icon-font ' + ic + '" style="font-size:24px;"></i><code style="font-size:11px;">' + ic + '</code></div>').join('');
 document.body.appendChild(div);`;
                   navigator.clipboard.writeText(code);
-                  setMessage('Script kopeeritud lõikelauale!');
+                  setMessage(t('scriptCopied'));
                 }}
                 style={{
                   position: 'absolute',

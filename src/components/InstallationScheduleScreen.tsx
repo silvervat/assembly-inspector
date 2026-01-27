@@ -57,11 +57,7 @@ const PLAYBACK_SPEEDS = [
   { label: '4x', value: 100 }
 ];
 
-// Estonian weekday names
-const WEEKDAY_NAMES = ['Pühapäev', 'Esmaspäev', 'Teisipäev', 'Kolmapäev', 'Neljapäev', 'Reede', 'Laupäev'];
-const WEEKDAY_NAMES_SHORT = ['Püh', 'Esm', 'Tei', 'Kol', 'Nel', 'Ree', 'Lau'];
-// English weekday names
-const WEEKDAY_NAMES_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+// Weekday names are now loaded from i18n translations (weekdaysList, weekdaysShortList)
 
 // Convert IFC GUID to MS GUID (UUID format)
 const IFC_GUID_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
@@ -88,24 +84,24 @@ const ifcToMsGuid = (ifcGuid: string): string => {
 };
 
 // Format date as DD.MM.YY Day (parsing local date from YYYY-MM-DD string)
-const formatDateEstonian = (dateStr: string): string => {
+const formatDateEstonian = (dateStr: string, weekdayNames: string[]): string => {
   const [year, month, day] = dateStr.split('-').map(Number);
   const date = new Date(year, month - 1, day);
   const dayStr = String(day).padStart(2, '0');
   const monthStr = String(month).padStart(2, '0');
   const yearStr = String(year).slice(-2);
-  const weekday = WEEKDAY_NAMES[date.getDay()];
+  const weekday = weekdayNames[date.getDay()];
   return `${dayStr}.${monthStr}.${yearStr} ${weekday}`;
 };
 
 // Format date with short weekday (3 chars) for date headers
-const formatDateShort = (dateStr: string): string => {
+const formatDateShort = (dateStr: string, weekdayNamesShort: string[]): string => {
   const [year, month, day] = dateStr.split('-').map(Number);
   const date = new Date(year, month - 1, day);
   const dayStr = String(day).padStart(2, '0');
   const monthStr = String(month).padStart(2, '0');
   const yearStr = String(year).slice(-2);
-  const weekday = WEEKDAY_NAMES_SHORT[date.getDay()];
+  const weekday = weekdayNamesShort[date.getDay()];
   return `${dayStr}.${monthStr}.${yearStr} ${weekday}`;
 };
 
@@ -163,15 +159,15 @@ interface MethodConfig {
 // Labor row: Troppija, Monteerija, Keevitaja
 const INSTALL_METHODS: MethodConfig[] = [
   // Machines
-  { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, defaultCount: 1, category: 'machine' },
-  { key: 'forklift', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
-  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
-  { key: 'poomtostuk', label: 'Korvtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 8, defaultCount: 2, category: 'machine' },
-  { key: 'kaartostuk', label: 'Käärtõstuk', icon: 'kaartostuk.png', bgColor: '#ffedd5', activeBgColor: '#f5840b', filterCss: 'invert(50%) sepia(90%) saturate(1500%) hue-rotate(360deg) brightness(100%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'crane', label: 'crane', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'forklift', label: 'forklift', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'manual', label: 'manual', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'poomtostuk', label: 'poomtostuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 8, defaultCount: 2, category: 'machine' },
+  { key: 'kaartostuk', label: 'kaartostuk', icon: 'kaartostuk.png', bgColor: '#ffedd5', activeBgColor: '#f5840b', filterCss: 'invert(50%) sepia(90%) saturate(1500%) hue-rotate(360deg) brightness(100%)', maxCount: 4, defaultCount: 1, category: 'machine' },
   // Labor
-  { key: 'troppija', label: 'Troppija', icon: 'troppija.png', bgColor: '#ccfbf1', activeBgColor: '#11625b', filterCss: 'invert(30%) sepia(40%) saturate(800%) hue-rotate(140deg) brightness(80%)', maxCount: 4, defaultCount: 1, category: 'labor' },
-  { key: 'monteerija', label: 'Monteerija', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 15, defaultCount: 1, category: 'labor' },
-  { key: 'keevitaja', label: 'Keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', activeBgColor: '#6b7280', filterCss: 'grayscale(100%) brightness(30%)', maxCount: 5, defaultCount: 1, category: 'labor' },
+  { key: 'troppija', label: 'troppija', icon: 'troppija.png', bgColor: '#ccfbf1', activeBgColor: '#11625b', filterCss: 'invert(30%) sepia(40%) saturate(800%) hue-rotate(140deg) brightness(80%)', maxCount: 4, defaultCount: 1, category: 'labor' },
+  { key: 'monteerija', label: 'monteerija', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 15, defaultCount: 1, category: 'labor' },
+  { key: 'keevitaja', label: 'keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', activeBgColor: '#6b7280', filterCss: 'grayscale(100%) brightness(30%)', maxCount: 5, defaultCount: 1, category: 'labor' },
 ];
 
 // Load default counts from localStorage
@@ -202,6 +198,16 @@ const saveDefaultCounts = (defaults: Record<InstallMethodType, number>) => {
 export default function InstallationScheduleScreen({ api, projectId, user, tcUserEmail, tcUserName, onBackToMenu, onNavigate, onColorModelWhite, onOpenPartDatabase }: Props) {
   // i18n translations
   const { t } = useTranslation('installation');
+
+  // Weekday and month names from i18n
+  const weekdayNames = t('weekdaysList', { returnObjects: true }) as string[];
+  const weekdayNamesShort = t('weekdaysShortList', { returnObjects: true }) as string[];
+  const weekdayNamesMin = t('weekdaysMinMon', { returnObjects: true }) as string[];
+  const monthNamesList = t('monthsList', { returnObjects: true }) as string[];
+
+  // Wrapper functions for date formatting with i18n weekday names
+  const fmtDateFull = (dateStr: string) => formatDateEstonian(dateStr, weekdayNames);
+  const fmtDateShort = (dateStr: string) => formatDateShort(dateStr, weekdayNamesShort);
 
   // Property mappings for reading Tekla properties
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
@@ -360,30 +366,30 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportLanguage, setExportLanguage] = useState<'et' | 'en'>('et');
   const [exportColumns, setExportColumns] = useState([
-    { id: 'nr', label: 'Nr', labelEn: 'No', enabled: true },
-    { id: 'date', label: 'Kuupäev', labelEn: 'Date', enabled: true },
-    { id: 'day', label: 'Päev', labelEn: 'Day', enabled: true },
-    { id: 'mark', label: 'Assembly Mark', labelEn: 'Assembly Mark', enabled: true },
-    { id: 'position', label: 'Position Code', labelEn: 'Position Code', enabled: true },
-    { id: 'product', label: 'Toode', labelEn: 'Product', enabled: true },
-    { id: 'weight', label: 'Kaal (kg)', labelEn: 'Weight (kg)', enabled: true },
-    { id: 'truck_nr', label: 'Veoki nr', labelEn: 'Truck No', enabled: true },
-    { id: 'delivery_date', label: 'Tarnekuupäev', labelEn: 'Delivery Date', enabled: true },
+    { id: 'nr', tKey: 'columns.nr', enabled: true },
+    { id: 'date', tKey: 'columns.date', enabled: true },
+    { id: 'day', tKey: 'columns.day', enabled: true },
+    { id: 'mark', tKey: 'columns.mark', enabled: true },
+    { id: 'position', tKey: 'columns.position', enabled: true },
+    { id: 'product', tKey: 'columns.product', enabled: true },
+    { id: 'weight', tKey: 'columns.weight', enabled: true },
+    { id: 'truck_nr', tKey: 'columns.truckNr', enabled: true },
+    { id: 'delivery_date', tKey: 'columns.deliveryDate', enabled: true },
     // Individual method columns
-    { id: 'crane', label: 'Kraana', labelEn: 'Crane', enabled: true },
-    { id: 'forklift', label: 'Telesk.', labelEn: 'Telehandler', enabled: true },
-    { id: 'poomtostuk', label: 'Korvtõstuk', labelEn: 'Boom Lift', enabled: true },
-    { id: 'kaartostuk', label: 'Käärtõstuk', labelEn: 'Scissor Lift', enabled: true },
-    { id: 'troppija', label: 'Troppija', labelEn: 'Rigger', enabled: true },
-    { id: 'monteerija', label: 'Monteerija', labelEn: 'Installer', enabled: true },
-    { id: 'keevitaja', label: 'Keevitaja', labelEn: 'Welder', enabled: true },
-    { id: 'manual', label: 'Käsitsi', labelEn: 'Manual', enabled: true },
-    { id: 'guid_ms', label: 'GUID (MS)', labelEn: 'GUID (MS)', enabled: true },
-    { id: 'guid_ifc', label: 'GUID (IFC)', labelEn: 'GUID (IFC)', enabled: true },
-    { id: 'created_by', label: 'Andmed sisestas', labelEn: 'Created By', enabled: false },
-    { id: 'created_at', label: 'Sisestatud', labelEn: 'Created At', enabled: false },
-    { id: 'percentage', label: 'Kumulatiivne %', labelEn: 'Cumulative %', enabled: true },
-    { id: 'comments', label: 'Kommentaarid', labelEn: 'Comments', enabled: true }
+    { id: 'crane', tKey: 'columns.crane', enabled: true },
+    { id: 'forklift', tKey: 'columns.forklift', enabled: true },
+    { id: 'poomtostuk', tKey: 'columns.poomtostuk', enabled: true },
+    { id: 'kaartostuk', tKey: 'columns.kaartostuk', enabled: true },
+    { id: 'troppija', tKey: 'columns.troppija', enabled: true },
+    { id: 'monteerija', tKey: 'columns.monteerija', enabled: true },
+    { id: 'keevitaja', tKey: 'columns.keevitaja', enabled: true },
+    { id: 'manual', tKey: 'columns.manual', enabled: true },
+    { id: 'guid_ms', tKey: 'columns.guidMs', enabled: true },
+    { id: 'guid_ifc', tKey: 'columns.guidIfc', enabled: true },
+    { id: 'created_by', tKey: 'columns.createdBy', enabled: false },
+    { id: 'created_at', tKey: 'columns.createdAt', enabled: false },
+    { id: 'percentage', tKey: 'columns.percentage', enabled: true },
+    { id: 'comments', tKey: 'columns.comments', enabled: true }
   ]);
 
   // Import state
@@ -1604,11 +1610,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       const methodLabels = Object.entries(batchInstallMethods)
         .map(([key, val]) => {
           const cfg = INSTALL_METHODS.find(m => m.key === key);
-          return cfg ? `${cfg.label} (${val})` : key;
+          return cfg ? `${t('resources.' + cfg.label)} (${val})` : key;
         })
-        .join(', ') || 'tühjendatud';
+        .join(', ') || t('messages.resourcesCleared');
 
-      setMessage(`${count} detaili ressursid: ${methodLabels}`);
+      setMessage(t('messages.resourcesUpdated', { count, methods: methodLabels }));
       loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error updating batch methods:', e);
@@ -1683,7 +1689,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       // Remove from stack and update local state
       setUndoStack(prev => prev.slice(0, -1));
       setScheduleItems(lastState.items);
-      setMessage(`Tagasi võetud: ${lastState.description}`);
+      setMessage(t('messages.undone', { description: lastState.description }));
     } catch (e) {
       console.error('Undo error:', e);
       setMessage(t('messages.undoError'));
@@ -1781,7 +1787,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         }
       }
 
-      setMessage(`${newItems.length} detaili lisatud`);
+      setMessage(t('messages.itemsAdded', { count: newItems.length }));
       loadSchedule(activeVersionId);
 
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
@@ -1878,7 +1884,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         }
       }
 
-      setMessage(`${newItems.length} detaili lisatud kuupäevale ${formatDateEstonian(date)}`);
+      setMessage(t('messages.itemsAddedToDate', { count: newItems.length, date: fmtDateFull(date) }));
       loadSchedule(activeVersionId);
 
       // Clear selection
@@ -2157,7 +2163,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
         if (error) throw error;
 
-        setMessage(`Päev ${formatDateShort(dateStr)} avatud`);
+        setMessage(`Päev ${fmtDateShort(dateStr)} avatud`);
       } else {
         // Lock - insert lock record
         const { error } = await supabase
@@ -2172,7 +2178,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
         if (error) throw error;
 
-        setMessage(`Päev ${formatDateShort(dateStr)} lukustatud`);
+        setMessage(`Päev ${fmtDateShort(dateStr)} lukustatud`);
       }
 
       await loadScheduleLocks();
@@ -2332,7 +2338,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     const dateItems = itemsByDate[date] || [];
     if (dateItems.length === 0) return;
 
-    const confirmed = window.confirm(`Kustuta kõik ${dateItems.length} detaili kuupäevalt ${formatDateShort(date)}?`);
+    const confirmed = window.confirm(`Kustuta kõik ${dateItems.length} detaili kuupäevalt ${fmtDateShort(date)}?`);
     if (!confirmed) return;
 
     saveUndoState(`Kõik detailid kuupäevalt ${date} kustutamine`);
@@ -2377,7 +2383,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       setDateMenuId(null);
-      setMessage(`${dateItems.length} detaili kustutatud kuupäevalt ${formatDateShort(date)}`);
+      setMessage(`${dateItems.length} detaili kustutatud kuupäevalt ${fmtDateShort(date)}`);
       await loadComments();
       loadSchedule(activeVersionId);
     } catch (e) {
@@ -2741,7 +2747,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           // Download the image
           const link = document.createElement('a');
           link.href = screenshot;
-          const dateFormatted = formatDateEstonian(date).replace(/\s+/g, '_');
+          const dateFormatted = fmtDateFull(date).replace(/\s+/g, '_');
           link.download = `graafik_${dateFormatted}_${items.length}tk.png`;
           document.body.appendChild(link);
           link.click();
@@ -2773,7 +2779,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       if (existingMarkups && existingMarkups.length > 0) {
         const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
         if (existingIds.length > 0) {
-          await batchRemoveMarkups(existingIds, 'Eemaldan vanu markupe...');
+          await batchRemoveMarkups(existingIds, t('ui.removingOldMarkups'));
         }
       }
 
@@ -2915,7 +2921,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       // Set colors (in batches)
-      await batchEditMarkupColors(createdIds, markupColor, 'Värvin markupe...');
+      await batchEditMarkupColors(createdIds, markupColor, t('ui.coloringMarkups'));
 
       setMessage(`${createdIds.length} markupit loodud`);
       setDateMenuId(null);
@@ -2944,7 +2950,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       if (existingMarkups && existingMarkups.length > 0) {
         const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
         if (existingIds.length > 0) {
-          await batchRemoveMarkups(existingIds, 'Eemaldan vanu markupe...');
+          await batchRemoveMarkups(existingIds, t('ui.removingOldMarkups'));
         }
       }
 
@@ -3174,7 +3180,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         return;
       }
 
-      await batchRemoveMarkups(allIds, 'Eemaldan markupe...');
+      await batchRemoveMarkups(allIds, t('ui.removingMarkups'));
       setMessage(`${allIds.length} markupit eemaldatud`);
       setDateMenuId(null);
     } catch (e) {
@@ -3236,7 +3242,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       if (existingMarkups && existingMarkups.length > 0) {
         const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
         if (existingIds.length > 0) {
-          await batchRemoveMarkups(existingIds, 'Eemaldan vanu markupe...');
+          await batchRemoveMarkups(existingIds, t('ui.removingOldMarkups'));
         }
       }
 
@@ -3343,7 +3349,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setDeliveryMarkupMap(newMarkupMap);
 
       // 7. Set color - orange for delivery dates (in batches)
-      await batchEditMarkupColors(createdIds, '#FF6600', 'Värvin markupe...');
+      await batchEditMarkupColors(createdIds, '#FF6600', t('ui.coloringMarkups'));
 
       setMessage(`${createdIds.length} tarnekuupäeva markupit loodud`);
     } catch (e) {
@@ -3411,7 +3417,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       if (existingMarkups && existingMarkups.length > 0) {
         const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
         if (existingIds.length > 0) {
-          await batchRemoveMarkups(existingIds, 'Eemaldan vanu markupe...');
+          await batchRemoveMarkups(existingIds, t('ui.removingOldMarkups'));
         }
       }
 
@@ -3517,7 +3523,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setDeliveryMarkupMap(newMarkupMap);
 
       // 7. Set color - green for non-ERP items (in batches)
-      await batchEditMarkupColors(createdIds, '#22C55E', 'Värvin markupe...');
+      await batchEditMarkupColors(createdIds, '#22C55E', t('ui.coloringMarkups'));
 
       setMessage(`${createdIds.length} markupit loodud (ilma ERP)`);
     } catch (e) {
@@ -3615,7 +3621,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       if (existingMarkups && existingMarkups.length > 0) {
         const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
         if (existingIds.length > 0) {
-          await batchRemoveMarkups(existingIds, 'Eemaldan vanu markupe...');
+          await batchRemoveMarkups(existingIds, t('ui.removingOldMarkups'));
         }
       }
 
@@ -3733,7 +3739,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setDeliveryMarkupMap(newMarkupMap);
 
       // 8. Set color - blue for vehicle info (in batches)
-      await batchEditMarkupColors(createdIds, '#3B82F6', 'Värvin markupe...');
+      await batchEditMarkupColors(createdIds, '#3B82F6', t('ui.coloringMarkups'));
 
       setMessage(`${createdIds.length} veoki markupit loodud`);
     } catch (e) {
@@ -4882,7 +4888,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       return;
     }
 
-    saveUndoState(`${itemsOnDate.length} detaili liigutamine kuupäevale ${formatDateShort(targetDate)}`);
+    saveUndoState(`${itemsOnDate.length} detaili liigutamine kuupäevale ${fmtDateShort(targetDate)}`);
 
     try {
       const { error } = await supabase
@@ -4894,7 +4900,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       if (error) throw error;
 
       setDateContextMenu(null);
-      setMessage(`${itemsOnDate.length} detaili liigutatud kuupäevale ${formatDateShort(targetDate)}`);
+      setMessage(`${itemsOnDate.length} detaili liigutatud kuupäevale ${fmtDateShort(targetDate)}`);
       loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error moving items:', e);
@@ -5105,9 +5111,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
   };
 
-  const monthNames = ['Jaanuar', 'Veebruar', 'Märts', 'Aprill', 'Mai', 'Juuni',
-    'Juuli', 'August', 'September', 'Oktoober', 'November', 'Detsember'];
-  const dayNames = ['E', 'T', 'K', 'N', 'R', 'L', 'P'];
+  const monthNames = monthNamesList;
+  const dayNames = weekdayNamesMin;
 
   const today = formatDateKey(new Date());
 
@@ -5193,6 +5198,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     const sortedItems = getAllItemsSorted();
     const totalItems = sortedItems.length;
     const isEnglish = exportLanguage === 'en';
+    const te = (key: string) => t(key, { lng: exportLanguage });
 
     if (totalItems === 0) {
       setMessage(t('messages.scheduleEmptyExport'));
@@ -5215,7 +5221,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     };
 
     // Main data sheet - header row from enabled columns (use correct language)
-    const mainData: any[][] = [enabledCols.map(c => isEnglish ? (c as any).labelEn || c.label : c.label)];
+    const mainData: any[][] = [enabledCols.map(c => t((c as any).tKey || c.id, { lng: exportLanguage }))];
 
     // Find date column index for coloring
     const dateColIndex = enabledCols.findIndex(c => c.id === 'date');
@@ -5226,7 +5232,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       const percentage = Math.round((cumulative / totalItems) * 100);
       const date = new Date(item.scheduled_date);
       const dateFormatted = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getFullYear()).slice(-2)}`;
-      const weekday = isEnglish ? WEEKDAY_NAMES_EN[date.getDay()] : WEEKDAY_NAMES[date.getDay()];
+      const weekday = (t('weekdaysList', { returnObjects: true, lng: exportLanguage }) as string[])[date.getDay()];
 
       // Build row based on enabled columns
       const row = enabledCols.map(col => {
@@ -5291,10 +5297,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
     // Summary sheet headers based on language
     const summaryData: any[][] = [[
-      isEnglish ? 'Date' : 'Kuupäev',
-      isEnglish ? 'Day' : 'Päev',
-      isEnglish ? 'Items' : 'Detaile',
-      isEnglish ? 'Cumulative' : 'Kumulatiivne',
+      te('excel.date'),
+      te('excel.day'),
+      te('excel.items'),
+      te('excel.cumulative'),
       '%'
     ]];
 
@@ -5306,7 +5312,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       const pct = Math.round((cumulativeSum / totalItems) * 100);
       const date = new Date(dateStr);
       const dateFormatted = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getFullYear()).slice(-2)}`;
-      const weekday = isEnglish ? WEEKDAY_NAMES_EN[date.getDay()] : WEEKDAY_NAMES[date.getDay()];
+      const weekday = (t('weekdaysList', { returnObjects: true, lng: exportLanguage }) as string[])[date.getDay()];
       summaryData.push([dateFormatted, weekday, count, cumulativeSum, `${pct}%`]);
     }
 
@@ -5361,7 +5367,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
     });
 
-    XLSX.utils.book_append_sheet(wb, ws1, isEnglish ? 'Schedule' : 'Graafik');
+    XLSX.utils.book_append_sheet(wb, ws1, te('excel.schedule'));
 
     // Calculate detailed equipment statistics - count days that need 1, 2, 3, etc. of each method
     type MethodCountStats = Record<number, Set<string>>; // count -> set of dates
@@ -5415,38 +5421,22 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
 
     // Resource Statistics Sheet
-    const resourceLabels = isEnglish ? {
-      title: 'Resource Statistics',
-      resource: 'Resource',
-      count: 'Count',
-      days: 'Days',
-      totalDays: 'Total Days',
-      crane: 'Crane',
-      forklift: 'Telehandler',
-      poomtostuk: 'Boom Lift',
-      kaartostuk: 'Scissor Lift',
-      troppija: 'Rigger',
-      monteerija: 'Installer',
-      keevitaja: 'Welder',
-      manual: 'Manual',
-      machines: 'Machines',
-      labor: 'Labor'
-    } : {
-      title: 'Ressursside statistika',
-      resource: 'Ressurss',
-      count: 'Kogus',
-      days: 'Päevi',
-      totalDays: 'Kokku päevi',
-      crane: 'Kraana',
-      forklift: 'Teleskooplaadur',
-      poomtostuk: 'Korvtõstuk',
-      kaartostuk: 'Käärtõstuk',
-      troppija: 'Troppija',
-      monteerija: 'Monteerija',
-      keevitaja: 'Keevitaja',
-      manual: 'Käsitsi',
-      machines: 'Tehnika',
-      labor: 'Tööjõud'
+    const resourceLabels = {
+      title: te('excel.resourceTitle'),
+      resource: te('excel.resourceResource'),
+      count: te('excel.resourceCount'),
+      days: te('excel.resourceDays'),
+      totalDays: te('excel.resourceTotalDays'),
+      crane: te('resources.crane'),
+      forklift: te('resources.forklift'),
+      poomtostuk: te('resources.poomtostuk'),
+      kaartostuk: te('resources.kaartostuk'),
+      troppija: te('resources.troppija'),
+      monteerija: te('resources.monteerija'),
+      keevitaja: te('resources.keevitaja'),
+      manual: te('resources.manual'),
+      machines: te('excel.machines'),
+      labor: te('excel.laborLabel')
     };
 
     const resourceData: any[][] = [
@@ -5535,7 +5525,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
     });
 
-    XLSX.utils.book_append_sheet(wb, ws3, isEnglish ? 'Resources' : 'Ressursid');
+    XLSX.utils.book_append_sheet(wb, ws3, te('excel.sheetResources'));
 
     // Add simple equipment statistics to summary (backwards compatibility)
     const daysWithMethod: Record<InstallMethodType, Set<string>> = {
@@ -5560,15 +5550,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
     // Add equipment statistics to summary
     summaryData.push([]); // Empty row
-    summaryData.push([isEnglish ? 'Equipment Statistics' : 'Tehnika statistika', '', '', '', '']);
-    summaryData.push([isEnglish ? 'Crane days' : 'Kraana päevi', '', daysWithMethod.crane.size, '', '']);
-    summaryData.push([isEnglish ? 'Telehandler days' : 'Teleskooplaaduri päevi', '', daysWithMethod.forklift.size, '', '']);
-    summaryData.push([isEnglish ? 'Boom lift days' : 'Korvtõstuki päevi', '', daysWithMethod.poomtostuk.size, '', '']);
-    summaryData.push([isEnglish ? 'Scissor lift days' : 'Käärtõstuki päevi', '', daysWithMethod.kaartostuk.size, '', '']);
-    summaryData.push([isEnglish ? 'Rigger days' : 'Troppijaid päevi', '', daysWithMethod.troppija.size, '', '']);
-    summaryData.push([isEnglish ? 'Installer days' : 'Monteerijaid päevi', '', daysWithMethod.monteerija.size, '', '']);
-    summaryData.push([isEnglish ? 'Welder days' : 'Keevitajaid päevi', '', daysWithMethod.keevitaja.size, '', '']);
-    summaryData.push([isEnglish ? 'Manual days' : 'Käsitsi päevi', '', daysWithMethod.manual.size, '', '']);
+    summaryData.push([te('excel.equipmentStatistics'), '', '', '', '']);
+    summaryData.push([te('excel.craneDays'), '', daysWithMethod.crane.size, '', '']);
+    summaryData.push([te('excel.telehandlerDays'), '', daysWithMethod.forklift.size, '', '']);
+    summaryData.push([te('excel.boomLiftDays'), '', daysWithMethod.poomtostuk.size, '', '']);
+    summaryData.push([te('excel.scissorLiftDays'), '', daysWithMethod.kaartostuk.size, '', '']);
+    summaryData.push([te('excel.riggerDays'), '', daysWithMethod.troppija.size, '', '']);
+    summaryData.push([te('excel.installerDays'), '', daysWithMethod.monteerija.size, '', '']);
+    summaryData.push([te('excel.welderDays'), '', daysWithMethod.keevitaja.size, '', '']);
+    summaryData.push([te('excel.manualDays'), '', daysWithMethod.manual.size, '', '']);
 
     // Summary sheet
     const ws2 = XLSX.utils.aoa_to_sheet(summaryData);
@@ -5626,7 +5616,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
     });
 
-    XLSX.utils.book_append_sheet(wb, ws2, isEnglish ? 'Summary' : 'Kokkuvõte');
+    XLSX.utils.book_append_sheet(wb, ws2, te('excel.sheetSummary'));
 
     // ========== TIMELINE SHEET ==========
     // Structure:
@@ -5638,32 +5628,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     // Rows 12+: Details (each under its date)
     // Last row: Totals per date
 
-    const timelineLabels = isEnglish ? {
-      resources: 'Resources',
-      details: 'Details',
-      total: 'Total',
-      week: 'W',
-      crane: 'Crane',
-      forklift: 'Telehandler',
-      poomtostuk: 'Boom Lift',
-      kaartostuk: 'Scissor Lift',
-      troppija: 'Rigger',
-      monteerija: 'Installer',
-      keevitaja: 'Welder',
-      manual: 'Manual',
-    } : {
-      resources: 'Ressursid',
-      details: 'Detailid',
-      total: 'Kokku',
-      week: 'N',
-      crane: 'Kraana',
-      forklift: 'Teleskooplaadur',
-      poomtostuk: 'Korvtõstuk',
-      kaartostuk: 'Käärtõstuk',
-      troppija: 'Troppija',
-      monteerija: 'Monteerija',
-      keevitaja: 'Keevitaja',
-      manual: 'Käsitsi',
+    const timelineLabels = {
+      resources: te('excel.timelineResources'),
+      details: te('excel.timelineDetails'),
+      total: te('excel.timelineTotal'),
+      week: te('excel.timelineWeek'),
+      crane: te('resources.crane'),
+      forklift: te('resources.forklift'),
+      poomtostuk: te('resources.poomtostuk'),
+      kaartostuk: te('resources.kaartostuk'),
+      troppija: te('resources.troppija'),
+      monteerija: te('resources.monteerija'),
+      keevitaja: te('resources.keevitaja'),
+      manual: te('resources.manual'),
     };
 
     const resourceOrder: { key: InstallMethodType; label: string }[] = [
@@ -5757,9 +5734,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     timelineData[TOTAL_ROW][0] = timelineLabels.total;
 
     // Weekday short names
-    const weekdayShort = isEnglish
-      ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-      : ['P', 'E', 'T', 'K', 'N', 'R', 'L'];
+    const weekdayShort = t('weekdaysMinMon', { returnObjects: true, lng: exportLanguage }) as string[];
+    // weekdaysMinMon is Mon-indexed [E,T,K,N,R,L,P] for ET, need Sun-indexed for getDay()
+    const weekdayShortSun = [weekdayShort[6], ...weekdayShort.slice(0, 6)];
 
     // Fill date headers and data columns
     timelineDates.forEach((dateStr, colIdx) => {
@@ -5769,7 +5746,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       const monthNum = date.getMonth() + 1;
 
       // Weekday name row
-      timelineData[DAY_ROW][col] = weekdayShort[date.getDay()];
+      timelineData[DAY_ROW][col] = weekdayShortSun[date.getDay()];
 
       // Date header (DD.MM)
       timelineData[DATE_ROW][col] = `${String(dayNum).padStart(2, '0')}.${String(monthNum).padStart(2, '0')}`;
@@ -5837,12 +5814,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         monthStartCol = col;
 
         // Set month label
-        const monthNames = isEnglish
-          ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-          : ['Jaan', 'Veebr', 'Märts', 'Apr', 'Mai', 'Juuni', 'Juuli', 'Aug', 'Sept', 'Okt', 'Nov', 'Dets'];
+        const exportMonthNames = t('monthsShortList', { returnObjects: true, lng: exportLanguage }) as string[];
         const cellRef = XLSX.utils.encode_cell({ r: MONTH_ROW, c: col });
         if (!ws4[cellRef]) ws4[cellRef] = { t: 's', v: '' };
-        ws4[cellRef].v = `${monthNames[month]} ${date.getFullYear()}`;
+        ws4[cellRef].v = `${exportMonthNames[month]} ${date.getFullYear()}`;
       }
     });
     // Close last month merge
@@ -6016,7 +5991,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       ? projectName.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ\s-]/g, '').replace(/\s+/g, '_').substring(0, 50)
       : 'projekt';
     const dateStr = new Date().toISOString().split('T')[0];
-    const filenameSuffix = isEnglish ? 'installation_schedule' : 'paigaldusgraafik';
+    const filenameSuffix = te('excel.filenameSuffix');
     XLSX.writeFile(wb, `${safeProjectName}_${filenameSuffix}_${dateStr}.xlsx`);
     setShowExportModal(false);
   };
@@ -6409,16 +6384,16 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           >
             <FiLayers size={14} />
             <span className="version-name">
-              {versions.find(v => v.id === activeVersionId)?.name || 'Põhigraafik'}
+              {versions.find(v => v.id === activeVersionId)?.name || t('ui.mainSchedule')}
             </span>
             <FiChevronDown size={14} className={showVersionDropdown ? 'rotated' : ''} />
           </button>
 
           {showVersionDropdown && (
             <div className="version-dropdown">
-              <div className="version-dropdown-header">Versioonid</div>
+              <div className="version-dropdown-header">{t('ui.versions')}</div>
               {versions.length === 0 ? (
-                <div className="version-empty">Versioone pole loodud</div>
+                <div className="version-empty">{t('ui.noVersions')}</div>
               ) : (
                 versions.map(v => (
                   <div
@@ -6500,7 +6475,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 <button
                   className={`month-lock-btn ${isMonthLocked ? 'locked' : ''}`}
                   onClick={() => toggleMonthLock(yearMonth)}
-                  title={isMonthLocked ? 'Ava kuu' : 'Lukusta kuu'}
+                  title={isMonthLocked ? t('ui.unlockMonth') : t('ui.lockMonth')}
                 >
                   {isMonthLocked ? <FiLock size={14} /> : <FiUnlock size={14} />}
                 </button>
@@ -6517,7 +6492,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             className="calendar-toggle-btn"
             onClick={() => setCalendarCollapsed(!calendarCollapsed)}
           >
-            {calendarCollapsed ? 'Ava kalender' : 'Peida kalender'}
+            {calendarCollapsed ? t('ui.openCalendar') : t('ui.hideCalendar')}
           </button>
         </div>
 
@@ -6629,7 +6604,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           <button
             className="reset-colors-btn"
             onClick={() => api.viewer.setObjectState(undefined, { color: 'reset' })}
-            title="Lähtesta värvid"
+            title={t('ui.resetColorsTitle')}
           >
             <FiRefreshCw size={14} />
           </button>
@@ -6642,7 +6617,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           <div className="multi-select-header">
             <span className="multi-select-count">{selectedItemIds.size} valitud</span>
             <div className="multi-select-actions">
-              <button className="apply-batch-btn" onClick={applyBatchMethodsToSelected} title="Rakenda ressursid">
+              <button className="apply-batch-btn" onClick={applyBatchMethodsToSelected} title={t('ui.applyResources')}>
                 <FiCheck size={12} />
                 Rakenda
               </button>
@@ -6918,7 +6893,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                             >
                               <span className="scheduled-item-nr">#{s.jrNr}</span>
                               <span className="scheduled-item-mark">{s.mark}</span>
-                              <span className="scheduled-item-date">{formatDateEstonian(s.date)}</span>
+                              <span className="scheduled-item-date">{fmtDateFull(s.date)}</span>
                             </div>
                           );
                         })}
@@ -6938,7 +6913,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
                   setSelectedObjects([]);
                 }}
-                title="Tühista valik mudelis"
+                title={t('ui.clearModelSelection')}
               >
                 <FiX size={14} />
               </button>
@@ -7074,7 +7049,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 disabled={saving}
               >
                 <FiPlus size={14} />
-                Lisa {selectedObjects.length - scheduledInfo.length} detaili {formatDateEstonian(selectedDate)}
+                Lisa {selectedObjects.length - scheduledInfo.length} detaili {fmtDateFull(selectedDate)}
                 {scheduledInfo.length > 0 && (
                   <span className="already-scheduled-count"> | {scheduledInfo.length} juba planeeritud</span>
                 )}
@@ -7375,18 +7350,18 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
               return (
                 <>
                   <div className="stats-section">
-                    <div className="stats-section-title">Tehnika</div>
-                    {renderMethodStats('crane', 'Kraana', '/crane.svg')}
-                    {renderMethodStats('forklift', 'Teleskooplaadur', '/forklift.svg')}
-                    {renderMethodStats('poomtostuk', 'Korvtõstuk', '/poomtostuk.svg')}
-                    {renderMethodStats('kaartostuk', 'Käärtõstuk', '/kaartostuk.svg')}
-                    {renderMethodStats('manual', 'Käsitsi', '/manual.svg')}
+                    <div className="stats-section-title">{t('ui.machinesSection')}</div>
+                    {renderMethodStats('crane', t('resources.crane'), '/crane.svg')}
+                    {renderMethodStats('forklift', t('resources.forklift'), '/forklift.svg')}
+                    {renderMethodStats('poomtostuk', t('resources.poomtostuk'), '/poomtostuk.svg')}
+                    {renderMethodStats('kaartostuk', t('resources.kaartostuk'), '/kaartostuk.svg')}
+                    {renderMethodStats('manual', t('resources.manual'), '/manual.svg')}
                   </div>
                   <div className="stats-section">
-                    <div className="stats-section-title">Tööjõud</div>
-                    {renderMethodStats('troppija', 'Troppija', '/troppija.svg')}
-                    {renderMethodStats('monteerija', 'Monteerija', '/monteerija.svg')}
-                    {renderMethodStats('keevitaja', 'Keevitaja', '/keevitaja.svg')}
+                    <div className="stats-section-title">{t('ui.laborSection')}</div>
+                    {renderMethodStats('troppija', t('resources.troppija'), '/troppija.svg')}
+                    {renderMethodStats('monteerija', t('resources.monteerija'), '/monteerija.svg')}
+                    {renderMethodStats('keevitaja', t('resources.keevitaja'), '/keevitaja.svg')}
                   </div>
                 </>
               );
@@ -7421,7 +7396,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 </button>
               </div>
               <div className="export-columns-header">
-                <span>Ekspordi veerud ({exportColumns.filter(c => c.enabled).length}/{exportColumns.length})</span>
+                <span>{t('excel.exportColumns')} ({exportColumns.filter(c => c.enabled).length}/{exportColumns.length})</span>
               </div>
               <div className="export-columns-list">
                 {exportColumns.map((col, idx) => (
@@ -7431,19 +7406,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                       checked={col.enabled}
                       onChange={() => toggleExportColumn(col.id)}
                     />
-                    <span className={col.enabled ? '' : 'disabled'}>{col.label}</span>
+                    <span className={col.enabled ? '' : 'disabled'}>{t((col as any).tKey || col.id)}</span>
                     <div className="column-order-btns">
                       <button
                         onClick={() => moveExportColumn(col.id, 'up')}
                         disabled={idx === 0}
-                        title="Liiguta üles"
+                        title={t('excel.moveUp')}
                       >
                         <FiArrowUp size={12} />
                       </button>
                       <button
                         onClick={() => moveExportColumn(col.id, 'down')}
                         disabled={idx === exportColumns.length - 1}
-                        title="Liiguta alla"
+                        title={t('excel.moveDown')}
                       >
                         <FiArrowDown size={12} />
                       </button>
@@ -7453,7 +7428,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
               </div>
               <button className="export-download-btn" onClick={exportToExcel}>
                 <FiDownload size={14} />
-                {exportLanguage === 'en' ? 'Export' : 'Ekspordi'} ({filteredItems.length} {exportLanguage === 'en' ? 'rows' : 'rida'})
+                {t('excel.exportButton', { lng: exportLanguage })} ({filteredItems.length} {t('excel.rows', { lng: exportLanguage })})
               </button>
 
               <div className="import-section">
@@ -8023,7 +7998,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         setDateContextMenu({ x: e.clientX, y: e.clientY, sourceDate: date });
                       }}
                       title="Paremklõps: muuda kuupäeva"
-                    >{formatDateShort(date)}</span>
+                    >{fmtDateShort(date)}</span>
                     {isDateLocked(date) && (
                       <span className="lock-indicator" title="Lukustatud">
                         <FiLock size={10} />
@@ -8456,7 +8431,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                       className={`date-picker-item ${d === item.scheduled_date ? 'current' : ''}`}
                                       onClick={() => selectedItemIds.size > 1 ? moveSelectedItemsToDate(d) : moveItemToDate(item.id, d)}
                                     >
-                                      {formatDateEstonian(d)}
+                                      {fmtDateFull(d)}
                                     </div>
                                   ))}
                                 </div>
@@ -8536,7 +8511,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             </button>
           </div>
           <div className="context-calendar-grid">
-            {['E', 'T', 'K', 'N', 'R', 'L', 'P'].map(day => (
+            {weekdayNamesMin.map(day => (
               <div key={day} className="context-day-name">{day}</div>
             ))}
             {getDaysForMonth(contextMenuMonth).map((calDate, idx) => {
@@ -8625,10 +8600,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                       <div key={key} className="tooltip-method-item">
                         <img
                           src={`${import.meta.env.BASE_URL}icons/${cfg.icon}`}
-                          alt={cfg.label}
+                          alt={t('resources.' + cfg.label)}
                           style={{ filter: cfg.filterCss }}
                         />
-                        <span>{cfg.label}</span>
+                        <span>{t('resources.' + cfg.label)}</span>
                         <span className="tooltip-method-count">× {count}</span>
                       </div>
                     );
@@ -8814,7 +8789,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         <div className="modal-overlay" onClick={() => setEditDayModalDate(null)}>
           <div className="comment-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Muuda päeva: {formatDateShort(editDayModalDate)} ({editDayModalItemCount} detaili)</h3>
+              <h3>Muuda päeva: {fmtDateShort(editDayModalDate)} ({editDayModalItemCount} detaili)</h3>
               <button onClick={() => setEditDayModalDate(null)}><FiX size={18} /></button>
             </div>
             <div className="comment-modal-body">

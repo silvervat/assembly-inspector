@@ -2254,7 +2254,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     let vehicleCode = customCode;
     try {
       const factory = getFactory(factoryId);
-      if (!factory) throw new Error('Tehas ei leitud');
+      if (!factory) throw new Error(t('importModal.factoryNotFound'));
       let vehicleNumber = 1;
       const separator = factory.vehicle_separator || '';
 
@@ -2809,7 +2809,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setSaving(true);
     try {
       const targetVehicle = getVehicle(targetVehicleId);
-      if (!targetVehicle) throw new Error('Sihtveok ei leitud');
+      if (!targetVehicle) throw new Error(t('importModal.targetVehicleNotFound'));
 
       const { error } = await supabase
         .from('trimble_delivery_items')
@@ -3586,7 +3586,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setSheetsConfig(data);
     } else if (error) {
       console.error('Failed to initialize sheets config:', error);
-      alert('Sheets konfiguratsiooni loomine ebaõnnestus!');
+      alert(t('sheetsModal.sheetsConfigError'));
     }
   };
 
@@ -3957,7 +3957,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       return result;
     } catch (e) {
       console.error('Error comparing schedule:', e);
-      setMessage('Viga graafiku võrdlemisel');
+      setMessage(t('scheduleUpdate.comparisonError'));
       return null;
     } finally {
       setComparisonLoading(false);
@@ -3984,7 +3984,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
     setImporting(true);
     setShowComparisonModal(false);
-    setImportProgress({ stage: 'saving', current: 0, total: 100, message: 'Uuendan graafikut...' });
+    setImportProgress({ stage: 'saving', current: 0, total: 100, message: t('scheduleUpdate.updatingSchedule') });
 
     try {
       const historyEntries: Array<{
@@ -4087,7 +4087,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           new_vehicle_id: targetVehicleId,
           old_vehicle_code: change.currentVehicleCode || undefined,
           new_vehicle_code: newVehicleCode || undefined,
-          change_reason: importSourceDescription || 'Graafiku uuendus',
+          change_reason: importSourceDescription || t('scheduleUpdate.title'),
           changed_by: tcUserEmail || '',
           is_snapshot: false,
           import_source: importSourceDescription || undefined
@@ -4109,7 +4109,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       // Now import new items using the existing import logic
       if (comparisonResult.newItems.length > 0 && importMode === 'update_all') {
-        setImportProgress({ stage: 'saving', current: 50, total: 100, message: 'Lisan uusi elemente...' });
+        setImportProgress({ stage: 'saving', current: 50, total: 100, message: t('scheduleUpdate.addingNewItems') });
 
         // Filter import text to only new items
         const newGuidsSet = new Set(comparisonResult.newItems.map(i => i.guid.toLowerCase()));
@@ -4409,7 +4409,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     console.log('🚀 handleImport called');
 
     // Reset progress
-    setImportProgress({ stage: 'idle', current: 0, total: 0, message: 'Alustame...' });
+    setImportProgress({ stage: 'idle', current: 0, total: 0, message: t('messages.startingImport') });
 
     console.log('📊 Import state:', {
       importTextLength: importText.length,
@@ -4537,7 +4537,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // NEW APPROACH: Search loaded models directly (like refresh does)
       // This is more reliable than relying on database which may be stale
       console.log('🔄 Searching loaded models for objects...');
-      setImportProgress({ stage: 'searching', current: 0, total: guidsToImport.length, message: 'Otsin mudelitest...' });
+      setImportProgress({ stage: 'searching', current: 0, total: guidsToImport.length, message: t('importModal.searchingModels') });
 
       // Convert all GUIDs to IFC format for lookup
       const ifcGuidsToLookup = guidsToImport.map(guid =>
@@ -4586,7 +4586,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       // NOW: Fetch FRESH properties from Trimble model using API
       console.log('🔍 Fetching fresh properties from Trimble model...');
-      setImportProgress({ stage: 'fetching', current: 0, total: foundObjects.size, message: 'Loen andmeid mudelist...' });
+      setImportProgress({ stage: 'fetching', current: 0, total: foundObjects.size, message: t('importModal.readingModel') });
 
       const freshPropertiesMap = new Map<string, {
         assembly_mark: string;
@@ -4711,7 +4711,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             }
           }
 
-            setImportProgress({ stage: 'fetching', current: processedCount, total: totalObjects, message: 'Loen andmeid mudelist...' });
+            setImportProgress({ stage: 'fetching', current: processedCount, total: totalObjects, message: t('importModal.readingModel') });
           } catch (error) {
             console.error(`❌ Error fetching properties for model ${modelId}, batch:`, error);
             // Continue with other batches/models
@@ -5037,7 +5037,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 new_vehicle_id: item.vehicle_id,
                 old_vehicle_code: oldVehicle?.vehicle_code || null,
                 new_vehicle_code: vehicleCode || null,
-                change_reason: 'Detailne import',
+                change_reason: t('importModal.detailedImport'),
                 changed_by: tcUserEmail,
                 is_snapshot: false
               });
@@ -5083,7 +5083,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         // Create vehicle for import
         let vehicle = await createVehicle(importFactoryId, addModalDate);
         if (!vehicle) {
-          throw new Error('Veoki loomine ebaõnnestus');
+          throw new Error(t('importModal.vehicleCreateError'));
         }
 
         // Reload vehicles to get the new one
@@ -5816,15 +5816,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             ...vehicleRows
           ]
         : [
-            ['Kokkuvõte'],
+            [t('excelExport.summary')],
             [],
-            ['Kokku detaile', totalItems],
-            ['Kokku kaal', `${Math.round(totalWeight)} kg`],
-            ['Veokeid', vehicles.length],
-            ['Tehaseid', factories.length],
+            [t('excelExport.totalItems'), totalItems],
+            [t('excelExport.totalWeight'), `${Math.round(totalWeight)} kg`],
+            [t('excelExport.vehicleCount'), vehicles.length],
+            [t('excelExport.factoryCount'), factories.length],
             [],
-            ['Kuupäevade kaupa'],
-            ['Kuupäev', 'Veokeid', 'Detaile', 'Kaal (kg)'],
+            [t('excelExport.byDate')],
+            [t('excelExport.dateCol'), t('excelExport.vehiclesCol'), t('excelExport.itemsCol'), t('excelExport.weightCol')],
             ...sortedDates.map(date => {
               const dateItems = items.filter(i => i.scheduled_date === date);
               const dateVehicles = new Set(dateItems.map(i => i.vehicle_id)).size;
@@ -5832,21 +5832,21 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               return [formatDateDisplay(date), dateVehicles, dateItems.length, Math.round(dateWeight)];
             }),
             [],
-            ['Veokite nimekiri'],
-            ['Veok', 'Kuupäev', 'Aeg', 'Kestus', 'Detaile', 'Kaal (kg)', 'Ressursid', 'Staatus'],
+            [t('excelExport.vehicleList')],
+            [t('excelExport.vehicleCol'), t('excelExport.dateCol'), t('excelExport.timeCol'), t('excelExport.durationCol'), t('excelExport.itemsCol'), t('excelExport.weightCol'), t('excelExport.resourcesCol'), t('excelExport.statusCol')],
             ...vehicleRows
           ];
 
       const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-      const summarySheetName = isEnglish ? 'Summary' : 'Kokkuvõte';
+      const summarySheetName = t('excelExport.sheetSummary');
       XLSX.utils.book_append_sheet(wb, wsSummary, summarySheetName);
 
       // Save file with language-aware filename
-      const filePrefix = isEnglish ? 'Delivery' : 'Tarne';
-      const fileSuffix = isEnglish ? 'schedule' : 'graafik';
+      const filePrefix = t('excelExport.filePrefix');
+      const fileSuffix = t('excelExport.fileSuffix');
       const fileName = `${projectName || filePrefix}_${fileSuffix}_${formatDateForDB(new Date())}.xlsx`;
       XLSX.writeFile(wb, fileName);
-      setMessage(isEnglish ? 'Excel exported' : 'Excel eksporditud');
+      setMessage(t('excelExport.excelExported'));
       setShowExportModal(false);
     } catch (e: any) {
       console.error('Error exporting:', e);
@@ -5873,7 +5873,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           }
         });
       }
-      const resourceStr = resourceParts.join(', ') || 'Pole määratud';
+      const resourceStr = resourceParts.join(', ') || t('ui.notAssigned');
 
       // Duration string
       const durationMins = vehicle.unload_duration_minutes || 0;
@@ -6646,7 +6646,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setVehicleColors({});
         setDateColors({});
 
-        setMessage('Laen paigalduse andmeid...');
+        setMessage(t('coloring.loadingInstallation'));
 
         // 1. Fetch installed items from installations table (same as Alt+Shift+3 / InstallationsScreen)
         const installedGuids = new Set<string>();
@@ -6973,7 +6973,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // Green = delivered by that date (not installed), Dark blue = installed, White = rest
   const colorDeliveredByDate = async (targetDate: string) => {
     try {
-      setMessage('Värvin tarnitud detaile...');
+      setMessage(t('coloring.coloringDelivered'));
 
       // 1. Fetch all GUIDs from trimble_model_objects
       const allGuids: string[] = [];
@@ -6996,7 +6996,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // 2. Find objects in loaded models
       const foundObjects = await findObjectsInLoadedModels(api, allGuids);
       if (foundObjects.size === 0) {
-        setMessage('Objekte ei leitud mudelist');
+        setMessage(t('coloring.objectsNotFound'));
         return;
       }
 
@@ -7104,7 +7104,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
 
     if (guids.length === 0) {
-      setMessage('Selleks kuupäevaks pole tarneid planeeritud');
+      setMessage(t('coloring.noDeliveriesPlanned'));
       return;
     }
 
@@ -7501,8 +7501,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         {sortedDates.length === 0 && !loading && (
           <div className="empty-state">
             <FiPackage size={48} />
-            <p>Tarnegraafik on tühi</p>
-            <p className="hint">Vali mudelist detailid ja lisa need veokitesse</p>
+            <p>{t('messages.noData')}</p>
+            <p className="hint">{t('messages.noData')}</p>
           </div>
         )}
 
@@ -7585,7 +7585,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     e.stopPropagation();
                     handleDateClick(date, e);
                   }}
-                  title="Märgista mudelis (CTRL+klõps: mitme päeva valik)"
+                  title={t('ui.selectInModelCtrl')}
                 >
                   {/* Color indicator: show during colorMode or playback */}
                   {(colorMode === 'date' && dateColors[date]) || (isPlaying && playbackSettings.playbackMode === 'date' && playbackColoredDates.has(date) && playbackDateColors[date]) ? (
@@ -7811,7 +7811,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     setInlineEditVehicleId(vehicleId);
                                     setInlineEditField('vehicle_code');
                                   }}
-                                  title="Topeltklikk muutmiseks, klikk märgistamiseks"
+                                  title={t('ui.doubleClickToEdit')}
                                 >{vehicle?.vehicle_code || 'Määramata'}</span>
                               )}
                               {inlineEditVehicleId === vehicleId && inlineEditField === 'status' ? (
@@ -7841,7 +7841,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     setInlineEditVehicleId(vehicleId);
                                     setInlineEditField('status');
                                   }}
-                                  title="Klikka muutmiseks"
+                                  title={t('ui.clickToEdit')}
                                 >
                                   {statusConfig.label}
                                 </span>
@@ -7894,7 +7894,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     setInlineEditVehicleId(vehicleId);
                                     setInlineEditField('time');
                                   }}
-                                  title="Klikka muutmiseks"
+                                  title={t('ui.clickToEdit')}
                                 >{vehicle?.unload_start_time ? vehicle.unload_start_time.slice(0, 5) : '--:--'}</span>
                               )}
                               {inlineEditVehicleId === vehicleId && inlineEditField === 'duration' ? (
@@ -7923,7 +7923,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     setInlineEditVehicleId(vehicleId);
                                     setInlineEditField('duration');
                                   }}
-                                  title="Klikka muutmiseks"
+                                  title={t('ui.clickToEdit')}
                                 >{vehicle?.unload_duration_minutes ? formatDuration(vehicle.unload_duration_minutes) : '-'}</span>
                               )}
                             </div>
@@ -8145,7 +8145,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     openCommentModal('vehicle', vehicle.id);
                                   }
                                 }}
-                                title="Kommentaarid"
+                                title={t('columns.comments')}
                               >
                                 <FiMessageSquare size={13} />
                                 {getVehicleCommentCount(vehicleId) > 0 && (
@@ -8420,7 +8420,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             {vehicleItems.length === 0 && (
                               <div className="empty-vehicle-message">
                                 <FiPackage size={16} />
-                                <span>Ühtegi detaili pole</span>
+                                <span>{t('item.noItems')}</span>
                               </div>
                             )}
                             {/* Removed items - items that were moved to a different vehicle during arrival */}
@@ -8462,10 +8462,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                         setMessage(`${count} eemaldatud detaili märgistatud mudelis`);
                                       }
                                     }}
-                                    title="Märgista kõik eemaldatud detailid mudelis"
+                                    title={t('ui.selectAllRemoved')}
                                   >
                                     <FiExternalLink size={12} />
-                                    <span>Eemaldatud detailid ({movedItems.length})</span>
+                                    <span>{t('removedItems.title', { count: movedItems.length })}</span>
                                   </div>
                                   <div className="moved-items-list">
                                     {movedItems.map(conf => {
@@ -8484,7 +8484,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                               setMessage(`${item.assembly_mark} märgistatud mudelis`);
                                             }
                                           }}
-                                          title="Märgista mudelis"
+                                          title={t('ui.selectInModel')}
                                         >
                                           <span className="moved-item-mark">{item.assembly_mark}</span>
                                           <span className="moved-item-arrow">→</span>
@@ -8522,10 +8522,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                         setMessage(`${count} puuduvat detaili märgistatud mudelis`);
                                       }
                                     }}
-                                    title="Märgista kõik puuduvad detailid mudelis"
+                                    title={t('ui.selectAllMissing')}
                                   >
                                     <FiAlertTriangle size={12} />
-                                    <span>Puuduvad detailid ({missingItems.length})</span>
+                                    <span>{t('removedItems.missingTitle', { count: missingItems.length })}</span>
                                   </div>
                                   <div className="moved-items-list">
                                     {missingItems.map(conf => {
@@ -8542,7 +8542,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                               setMessage(`${item.assembly_mark} märgistatud mudelis`);
                                             }
                                           }}
-                                          title="Märgista mudelis"
+                                          title={t('ui.selectInModel')}
                                         >
                                           <span className="moved-item-mark">{item.assembly_mark}</span>
                                           {arrivedVehicle?.arrival_date && (
@@ -8679,7 +8679,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                           e.stopPropagation();
                                           openCommentModal('item', item.id);
                                         }}
-                                        title="Kommentaarid"
+                                        title={t('columns.comments')}
                                       >
                                         <FiMessageSquare size={12} style={{ stroke: '#374151' }} />
                                         {getItemCommentCount(item.id) > 0 && (
@@ -8757,8 +8757,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         {Object.keys(itemsByFactory).length === 0 && !loading && (
           <div className="empty-state">
             <FiLayers size={48} />
-            <p>Pole tehaseid</p>
-            <p className="hint">Lisa tehaseid ja veokeid</p>
+            <p>{t('factory.noFactories')}</p>
+            <p className="hint">{t('factory.add')}</p>
           </div>
         )}
 
@@ -8869,7 +8869,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               e.stopPropagation();
                               handleVehicleClick(vehicle);
                             }}
-                            title="Märgista mudelis"
+                            title={t('ui.selectInModel')}
                           >{vehicle.vehicle_code}</span>
                           <span className="vehicle-date">{vehicle.scheduled_date ? formatDateWithWeekday(vehicle.scheduled_date) : t('unassigned')}</span>
                           <span className="vehicle-stats">
@@ -8994,7 +8994,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                       })}
                                     </div>
                                     <div className="item-actions">
-                                      <button className="item-btn" onClick={(e) => { e.stopPropagation(); openCommentModal('item', item.id); }} title="Kommentaarid">
+                                      <button className="item-btn" onClick={(e) => { e.stopPropagation(); openCommentModal('item', item.id); }} title={t('columns.comments')}>
                                         <FiMessageSquare size={12} style={{ stroke: '#374151' }} />
                                         {getItemCommentCount(item.id) > 0 && <span className="badge">{getItemCommentCount(item.id)}</span>}
                                       </button>
@@ -9353,7 +9353,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   <button
                     className="history-btn"
                     onClick={() => loadVehicleDateHistory(activeVehicleId!)}
-                    title="Kuupäeva muutuste ajalugu"
+                    title={t('ui.dateChangeHistory')}
                   >
                     <FiClock size={12} />
                   </button>
@@ -9369,7 +9369,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               <div className="vehicle-edit-row">
                 {/* Time */}
                 <div className="edit-field time-field">
-                  <label>Aeg</label>
+                  <label>{t('editField.time')}</label>
                   <input
                     type="text"
                     className="time-input"
@@ -9402,7 +9402,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                 {/* Duration */}
                 <div className="edit-field duration-field">
-                  <label>Kestus</label>
+                  <label>{t('editField.duration')}</label>
                   <select
                     value={activeVehicle.unload_duration_minutes || 60}
                     onChange={async (e) => {
@@ -9426,7 +9426,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                 {/* Status */}
                 <div className="edit-field status-field">
-                  <label>Staatus</label>
+                  <label>{t('columns.status')}</label>
                   <select
                     value={activeVehicle.status || 'planned'}
                     onChange={async (e) => {
@@ -9451,7 +9451,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
               {/* Resources */}
               <div className="vehicle-edit-resources">
-                <label>Ressursid</label>
+                <label>{t('resources.title')}</label>
                 <div className="method-selectors">
                   {UNLOAD_METHODS.map(method => {
                     const count = activeVehicle.unload_methods?.[method.key] || 0;
@@ -9593,7 +9593,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               return (
                 <div className="selection-bar model-selection two-rows">
                   <div className="selection-info-row">
-                    <span className="selection-label">Mudelist valitud:</span>
+                    <span className="selection-label">{t('actions.selectInModel')}:</span>
                     <span className="selection-count">{totalCount} detaili | {Math.round(totalWeight)} kg</span>
                     {assignedCount > 0 && (
                       <span className="selection-hint">
@@ -9655,7 +9655,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               return (
               <div className="selection-bar item-selection two-rows">
                 <div className="selection-info-row">
-                  <span className="selection-label">Graafikust valitud:</span>
+                  <span className="selection-label">{t('ui.selectInModel')}:</span>
                   <span className="selection-count">{selectedItemIds.size} detaili | {Math.round(selectedItemsWeight)} kg</span>
                 </div>
                 <div className="selection-actions-row">
@@ -9713,7 +9713,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             <FiSearch className="search-icon" />
             <input
               type="text"
-              placeholder="Otsi..."
+              placeholder={t('ui.search')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -9729,7 +9729,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         {loading ? (
           <div className="loading-state">
             <FiRefreshCw className="spin" />
-            <p>Laadin...</p>
+            <p>{t('ui.loading')}</p>
           </div>
         ) : viewMode === 'dates' ? (
           renderDateView()
@@ -9750,14 +9750,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
           <div className="modal add-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Lisa detailid veokisse</h2>
+              <h2>{t('item.add')}</h2>
               <button className="close-btn" onClick={() => setShowAddModal(false)}>
                 <FiX />
               </button>
             </div>
             <div className="modal-body">
               <div className="form-group">
-                <label>Kuupäev</label>
+                <label>{t('columns.date')}</label>
                 <div className="date-calendar-wrapper">
                   <button
                     type="button"
@@ -9810,7 +9810,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 </div>
               </div>
               <div className="form-group">
-                <label>Tehas *</label>
+                <label>{t('columns.factory')} *</label>
                 <select
                   value={addModalFactoryId}
                   onChange={(e) => {
@@ -9819,7 +9819,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   }}
                   required
                 >
-                  <option value="">Vali tehas...</option>
+                  <option value="">{t('importModal.selectFactory')}</option>
                   {factories.map(f => (
                     <option key={f.id} value={f.id}>{f.factory_name} ({f.factory_code})</option>
                   ))}
@@ -9831,7 +9831,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                 return hasVehicles ? (
                   <div className="form-group">
-                    <label>Veok</label>
+                    <label>{t('columns.vehicle')}</label>
                     <div className="vehicle-select">
                       <select
                         value={addModalVehicleId}
@@ -9841,7 +9841,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         }}
                         disabled={!addModalFactoryId}
                       >
-                        <option value="">Vali olemasolev veok...</option>
+                        <option value="">{t('moveModal.selectVehicle')}</option>
                         {dateVehicles.map(v => {
                           const vehicleItems = items.filter(i => i.vehicle_id === v.id);
                           const vehicleWeight = vehicleItems.reduce((sum, i) => sum + (parseFloat(i.cast_unit_weight || '0') || 0), 0);
@@ -9869,11 +9869,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   </div>
                 ) : (
                   <div className="form-group">
-                    <label>Uus veok</label>
+                    <label>{t('vehicle.new')}</label>
                     <div className="new-vehicle-input-section">
                       <div className="new-vehicle-info">
                         <FiTruck size={14} />
-                        <span>Sellel kuupäeval pole veokeid</span>
+                        <span>{t('ui.noVehiclesOnDate')}</span>
                       </div>
                       <input
                         type="text"
@@ -9886,7 +9886,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                           return `${factory.factory_code}${sep}${maxNumber + 1}`;
                         })()}
                         onChange={(e) => setAddModalCustomCode(e.target.value.toUpperCase())}
-                        placeholder="Nt: OBO.1"
+                        placeholder={t('ui.vehicleCodePlaceholder')}
                         className="vehicle-code-input"
                       />
                     </div>
@@ -9904,7 +9904,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   <div className="new-vehicle-settings">
                     <div className="form-row">
                       <div className="form-group half">
-                        <label>Algusaeg</label>
+                        <label>{t('editField.time')}</label>
                         <input
                           type="text"
                           className="time-input"
@@ -9920,7 +9920,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         </datalist>
                       </div>
                       <div className="form-group half">
-                        <label>Kestus</label>
+                        <label>{t('editField.duration')}</label>
                         <select
                           value={addModalDuration}
                           onChange={(e) => setAddModalDuration(Number(e.target.value))}
@@ -9932,7 +9932,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       </div>
                     </div>
                     <div className="form-section compact">
-                      <label>Mahalaadimise ressursid</label>
+                      <label>{t('itemEditModal.unloadResources')}</label>
                       <div className="method-selectors">
                         {UNLOAD_METHODS.map(method => {
                           const count = addModalUnloadMethods[method.key] || 0;
@@ -9990,7 +9990,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 );
               })()}
               <div className="form-group">
-                <label>Kommentaar (lisatakse igale detailile)</label>
+                <label>{t('actions.addComment')}</label>
                 <textarea
                   value={addModalComment}
                   onChange={(e) => setAddModalComment(e.target.value)}
@@ -10042,7 +10042,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               <button
                                 type="button"
                                 className="zoom-btn"
-                                title="Zoomi detailini"
+                                title={t('ui.zoomToItem')}
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   try {
@@ -10262,7 +10262,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         <div className="modal-overlay" onClick={() => setShowVehicleModal(false)}>
           <div className="modal vehicle-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Veoki seaded: {editingVehicle.vehicle_code}</h2>
+              <h2>{t('vehicleModal.title', { code: editingVehicle.vehicle_code })}</h2>
               <button className="close-btn" onClick={() => setShowVehicleModal(false)}>
                 <FiX />
               </button>
@@ -10271,7 +10271,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               {/* Vehicle code edit */}
               <div className="form-row">
                 <div className="form-group" style={{ flex: 1 }}>
-                  <label><FiTruck style={{ marginRight: 4 }} />Veoki kood</label>
+                  <label><FiTruck style={{ marginRight: 4 }} />{t('vehicle.code')}</label>
                   <input
                     type="text"
                     value={editingVehicle.vehicle_code}
@@ -10287,7 +10287,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
               <div className="form-row">
                 <div className="form-group">
-                  <label>Staatus</label>
+                  <label>{t('columns.status')}</label>
                   <select
                     value={editingVehicle.status}
                     onChange={(e) => setEditingVehicle({
@@ -10301,7 +10301,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   </select>
                 </div>
                 <div className="form-group">
-                  <label><FiTruck style={{ marginRight: 4 }} />Veoki tüüp</label>
+                  <label><FiTruck style={{ marginRight: 4 }} />{t('vehicle.type')}</label>
                   <select
                     value={vehicleType}
                     onChange={(e) => setVehicleType(e.target.value)}
@@ -10315,7 +10315,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
               <div className="form-row">
                 <div className="form-group">
-                  <label><FiCalendar style={{ marginRight: 4 }} />Kuupäev</label>
+                  <label><FiCalendar style={{ marginRight: 4 }} />{t('columns.date')}</label>
                   <div className="date-input-wrapper">
                     <input
                       type="date"
@@ -10341,7 +10341,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   </div>
                 </div>
                 <div className="form-group">
-                  <label><FiClock style={{ marginRight: 4 }} />Algusaeg</label>
+                  <label><FiClock style={{ marginRight: 4 }} />{t('editField.time')}</label>
                   <input
                     type="text"
                     className="time-input"
@@ -10357,7 +10357,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   </datalist>
                 </div>
                 <div className="form-group">
-                  <label>Kestus</label>
+                  <label>{t('editField.duration')}</label>
                   <select
                     value={vehicleDuration}
                     onChange={(e) => setVehicleDuration(Number(e.target.value))}
@@ -10370,7 +10370,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </div>
 
               <div className="form-section">
-                <h4>Mahalaadimise ressursid</h4>
+                <h4>{t('itemEditModal.unloadResources')}</h4>
                 <div className="method-selectors">
                   {UNLOAD_METHODS.map(method => {
                     const count = vehicleUnloadMethods[method.key] || 0;
@@ -10425,7 +10425,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </div>
 
               <div className="form-group">
-                <label>Märkused</label>
+                <label>{t('vehicleModal.notes')}</label>
                 <textarea
                   value={editingVehicle.notes || ''}
                   onChange={(e) => setEditingVehicle({
@@ -10437,7 +10437,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </div>
 
               <div className="form-section">
-                <h4>Kommentaarid</h4>
+                <h4>{t('vehicleModal.comments')}</h4>
                 <div className="vehicle-comments-list">
                   {comments
                     .filter(c => c.vehicle_id === editingVehicle.id && !c.delivery_item_id)
@@ -10452,11 +10452,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     ))}
                 </div>
                 <div className="form-group">
-                  <label>Lisa uus kommentaar</label>
+                  <label>{t('vehicleModal.addNewComment')}</label>
                   <textarea
                     value={vehicleNewComment}
                     onChange={(e) => setVehicleNewComment(e.target.value)}
-                    placeholder="Kirjuta kommentaar veokile..."
+                    placeholder={t('vehicleModal.commentPlaceholder')}
                     rows={2}
                   />
                 </div>
@@ -10539,19 +10539,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         <div className="modal-overlay" onClick={() => setShowMoveModal(false)}>
           <div className="modal move-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Tõsta {selectedItemIds.size} detaili</h2>
+              <h2>{t('moveModal.title', { count: selectedItemIds.size })}</h2>
               <button className="close-btn" onClick={() => setShowMoveModal(false)}>
                 <FiX />
               </button>
             </div>
             <div className="modal-body">
               <div className="form-group">
-                <label>Sihtveok</label>
+                <label>{t('moveModal.targetVehicle')}</label>
                 <select
                   value={moveTargetVehicleId}
                   onChange={(e) => setMoveTargetVehicleId(e.target.value)}
                 >
-                  <option value="">Vali veok...</option>
+                  <option value="">{t('moveModal.selectVehicle')}</option>
                   {[...vehicles]
                     .sort((a, b) => {
                       // Sort by date first
@@ -10598,7 +10598,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         <div className="modal-overlay" onClick={() => setShowDateChangeModal(false)}>
           <div className="modal date-change-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Kuupäeva muutmine</h2>
+              <h2>{t('dateChangeModal.title')}</h2>
               <button className="close-btn" onClick={() => setShowDateChangeModal(false)}>
                 <FiX />
               </button>
@@ -10610,11 +10610,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 <span className="date-new">{dateChangeNewDate || '—'}</span>
               </div>
               <div className="form-group">
-                <label>Muutmise põhjus (valikuline)</label>
+                <label>{t('dateChangeModal.reasonLabel')}</label>
                 <textarea
                   value={dateChangeComment}
                   onChange={(e) => setDateChangeComment(e.target.value)}
-                  placeholder="Lisa kommentaar muutmise kohta..."
+                  placeholder={t('dateChangeModal.commentPlaceholder')}
                   rows={3}
                 />
               </div>
@@ -10653,7 +10653,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               {arrivedVehicleModalData.loading ? (
                 <div style={{ textAlign: 'center', padding: 40 }}>
                   <FiRefreshCw className="spinning" />
-                  <p style={{ marginTop: 8 }}>Laadin...</p>
+                  <p style={{ marginTop: 8 }}>{t('ui.loading')}</p>
                 </div>
               ) : (
                 <>
@@ -10661,19 +10661,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   <div style={{ marginBottom: 20, padding: 12, background: '#f9fafb', borderRadius: 8 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
                       <div>
-                        <span style={{ color: '#6b7280' }}>Planeeritud veok:</span>{' '}
+                        <span style={{ color: '#6b7280' }}>{t('arrivedModal.plannedVehicle')}</span>{' '}
                         <strong>{arrivedVehicleModalData.arrivedVehicle?.vehicle?.vehicle_code || '-'}</strong>
                       </div>
                       <div>
-                        <span style={{ color: '#6b7280' }}>Saabumise kuupäev:</span>{' '}
+                        <span style={{ color: '#6b7280' }}>{t('arrivedModal.arrivalDate')}</span>{' '}
                         <strong>{arrivedVehicleModalData.arrivedVehicle?.arrival_date ? formatDateWithWeekday(arrivedVehicleModalData.arrivedVehicle.arrival_date) : '-'}</strong>
                       </div>
                       <div>
-                        <span style={{ color: '#6b7280' }}>Saabumise aeg:</span>{' '}
+                        <span style={{ color: '#6b7280' }}>{t('arrivedModal.arrivalTime')}</span>{' '}
                         <strong>{arrivedVehicleModalData.arrivedVehicle?.arrival_time || '-'}</strong>
                       </div>
                       <div>
-                        <span style={{ color: '#6b7280' }}>Mahalaadimine:</span>{' '}
+                        <span style={{ color: '#6b7280' }}>{t('arrivedModal.unloading')}</span>{' '}
                         <strong>
                           {arrivedVehicleModalData.arrivedVehicle?.unload_start_time || '-'}
                           {arrivedVehicleModalData.arrivedVehicle?.unload_end_time && ` - ${arrivedVehicleModalData.arrivedVehicle.unload_end_time}`}
@@ -10681,25 +10681,25 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       </div>
                       {arrivedVehicleModalData.arrivedVehicle?.reg_number && (
                         <div>
-                          <span style={{ color: '#6b7280' }}>Reg. number:</span>{' '}
+                          <span style={{ color: '#6b7280' }}>{t('arrivedModal.regNumber')}</span>{' '}
                           <strong>{arrivedVehicleModalData.arrivedVehicle.reg_number}</strong>
                         </div>
                       )}
                       {arrivedVehicleModalData.arrivedVehicle?.trailer_number && (
                         <div>
-                          <span style={{ color: '#6b7280' }}>Haagis:</span>{' '}
+                          <span style={{ color: '#6b7280' }}>{t('arrivedModal.trailer')}</span>{' '}
                           <strong>{arrivedVehicleModalData.arrivedVehicle.trailer_number}</strong>
                         </div>
                       )}
                       {arrivedVehicleModalData.arrivedVehicle?.unload_location && (
                         <div style={{ gridColumn: '1 / -1' }}>
-                          <span style={{ color: '#6b7280' }}>Mahalaadimine asukoht:</span>{' '}
+                          <span style={{ color: '#6b7280' }}>{t('arrivedModal.unloadLocation')}</span>{' '}
                           <strong>{arrivedVehicleModalData.arrivedVehicle.unload_location}</strong>
                         </div>
                       )}
                       {arrivedVehicleModalData.arrivedVehicle?.notes && (
                         <div style={{ gridColumn: '1 / -1' }}>
-                          <span style={{ color: '#6b7280' }}>Märkused:</span>{' '}
+                          <span style={{ color: '#6b7280' }}>{t('arrivedModal.notes')}</span>{' '}
                           <span>{arrivedVehicleModalData.arrivedVehicle.notes}</span>
                         </div>
                       )}
@@ -10749,11 +10749,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                         <thead>
                           <tr style={{ background: '#f9fafb' }}>
-                            <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>Nr</th>
-                            <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>Assembly Mark</th>
-                            <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>Toode</th>
-                            <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>Kaal</th>
-                            <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 600 }}>Staatus</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>{t('arrivedModal.tableHeaders.nr')}</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>{t('arrivedModal.tableHeaders.assemblyMark')}</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>{t('arrivedModal.tableHeaders.product')}</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>{t('arrivedModal.tableHeaders.weight')}</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 600 }}>{t('arrivedModal.tableHeaders.status')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -10803,14 +10803,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         <div className="modal-overlay" onClick={() => setShowHistoryModal(false)}>
           <div className="modal history-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Muudatuste ajalugu</h2>
+              <h2>{t('historyModal.title')}</h2>
               <button className="close-btn" onClick={() => setShowHistoryModal(false)}>
                 <FiX />
               </button>
             </div>
             <div className="modal-body">
               {historyData.length === 0 ? (
-                <p className="no-history">Ajalugu puudub</p>
+                <p className="no-history">{t('historyModal.noHistory')}</p>
               ) : (
                 <div className="history-list">
                   {historyData.map(h => (
@@ -10862,19 +10862,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
                 <div style={{ padding: 12, background: '#f0fdf4', borderRadius: 8, textAlign: 'center' }}>
                   <div style={{ fontSize: 24, fontWeight: 700, color: '#16a34a' }}>{comparisonResult.newItems.length}</div>
-                  <div style={{ fontSize: 12, color: '#166534' }}>Uued elemendid</div>
+                  <div style={{ fontSize: 12, color: '#166534' }}>{t('comparisonModal.newItems')}</div>
                 </div>
                 <div style={{ padding: 12, background: '#fef3c7', borderRadius: 8, textAlign: 'center' }}>
                   <div style={{ fontSize: 24, fontWeight: 700, color: '#d97706' }}>{comparisonResult.dateChanges.length}</div>
-                  <div style={{ fontSize: 12, color: '#92400e' }}>Kuupäeva muutused</div>
+                  <div style={{ fontSize: 12, color: '#92400e' }}>{t('comparisonModal.dateChanges')}</div>
                 </div>
                 <div style={{ padding: 12, background: '#dbeafe', borderRadius: 8, textAlign: 'center' }}>
                   <div style={{ fontSize: 24, fontWeight: 700, color: '#2563eb' }}>{comparisonResult.vehicleChanges.length}</div>
-                  <div style={{ fontSize: 12, color: '#1e40af' }}>Veoki muutused</div>
+                  <div style={{ fontSize: 12, color: '#1e40af' }}>{t('comparisonModal.vehicleChanges')}</div>
                 </div>
                 <div style={{ padding: 12, background: '#f3f4f6', borderRadius: 8, textAlign: 'center' }}>
                   <div style={{ fontSize: 24, fontWeight: 700, color: '#6b7280' }}>{comparisonResult.unchanged.length}</div>
-                  <div style={{ fontSize: 12, color: '#4b5563' }}>Muutmata</div>
+                  <div style={{ fontSize: 12, color: '#4b5563' }}>{t('comparisonModal.unchanged')}</div>
                 </div>
               </div>
 
@@ -10883,7 +10883,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 <div style={{ marginBottom: 20, padding: 12, background: '#fef2f2', borderRadius: 8, border: '1px solid #fecaca' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <FiAlertTriangle style={{ color: '#dc2626' }} />
-                    <strong style={{ color: '#991b1b' }}>Hoiatus</strong>
+                    <strong style={{ color: '#991b1b' }}>{t('comparisonModal.warning')}</strong>
                   </div>
                   {comparisonResult.confirmedItemsWithChanges.length > 0 && (
                     <p style={{ margin: '4px 0', fontSize: 13, color: '#7f1d1d' }}>
@@ -10903,7 +10903,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 <div style={{ marginBottom: 20, padding: 12, background: '#fef9c3', borderRadius: 8, border: '1px solid #fde047' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <FiAlertTriangle style={{ color: '#ca8a04' }} />
-                    <strong style={{ color: '#854d0e' }}>Elemendid mida uues graafikus pole</strong>
+                    <strong style={{ color: '#854d0e' }}>{t('comparisonModal.notInImportTitle')}</strong>
                   </div>
                   <p style={{ margin: '4px 0', fontSize: 13, color: '#713f12' }}>
                     {comparisonResult.notInImport.length} elementi on praeguses graafikus, aga uues graafikus neid pole. Need jäävad alles.
@@ -10920,7 +10920,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   type="text"
                   value={importSourceDescription}
                   onChange={(e) => setImportSourceDescription(e.target.value)}
-                  placeholder="Nt: Kliendi graafik 15.01.2026"
+                  placeholder={t('comparisonModal.sourcePlaceholder')}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14 }}
                 />
               </div>
@@ -10935,11 +10935,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                       <thead style={{ position: 'sticky', top: 0, background: '#f9fafb' }}>
                         <tr>
-                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>Märk</th>
-                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>Praegune kuupäev</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>{t('comparisonModal.markHeader')}</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>{t('comparisonModal.currentDate')}</th>
                           <th style={{ padding: '8px 10px', textAlign: 'center' }}>→</th>
-                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>Uus kuupäev</th>
-                          <th style={{ padding: '8px 10px', textAlign: 'center' }}>Staatus</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>{t('comparisonModal.newDate')}</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'center' }}>{t('comparisonModal.statusHeader')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -10950,8 +10950,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             <td style={{ padding: '6px 10px', textAlign: 'center', color: '#9ca3af' }}>→</td>
                             <td style={{ padding: '6px 10px', fontWeight: 500, color: '#d97706' }}>{change.newDate || '—'}</td>
                             <td style={{ padding: '6px 10px', textAlign: 'center' }}>
-                              {change.isArrivalConfirmed && <span style={{ background: '#fecaca', color: '#991b1b', padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>Kinnitatud</span>}
-                              {change.isInstalled && <span style={{ background: '#bbf7d0', color: '#166534', padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>Paigaldatud</span>}
+                              {change.isArrivalConfirmed && <span style={{ background: '#fecaca', color: '#991b1b', padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>{t('comparisonModal.confirmedBadge')}</span>}
+                              {change.isInstalled && <span style={{ background: '#bbf7d0', color: '#166534', padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>{t('comparisonModal.installedBadge')}</span>}
                             </td>
                           </tr>
                         ))}
@@ -10978,11 +10978,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                       <thead style={{ position: 'sticky', top: 0, background: '#f9fafb' }}>
                         <tr>
-                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>Märk</th>
-                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>Praegune veok</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>{t('comparisonModal.markHeader')}</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>{t('comparisonModal.currentVehicle')}</th>
                           <th style={{ padding: '8px 10px', textAlign: 'center' }}>→</th>
-                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>Uus veok</th>
-                          <th style={{ padding: '8px 10px', textAlign: 'center' }}>Staatus</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>{t('comparisonModal.newVehicle')}</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'center' }}>{t('comparisonModal.statusHeader')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -10993,8 +10993,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             <td style={{ padding: '6px 10px', textAlign: 'center', color: '#9ca3af' }}>→</td>
                             <td style={{ padding: '6px 10px', fontWeight: 500, color: '#2563eb' }}>{change.newVehicleCode || '—'}</td>
                             <td style={{ padding: '6px 10px', textAlign: 'center' }}>
-                              {change.isArrivalConfirmed && <span style={{ background: '#fecaca', color: '#991b1b', padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>Kinnitatud</span>}
-                              {change.isInstalled && <span style={{ background: '#bbf7d0', color: '#166534', padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>Paigaldatud</span>}
+                              {change.isArrivalConfirmed && <span style={{ background: '#fecaca', color: '#991b1b', padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>{t('comparisonModal.confirmedBadge')}</span>}
+                              {change.isInstalled && <span style={{ background: '#bbf7d0', color: '#166534', padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>{t('comparisonModal.installedBadge')}</span>}
                             </td>
                           </tr>
                         ))}
@@ -11022,8 +11022,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       <thead style={{ position: 'sticky', top: 0, background: '#f9fafb' }}>
                         <tr>
                           <th style={{ padding: '8px 10px', textAlign: 'left' }}>GUID</th>
-                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>Kuupäev</th>
-                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>Veok</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>{t('columns.date')}</th>
+                          <th style={{ padding: '8px 10px', textAlign: 'left' }}>{t('columns.vehicle')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -11049,7 +11049,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
               {/* Import mode selection */}
               <div style={{ marginTop: 16, padding: 12, background: '#f9fafb', borderRadius: 8 }}>
-                <div style={{ fontWeight: 500, marginBottom: 8 }}>Impordi režiim</div>
+                <div style={{ fontWeight: 500, marginBottom: 8 }}>{t('comparisonModal.importMode')}</div>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, cursor: 'pointer' }}>
                   <input
                     type="radio"
@@ -11058,9 +11058,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     onChange={() => setImportMode('update_all')}
                   />
                   <span>
-                    <strong>Uuenda graafik</strong> - uuenda olemasolevaid elemente ja lisa uued
+                    <strong>{t('comparisonModal.updateAll')}</strong> - {t('comparisonModal.updateAllDesc')}
                     <br />
-                    <span style={{ fontSize: 12, color: '#6b7280' }}>Kinnitatud ja paigaldatud elemendid jäetakse muutmata</span>
+                    <span style={{ fontSize: 12, color: '#6b7280' }}>{t('comparisonModal.updateAllNote')}</span>
                   </span>
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
@@ -11071,7 +11071,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     onChange={() => setImportMode('add_new')}
                   />
                   <span>
-                    <strong>Lisa ainult uued</strong> - olemasolevaid elemente ei muudeta
+                    <strong>{t('comparisonModal.addNewOnly')}</strong> - {t('comparisonModal.addNewOnlyDesc')}
                   </span>
                 </label>
               </div>
@@ -11098,7 +11098,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         <div className="modal-overlay" onClick={() => setShowImportModal(false)}>
           <div className="modal import-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Impordi GUID-id</h2>
+              <h2>{t('importModal.title')}</h2>
               <button className="close-btn" onClick={() => setShowImportModal(false)}>
                 <FiX />
               </button>
@@ -11106,7 +11106,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             <div className="modal-body">
               <div className="form-group">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <label style={{ margin: 0 }}>Lae fail (Excel või CSV)</label>
+                  <label style={{ margin: 0 }}>{t('importModal.uploadFile')}</label>
                   <button
                     type="button"
                     onClick={downloadImportTemplate}
@@ -11135,12 +11135,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 />
               </div>
               <div className="form-group">
-                <label>või kleebi GUID-id (üks rea kohta)</label>
+                <label>{t('importModal.pasteGuids')}</label>
                 <textarea
                   value={importText}
                   onChange={(e) => setImportText(e.target.value)}
                   rows={8}
-                  placeholder="Kleebi siia GUID-id..."
+                  placeholder={t('importModal.pastePlaceholder')}
                 />
               </div>
               {/* Show info if detailed import data was detected */}
@@ -11154,23 +11154,23 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   fontSize: 13
                 }}>
                   <div style={{ fontWeight: 500, color: '#059669', marginBottom: 4 }}>
-                    ✓ Detailne import tuvastatud
+                    ✓ {t('importModal.detailedImportDetected')}
                   </div>
                   <div style={{ color: '#047857' }}>
-                    {parsedImportData.length} rida
-                    {parsedImportData.some(r => r.date) && ' kuupäevadega'}
-                    {parsedImportData.some(r => r.time) && ' kellaaegadega'}
-                    {parsedImportData.some(r => r.vehicleCode) && ' veokitega'}.
-                    {parsedImportData.some(r => r.vehicleCode) && ' Tehas tuvastatakse veoki koodist automaatselt.'}
+                    {t('importModal.rowsInfo', { count: parsedImportData.length })}
+                    {parsedImportData.some(r => r.date) && t('importModal.withDates')}
+                    {parsedImportData.some(r => r.time) && t('importModal.withTimes')}
+                    {parsedImportData.some(r => r.vehicleCode) && t('importModal.withVehicles')}.
+                    {parsedImportData.some(r => r.vehicleCode) && t('importModal.factoryAutoDetect')}
                   </div>
                 </div>
               )}
 
               <div className="form-group">
                 <label>
-                  Kuupäev
+                  {t('importModal.dateLabel')}
                   {parsedImportData.length > 0 && parsedImportData.some(r => r.date) && (
-                    <span style={{ fontWeight: 'normal', color: '#6b7280', marginLeft: 6 }}>(valikuline)</span>
+                    <span style={{ fontWeight: 'normal', color: '#6b7280', marginLeft: 6 }}>{t('importModal.optional')}</span>
                   )}
                 </label>
                 <input
@@ -11181,16 +11181,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </div>
               <div className="form-group">
                 <label>
-                  Tehas
+                  {t('importModal.factoryLabel')}
                   {parsedImportData.length > 0 && parsedImportData.some(r => r.factoryCode || r.vehicleCode) && (
-                    <span style={{ fontWeight: 'normal', color: '#6b7280', marginLeft: 6 }}>(valikuline - tuvastatakse veoki koodist)</span>
+                    <span style={{ fontWeight: 'normal', color: '#6b7280', marginLeft: 6 }}>{t('importModal.factoryOptional')}</span>
                   )}
                 </label>
                 <select
                   value={importFactoryId}
                   onChange={(e) => setImportFactoryId(e.target.value)}
                 >
-                  <option value="">Vali tehas...</option>
+                  <option value="">{t('importModal.selectFactory')}</option>
                   {factories.map(f => (
                     <option key={f.id} value={f.id}>{f.factory_name} ({f.factory_code})</option>
                   ))}
@@ -11321,9 +11321,9 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                 borderBottom: '1px solid #e2e8f0'
               }}>
                 <div style={{ marginBottom: 8, fontSize: 13, color: '#475569', fontWeight: 500 }}>
-                  {importProgress.stage === 'searching' && '🔍 Otsin mudelitest...'}
-                  {importProgress.stage === 'fetching' && '📥 Loen andmeid mudelist...'}
-                  {importProgress.stage === 'saving' && '💾 Salvestan andmebaasi...'}
+                  {importProgress.stage === 'searching' && t('importModal.searchingModels')}
+                  {importProgress.stage === 'fetching' && t('importModal.readingModel')}
+                  {importProgress.stage === 'saving' && t('importModal.savingToDb')}
                 </div>
                 <div style={{
                   width: '100%',
@@ -11353,25 +11353,25 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                 if (!importText.trim()) {
                   return (
                     <div style={{ flex: 1, color: '#dc2626', fontSize: 13 }}>
-                      ⚠️ Lae fail või kleebi GUID-id
+                      ⚠️ {t('importModal.validationUploadOrPaste')}
                     </div>
                   );
                 }
                 const hasDetailedVehicles = parsedImportData.length > 0 && parsedImportData.some(r => r.vehicleCode);
                 if (!hasDetailedVehicles && (!importFactoryId || !addModalDate)) {
                   const missing = [];
-                  if (!importFactoryId) missing.push('tehas');
-                  if (!addModalDate) missing.push('kuupäev');
+                  if (!importFactoryId) missing.push(t('importModal.factory'));
+                  if (!addModalDate) missing.push(t('importModal.date'));
                   return (
                     <div style={{ flex: 1, color: '#dc2626', fontSize: 13 }}>
-                      ⚠️ Vali {missing.join(' ja ')}
+                      ⚠️ {t('importModal.validationSelectMissing', { missing: missing.join(t('importModal.and')) })}
                     </div>
                   );
                 }
                 return <div style={{ flex: 1 }} />;
               })()}
               <button className="cancel-btn" onClick={() => setShowImportModal(false)}>
-                Tühista
+                {t('ui.cancel')}
               </button>
               {/* Compare button - shown when there are existing items */}
               {items.length > 0 && parsedImportData.length > 0 && (
@@ -11381,7 +11381,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                   onClick={handleCompareBeforeImport}
                   style={{ background: '#f59e0b', marginRight: 8 }}
                 >
-                  {comparisonLoading ? 'Võrdlen...' : 'Võrdle graafikut'}
+                  {comparisonLoading ? t('importModal.comparing') : t('importModal.compareSchedule')}
                 </button>
               )}
               <button
@@ -11409,7 +11409,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                   handleImport();
                 }}
               >
-                {importing ? 'Importimisel...' : 'Impordi uued'}
+                {importing ? t('actions.importing') : t('importModal.importNew')}
               </button>
             </div>
           </div>
@@ -11421,14 +11421,14 @@ ${importText.split('\n').slice(0, 5).join('\n')}
         <div className="modal-overlay" onClick={() => setShowExportModal(false)}>
           <div className="modal export-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Ekspordi Excel</h2>
+              <h2>{t('exportModal.title')}</h2>
               <button className="close-btn" onClick={() => setShowExportModal(false)}>
                 <FiX />
               </button>
             </div>
             <div className="modal-body">
               {/* Language selection */}
-              <h4>Keel / Language</h4>
+              <h4>{t('exportModal.languageTitle')}</h4>
               <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                 <button
                   onClick={() => setExportLanguage('et')}
@@ -11443,7 +11443,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                     fontWeight: 500
                   }}
                 >
-                  🇪🇪 Eesti
+                  🇪🇪 {t('exportModal.estonian')}
                 </button>
                 <button
                   onClick={() => setExportLanguage('en')}
@@ -11458,10 +11458,10 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                     fontWeight: 500
                   }}
                 >
-                  🇬🇧 English
+                  🇬🇧 {t('exportModal.english')}
                 </button>
               </div>
-              <h4>Veerud</h4>
+              <h4>{t('exportModal.columnsTitle')}</h4>
               <div className="column-list">
                 {exportColumns.map(col => (
                   <label key={col.id} className="column-checkbox">
@@ -11481,10 +11481,10 @@ ${importText.split('\n').slice(0, 5).join('\n')}
             </div>
             <div className="modal-footer">
               <button className="cancel-btn" onClick={() => setShowExportModal(false)}>
-                {exportLanguage === 'en' ? 'Cancel' : 'Tühista'}
+                {exportLanguage === 'en' ? t('exportModal.cancelEn') : t('exportModal.cancelEt')}
               </button>
               <button className="submit-btn primary" onClick={exportToExcel}>
-                <FiDownload /> {exportLanguage === 'en' ? 'Export' : 'Ekspordi'}
+                <FiDownload /> {exportLanguage === 'en' ? t('exportModal.exportEn') : t('exportModal.exportEt')}
               </button>
             </div>
           </div>
@@ -11506,13 +11506,13 @@ ${importText.split('\n').slice(0, 5).join('\n')}
             }}
           >
             <div className="modal-header" style={{ flexShrink: 0 }}>
-              <h2>Tabeli redaktor</h2>
+              <h2>{t('tableEditor.title')}</h2>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '12px', color: '#64748b' }}>
-                  {tableEditorData.length} rida
+                  {t('tableEditor.rows', { count: tableEditorData.length })}
                   {tableEditorData.filter(r => r.modified).length > 0 && (
                     <span style={{ color: '#f59e0b', marginLeft: '8px' }}>
-                      ({tableEditorData.filter(r => r.modified).length} muudetud)
+                      ({t('tableEditor.modified', { count: tableEditorData.filter(r => r.modified).length })})
                     </span>
                   )}
                 </span>
@@ -11536,11 +11536,11 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                 }}>
                   <tr>
                     <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '40px' }}>#</th>
-                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '100px' }}>Veok</th>
-                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '110px' }}>Kuupäev</th>
-                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '80px' }}>Kellaaeg</th>
-                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '120px' }}>Assembly Mark</th>
-                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '80px' }}>Kaal</th>
+                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '100px' }}>{t('columns.vehicle')}</th>
+                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '110px' }}>{t('columns.date')}</th>
+                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '80px' }}>{t('columns.time')}</th>
+                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '120px' }}>{t('columns.mark')}</th>
+                    <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left', width: '80px' }}>{t('columns.weight')}</th>
                     <th style={{ padding: '8px', borderBottom: '2px solid #e2e8f0', textAlign: 'left' }}>GUID</th>
                   </tr>
                 </thead>
@@ -11759,7 +11759,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
         <div className="modal-overlay" onClick={() => setShowFactoryModal(false)}>
           <div className="modal factory-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Tehaste haldus</h2>
+              <h2>{t('toolbar.factories')}</h2>
               <button className="close-btn" onClick={() => setShowFactoryModal(false)}>
                 <FiX />
               </button>
@@ -11767,7 +11767,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
             <div className="modal-body">
               {/* Project-level separator setting */}
               <div className="project-separator-setting">
-                <label>Veoki koodi eraldaja:</label>
+                <label>{t('factoryModal.separator')}:</label>
                 <div className="separator-options">
                   {['', '.', ',', '-', '|'].map(sep => (
                     <button
@@ -11805,11 +11805,11 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                       }}
                       disabled={saving}
                     >
-                      {sep || 'tühi'}
+                      {sep || t('factoryModal.empty')}
                     </button>
                   ))}
                 </div>
-                <span className="separator-preview">Näidis: ABC{factories[0]?.vehicle_separator || ''}1</span>
+                <span className="separator-preview">{t('factoryModal.separatorPreview', { sep: factories[0]?.vehicle_separator || '' })}</span>
               </div>
 
               {/* Factory list */}
@@ -11822,14 +11822,14 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                           type="text"
                           value={editFactoryName}
                           onChange={(e) => setEditFactoryName(e.target.value)}
-                          placeholder="Nimi"
+                          placeholder={t('factoryModal.editName')}
                           className="factory-edit-input"
                         />
                         <input
                           type="text"
                           value={editFactoryCode}
                           onChange={(e) => setEditFactoryCode(e.target.value.toUpperCase())}
-                          placeholder="Kood"
+                          placeholder={t('factoryModal.editCode')}
                           maxLength={5}
                           className="factory-edit-input factory-code-input"
                         />
@@ -11863,13 +11863,13 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                 <div className="form-row">
                   <input
                     type="text"
-                    placeholder="Tehase nimi"
+                    placeholder={t('factoryModal.factoryName')}
                     value={newFactoryName}
                     onChange={(e) => setNewFactoryName(e.target.value)}
                   />
                   <input
                     type="text"
-                    placeholder="Kood"
+                    placeholder={t('factoryModal.factoryCode')}
                     value={newFactoryCode}
                     onChange={(e) => setNewFactoryCode(e.target.value.toUpperCase())}
                     maxLength={5}
@@ -11887,7 +11887,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
             </div>
             <div className="modal-footer">
               <button className="cancel-btn" onClick={() => setShowFactoryModal(false)}>
-                Sulge
+                {t('ui.close')}
               </button>
             </div>
           </div>
@@ -11899,12 +11899,12 @@ ${importText.split('\n').slice(0, 5).join('\n')}
         <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
           <div className="settings-modal compact" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Mängimise seaded</h3>
+              <h3>{t('settingsModal.title')}</h3>
               <button onClick={() => setShowSettingsModal(false)}><FiX size={18} /></button>
             </div>
             <div className="modal-body">
               <div className="setting-group">
-                <span className="setting-group-label">Mahamängimise režiim</span>
+                <span className="setting-group-label">{t('settingsModal.playbackMode')}</span>
                 <label className="setting-option-compact">
                   <input
                     type="radio"
@@ -11916,8 +11916,8 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                     }))}
                   />
                   <div className="setting-text">
-                    <span>Veokite kaupa</span>
-                    <small>Mängi maha veok haaval</small>
+                    <span>{t('settingsModal.byVehicle')}</span>
+                    <small>{t('settingsModal.byVehicleDesc')}</small>
                   </div>
                 </label>
 
@@ -11932,8 +11932,8 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                     }))}
                   />
                   <div className="setting-text">
-                    <span>Kuupäevade kaupa</span>
-                    <small>Mängi maha päev haaval</small>
+                    <span>{t('settingsModal.byDate')}</span>
+                    <small>{t('settingsModal.byDateDesc')}</small>
                   </div>
                 </label>
               </div>
@@ -11950,8 +11950,8 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                   }))}
                 />
                 <div className="setting-text">
-                  <span>Veoki ülevaade</span>
-                  <small>Näita veoki kokkuvõtet pärast lõppu</small>
+                  <span>{t('settingsModal.vehicleOverview')}</span>
+                  <small>{t('settingsModal.vehicleOverviewDesc')}</small>
                 </div>
               </label>
 
@@ -11965,8 +11965,8 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                   }))}
                 />
                 <div className="setting-text">
-                  <span>Ava veoki detailid</span>
-                  <small>Laienda veoki listi esitamise ajal</small>
+                  <span>{t('settingsModal.expandItems')}</span>
+                  <small>{t('settingsModal.expandItemsDesc')}</small>
                 </div>
               </label>
 
@@ -11980,8 +11980,8 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                   }))}
                 />
                 <div className="setting-text">
-                  <span>Ilma zoomita</span>
-                  <small>Ära zoomi detailide juurde</small>
+                  <span>{t('settingsModal.noZoom')}</span>
+                  <small>{t('settingsModal.noZoomDesc')}</small>
                 </div>
               </label>
 
@@ -11995,35 +11995,35 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                   }))}
                 />
                 <div className="setting-text">
-                  <span>Vali detailid mudelis</span>
-                  <small>Märgista detailid mudelis esitamise ajal</small>
+                  <span>{t('settingsModal.selectItemsInModel')}</span>
+                  <small>{t('settingsModal.selectItemsInModelDesc')}</small>
                 </div>
               </label>
 
               {/* Danger zone */}
               <div className="setting-divider" />
               <div className="danger-zone">
-                <span className="danger-zone-title">Ohtlik tsoon</span>
+                <span className="danger-zone-title">{t('settingsModal.dangerZone')}</span>
                 {!showDeleteAllConfirm ? (
                   <button
                     className="danger-btn"
                     onClick={() => setShowDeleteAllConfirm(true)}
                   >
                     <FiTrash2 size={14} />
-                    Kustuta kõik andmed
+                    {t('settingsModal.deleteAllData')}
                   </button>
                 ) : (
                   <div className="delete-confirm-box">
                     <p className="delete-warning">
                       <FiAlertTriangle size={16} />
-                      <strong>HOIATUS!</strong> See kustutab KÕIK:
+                      <strong>{t('comparisonModal.warning')}!</strong> {t('settingsModal.deleteWarning')}
                     </p>
                     <ul className="delete-list">
-                      <li>{items.length} detaili</li>
-                      <li>{vehicles.length} veoki(t)</li>
-                      <li>{factories.length} tehast/tehaseid</li>
+                      <li>{t('settingsModal.deleteItems', { count: items.length })}</li>
+                      <li>{t('settingsModal.deleteVehicles', { count: vehicles.length })}</li>
+                      <li>{t('settingsModal.deleteFactories', { count: factories.length })}</li>
                     </ul>
-                    <p className="delete-warning-small">Seda tegevust EI SAA tagasi võtta!</p>
+                    <p className="delete-warning-small">{t('settingsModal.deleteIrreversible')}</p>
                     <div className="delete-confirm-buttons">
                       <button
                         className="cancel-btn"
@@ -12053,7 +12053,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
         <div className="modal-overlay" onClick={() => setShowSheetsModal(false)}>
           <div className="modal settings-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2><FiExternalLink style={{ marginRight: 8 }} />Google Sheets Sünkroonimine</h2>
+              <h2><FiExternalLink style={{ marginRight: 8 }} />{t('sheetsModal.title')}</h2>
               <button className="close-btn" onClick={() => setShowSheetsModal(false)}>
                 <FiX />
               </button>
@@ -12063,21 +12063,21 @@ ${importText.split('\n').slice(0, 5).join('\n')}
               {sheetsLoading ? (
                 <div style={{ textAlign: 'center', padding: 40 }}>
                   <FiRefreshCw className="spin" size={24} />
-                  <p>Laadin...</p>
+                  <p>{t('ui.loading')}</p>
                 </div>
               ) : !sheetsConfig ? (
                 <div className="sheets-not-initialized">
                   <div style={{ textAlign: 'center', padding: '20px 0' }}>
                     <FiExternalLink size={48} style={{ color: '#9ca3af', marginBottom: 16 }} />
                     <p style={{ marginBottom: 16, color: '#374151' }}>
-                      Google Sheets sünkroonimine pole veel seadistatud.
+                      {t('sheetsModal.notInitialized')}
                     </p>
                     <button
                       className="submit-btn primary"
                       onClick={initializeSheetsConfig}
                     >
                       <FiPlus style={{ marginRight: 8 }} />
-                      Seadista sünkroonimine
+                      {t('sheetsModal.setupSync')}
                     </button>
                   </div>
                   <div className="sheets-hint" style={{
@@ -12088,11 +12088,11 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                     fontSize: 13,
                     color: '#6b7280'
                   }}>
-                    <strong>Järgmised sammud pärast seadistamist:</strong>
+                    <strong>{t('sheetsModal.nextSteps')}</strong>
                     <ol style={{ marginTop: 8, paddingLeft: 20 }}>
-                      <li>Ava Google Apps Script</li>
-                      <li>Käivita <code>initializeSheet()</code> funktsioon</li>
-                      <li>Sheet luuakse automaatselt</li>
+                      <li>{t('sheetsModal.step1')}</li>
+                      <li>{t('sheetsModal.step2')}</li>
+                      <li>{t('sheetsModal.step3')}</li>
                     </ol>
                   </div>
                 </div>
@@ -12100,19 +12100,19 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                 <div className="sheets-config">
                   {/* Status */}
                   <div className="sheets-status-row">
-                    <span>Staatus:</span>
+                    <span>{t('sheetsModal.status')}</span>
                     <span className={`sheets-status-badge ${sheetsConfig.sync_status}`}>
-                      {sheetsConfig.sync_status === 'not_initialized' && '⚪ Ootab initsialiseerimist'}
-                      {sheetsConfig.sync_status === 'idle' && '🟢 Valmis'}
-                      {sheetsConfig.sync_status === 'syncing' && '🔄 Sünkroonib...'}
-                      {sheetsConfig.sync_status === 'error' && '🔴 Viga'}
+                      {sheetsConfig.sync_status === 'not_initialized' && t('sheetsModal.statusNotInitialized')}
+                      {sheetsConfig.sync_status === 'idle' && t('sheetsModal.statusIdle')}
+                      {sheetsConfig.sync_status === 'syncing' && t('sheetsModal.statusSyncing')}
+                      {sheetsConfig.sync_status === 'error' && t('sheetsModal.statusError')}
                     </span>
                   </div>
 
                   {/* Sheet Link */}
                   {sheetsConfig.google_spreadsheet_url ? (
                     <div className="sheets-link-row">
-                      <span>Google Sheet:</span>
+                      <span>{t('sheetsModal.sheetLink')}</span>
                       <a
                         href={sheetsConfig.google_spreadsheet_url}
                         target="_blank"
@@ -12120,13 +12120,13 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                         className="sheets-link"
                       >
                         <FiExternalLink style={{ marginRight: 4 }} />
-                        Ava Sheets'is
+                        {t('sheetsModal.openInSheets')}
                       </a>
                     </div>
                   ) : (
                     <div className="sheets-pending">
                       <FiClock style={{ marginRight: 8 }} />
-                      Sheet pole veel loodud. Käivita Google Apps Scriptis <code>initializeSheet()</code>
+                      {t('sheetsModal.sheetNotCreated')}
                       <button
                         className="refresh-btn"
                         onClick={refreshSheetsConfig}
@@ -12140,14 +12140,14 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                   {/* Sync times */}
                   <div className="sheets-times">
                     <div className="sheets-time-row">
-                      <span>Viimane sünkr. Sheeti:</span>
+                      <span>{t('sheetsModal.lastSyncToSheets')}</span>
                       <span>{sheetsConfig.last_sync_to_sheets
                         ? new Date(sheetsConfig.last_sync_to_sheets).toLocaleString('et-EE')
                         : '-'
                       }</span>
                     </div>
                     <div className="sheets-time-row">
-                      <span>Viimane sünkr. Sheetist:</span>
+                      <span>{t('sheetsModal.lastSyncFromSheets')}</span>
                       <span>{sheetsConfig.last_sync_from_sheets
                         ? new Date(sheetsConfig.last_sync_from_sheets).toLocaleString('et-EE')
                         : '-'
@@ -12160,7 +12160,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                     <div className="sheets-error">
                       <FiAlertTriangle style={{ marginRight: 8 }} />
                       <div>
-                        <strong>Viimane viga:</strong>
+                        <strong>{t('sheetsModal.lastError')}</strong>
                         <code>{sheetsConfig.last_error}</code>
                       </div>
                     </div>
@@ -12174,28 +12174,28 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                         checked={sheetsConfig.sync_enabled}
                         onChange={(e) => toggleSheetsSync(e.target.checked)}
                       />
-                      <span>Automaatne sünkroonimine aktiivne</span>
+                      <span>{t('sheetsModal.autoSync')}</span>
                     </label>
                   </div>
 
                   {/* Logs */}
                   {sheetsLogs.length > 0 && (
                     <div className="sheets-logs">
-                      <h4>Viimased sünkroonimised</h4>
+                      <h4>{t('sheetsModal.recentSyncs')}</h4>
                       <table className="sheets-logs-table">
                         <thead>
                           <tr>
-                            <th>Aeg</th>
-                            <th>Suund</th>
-                            <th>Veokeid</th>
-                            <th>Kestus</th>
+                            <th>{t('sheetsModal.timeHeader')}</th>
+                            <th>{t('sheetsModal.directionHeader')}</th>
+                            <th>{t('sheetsModal.vehiclesHeader')}</th>
+                            <th>{t('sheetsModal.durationHeader')}</th>
                           </tr>
                         </thead>
                         <tbody>
                           {sheetsLogs.slice(0, 5).map(log => (
                             <tr key={log.id} className={log.errors_count > 0 ? 'has-error' : ''}>
                               <td>{new Date(log.started_at).toLocaleString('et-EE')}</td>
-                              <td>{log.sync_direction === 'to_sheets' ? '→ Sheets' : '← Sheets'}</td>
+                              <td>{log.sync_direction === 'to_sheets' ? t('sheetsModal.toSheets') : t('sheetsModal.fromSheets')}</td>
                               <td>{log.vehicles_processed}</td>
                               <td>{log.duration_ms ? `${log.duration_ms}ms` : '-'}</td>
                             </tr>
@@ -12210,7 +12210,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
 
             <div className="modal-footer">
               <button className="cancel-btn" onClick={() => setShowSheetsModal(false)}>
-                Sulge
+                {t('ui.close')}
               </button>
             </div>
           </div>
@@ -12243,7 +12243,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
               {/* Existing comments */}
               <div className="comments-list">
                 {getCommentsFor(commentModalTarget.type, commentModalTarget.id).length === 0 ? (
-                  <div className="no-comments">Kommentaare pole</div>
+                  <div className="no-comments">{t('commentModal.noComments')}</div>
                 ) : (
                   getCommentsFor(commentModalTarget.type, commentModalTarget.id).map(comment => {
                     const isOwner = comment.created_by === tcUserEmail;
@@ -12280,7 +12280,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                 <textarea
                   value={newCommentText}
                   onChange={e => setNewCommentText(e.target.value)}
-                  placeholder="Lisa kommentaar..."
+                  placeholder={t('commentModal.addPlaceholder')}
                   rows={3}
                   className="comment-textarea"
                 />
@@ -12302,7 +12302,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
         <div className="modal-overlay" onClick={() => setShowItemEditModal(false)}>
           <div className="modal item-edit-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Muuda detaili: {editingItem.assembly_mark}</h2>
+              <h2>{t('itemEditModal.title', { mark: editingItem.assembly_mark })}</h2>
               <button className="close-btn" onClick={() => setShowItemEditModal(false)}>
                 <FiX />
               </button>
@@ -12310,12 +12310,12 @@ ${importText.split('\n').slice(0, 5).join('\n')}
             <div className="modal-body">
               <div className="form-row">
                 <div className="form-group">
-                  <label><FiTruck style={{ marginRight: 4 }} />Veok</label>
+                  <label><FiTruck style={{ marginRight: 4 }} />{t('itemEditModal.vehicleLabel')}</label>
                   <select
                     value={itemEditVehicleId}
                     onChange={(e) => setItemEditVehicleId(e.target.value)}
                   >
-                    <option value="">- Pole määratud -</option>
+                    <option value="">{t('itemEditModal.notAssigned')}</option>
                     {vehicles
                       .sort((a, b) => {
                         if (!a.scheduled_date && !b.scheduled_date) return a.vehicle_code.localeCompare(b.vehicle_code);
@@ -12344,7 +12344,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
               </div>
 
               <div className="form-section">
-                <h4>Mahalaadimise ressursid</h4>
+                <h4>{t('itemEditModal.unloadResources')}</h4>
                 <div className="methods-grid">
                   {UNLOAD_METHODS.map(method => {
                     const count = itemEditUnloadMethods[method.key] || 0;
@@ -12378,7 +12378,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
               </div>
 
               <div className="form-group">
-                <label>Märkused</label>
+                <label>{t('itemEditModal.notes')}</label>
                 <textarea
                   value={itemEditNotes}
                   onChange={(e) => setItemEditNotes(e.target.value)}
@@ -12389,7 +12389,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
 
               {/* Photo upload section */}
               <div className="form-section">
-                <h4><FiCamera style={{ marginRight: 4 }} />Pilt (Foto)</h4>
+                <h4><FiCamera style={{ marginRight: 4 }} />{t('itemEditModal.photoTitle')}</h4>
 
                 {/* Existing photos */}
                 {itemEditPhotoUrl && itemEditPhotoUrl.split(',').filter(Boolean).length > 0 && (
@@ -12467,7 +12467,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                     }}
                   >
                     <FiCamera size={16} />
-                    <span>Pildista</span>
+                    <span>{t('itemEditModal.takePhoto')}</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -12496,7 +12496,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                     }}
                   >
                     <FiImage size={16} />
-                    <span>Galerii</span>
+                    <span>{t('itemEditModal.gallery')}</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -12516,25 +12516,25 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                       fontSize: '13px'
                     }}>
                       <FiRefreshCw size={14} className="spin" />
-                      Laadin üles...
+                      {t('itemEditModal.uploading')}
                     </span>
                   )}
                 </div>
               </div>
 
               <div className="item-info-section">
-                <h4>Detaili info</h4>
+                <h4>{t('itemEditModal.itemInfo')}</h4>
                 <div className="info-grid">
                   <div className="info-row">
-                    <span className="info-label">Toode:</span>
+                    <span className="info-label">{t('itemEditModal.product')}</span>
                     <span className="info-value">{editingItem.product_name || '-'}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Kaal:</span>
+                    <span className="info-label">{t('itemEditModal.weight')}</span>
                     <span className="info-value">{editingItem.cast_unit_weight ? `${Math.round(parseFloat(editingItem.cast_unit_weight))} kg` : '-'}</span>
                   </div>
                   <div className="info-row">
-                    <span className="info-label">Positsioon:</span>
+                    <span className="info-label">{t('itemEditModal.position')}</span>
                     <span className="info-value">{editingItem.cast_unit_position_code || '-'}</span>
                   </div>
                 </div>
@@ -12542,7 +12542,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
             </div>
             <div className="modal-footer">
               <button className="cancel-btn" onClick={() => setShowItemEditModal(false)}>
-                Tühista
+                {t('ui.cancel')}
               </button>
               <button
                 className="submit-btn primary"
@@ -12574,16 +12574,16 @@ ${importText.split('\n').slice(0, 5).join('\n')}
           <div className="settings-modal compact assembly-modal">
             <div className="modal-body" style={{ textAlign: 'center', padding: '24px' }}>
               <p style={{ marginBottom: '16px', color: '#374151' }}>
-                Jätkamine pole võimalik, kuna lülitasid Assembly valiku välja.
+                {t('assemblyModal.cannotContinue')}
               </p>
               <p style={{ marginBottom: '20px', color: '#6b7280', fontSize: '13px' }}>
-                Tarnegraafiku kasutamiseks peab Assembly Selection olema sisse lülitatud.
+                {t('assemblyModal.requiresAssembly')}
               </p>
               <button
                 className="assembly-enable-btn"
                 onClick={enableAssemblySelection}
               >
-                Lülita Assembly Selection sisse
+                {t('assemblyModal.enableAssembly')}
               </button>
             </div>
           </div>

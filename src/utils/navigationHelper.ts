@@ -1,4 +1,5 @@
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
+import i18n from '../i18n';
 import { supabase } from '../supabase';
 
 // localStorage key for EOS2 -> Assembly Inspector communication
@@ -109,14 +110,14 @@ export async function navigateToInspection(
   };
 
   try {
-    updateStatus('Kontrollin mudelit...');
+    updateStatus(i18n.t('errors:navigation.checkingModel'));
 
     // Check if model is loaded
     const loadedModels = await api.viewer.getModels('loaded');
     const isModelLoaded = loadedModels.some(m => m.id === inspection.model_id);
 
     if (!isModelLoaded) {
-      updateStatus('Laadin mudelit...');
+      updateStatus(i18n.t('errors:navigation.loadingModel'));
       // Try to load the model
       try {
         await api.viewer.toggleModel(inspection.model_id, true, false);
@@ -124,7 +125,7 @@ export async function navigateToInspection(
         await new Promise(resolve => setTimeout(resolve, 2000));
       } catch (e) {
         console.error('Failed to load model:', e);
-        updateStatus('Mudeli laadimine ebaõnnestus');
+        updateStatus(i18n.t('errors:navigation.modelLoadFailed'));
         return false;
       }
     }
@@ -134,7 +135,7 @@ export async function navigateToInspection(
     const guid = inspection.guid || inspection.guid_ifc;
 
     if (guid) {
-      updateStatus('Otsin objekti GUID järgi...');
+      updateStatus(i18n.t('errors:navigation.searchingByGuid'));
       try {
         const runtimeIds = await api.viewer.convertToObjectRuntimeIds(
           inspection.model_id,
@@ -149,7 +150,7 @@ export async function navigateToInspection(
       }
     }
 
-    updateStatus('Värvin objekte...');
+    updateStatus(i18n.t('errors:navigation.coloringObjects'));
 
     // Reset all colors to white
     await api.viewer.setObjectState(undefined, {
@@ -170,7 +171,7 @@ export async function navigateToInspection(
       { color: { r: 34, g: 197, b: 94, a: 255 } } // Green
     );
 
-    updateStatus('Navigeerin objektini...');
+    updateStatus(i18n.t('errors:navigation.navigatingToObject'));
 
     // Zoom to the object
     await api.viewer.setCamera(
@@ -194,12 +195,12 @@ export async function navigateToInspection(
       'set'
     );
 
-    updateStatus(`Navigeeritud: ${inspection.assembly_mark || 'Object'}`);
+    updateStatus(i18n.t('errors:navigation.navigatedTo', { mark: inspection.assembly_mark || 'Object' }));
 
     return true;
   } catch (e) {
     console.error('Navigation failed:', e);
-    updateStatus('Navigeerimine ebaõnnestus');
+    updateStatus(i18n.t('errors:navigation.navigationFailed'));
     return false;
   }
 }

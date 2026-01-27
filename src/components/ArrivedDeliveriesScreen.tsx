@@ -57,12 +57,12 @@ interface UnloadResourceConfig {
 
 const UNLOAD_RESOURCES: UnloadResourceConfig[] = [
   // Machines
-  { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, category: 'machine' },
-  { key: 'forklift', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, category: 'machine' },
-  { key: 'poomtostuk', label: 'Korvtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 4, category: 'machine' },
-  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 1, category: 'machine' },
+  { key: 'crane', label: 'equipment.crane', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, category: 'machine' },
+  { key: 'forklift', label: 'equipment.telescopic', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, category: 'machine' },
+  { key: 'poomtostuk', label: 'equipment.boomLift', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 4, category: 'machine' },
+  { key: 'manual', label: 'equipment.manual', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 1, category: 'machine' },
   // Labor
-  { key: 'workforce', label: 'Tööjõud', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 6, category: 'labor' },
+  { key: 'workforce', label: 'equipment.workers', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 6, category: 'labor' },
 ];
 
 // Color type for model coloring
@@ -1340,7 +1340,7 @@ export default function ArrivedDeliveriesScreen({
           factory_id: unplannedFactoryId || null,
           scheduled_date: selectedDate,
           is_unplanned: true,
-          notes: unplannedNotes || 'Planeerimata veok',
+          notes: unplannedNotes || t('arrivals.addVehicle'),
           status: 'pending',
           sort_order: vehicles.length,
           created_by: tcUserEmail,
@@ -1360,7 +1360,7 @@ export default function ArrivedDeliveriesScreen({
           arrival_date: selectedDate,
           arrival_time: null, // User should enter time manually
           is_confirmed: false,
-          notes: unplannedNotes || 'Planeerimata veok',
+          notes: unplannedNotes || t('arrivals.addVehicle'),
           created_by: tcUserEmail,
           updated_by: tcUserEmail
         })
@@ -1475,7 +1475,7 @@ export default function ArrivedDeliveriesScreen({
             change_type: 'status_changed',
             old_status: item.status,
             new_status: 'missing',
-            change_reason: 'Puudub saabunud veokist',
+            change_reason: t('arrivals.markedMissing'),
             changed_by: tcUserEmail,
             is_snapshot: false
           });
@@ -1499,7 +1499,7 @@ export default function ArrivedDeliveriesScreen({
         : getVehicleItems(arrivedVehicles.find(av => av.id === arrivedVehicleId)?.vehicle_id || '');
 
       if (itemsToConfirm.length === 0) {
-        setMessage('Pole detaile kinnitamiseks');
+        setMessage(t('arrivals.noSearchResults'));
         return;
       }
 
@@ -1615,13 +1615,13 @@ export default function ArrivedDeliveriesScreen({
       console.log('[confirmSelectedItems] Confirmations reloaded');
       setSelectedItemsForConfirm(new Set());
       const statusLabels: Record<ArrivalItemStatus, string> = {
-        confirmed: 'kinnitatud',
-        missing: 'märgitud puuduvaks',
-        wrong_vehicle: 'muudetud', // Legacy - pole enam kasutusel
-        pending: 'ootel',
-        added: 'lisatud'
+        confirmed: t('arrivals.confirmed').toLowerCase(),
+        missing: t('arrivals.markedMissing'),
+        wrong_vehicle: t('arrivals.confirmed').toLowerCase(),
+        pending: t('arrivals.pending').toLowerCase(),
+        added: t('delivery:itemStatus.added').toLowerCase()
       };
-      setMessage(`${selectedItemIds.length} detaili ${statusLabels[status]}`);
+      setMessage(`${selectedItemIds.length} ${statusLabels[status]}`);
     } catch (e: any) {
       console.error('Error confirming selected items:', e);
       setMessage(t('delivery:messages.genericError') + ': ' + e.message);
@@ -1826,7 +1826,7 @@ export default function ArrivedDeliveriesScreen({
     if (url) {
       try {
         await navigator.clipboard.writeText(url);
-        setMessage('Link kopeeritud lõikelauale');
+        setMessage(t('arrivals.linkCopiedToClipboard'));
       } catch {
         // Fallback for older browsers
         const textArea = document.createElement('textarea');
@@ -1835,7 +1835,7 @@ export default function ArrivedDeliveriesScreen({
         textArea.select();
         document.execCommand('copy');
         document.body.removeChild(textArea);
-        setMessage('Link kopeeritud lõikelauale');
+        setMessage(t('arrivals.linkCopiedToClipboard'));
       }
     }
   };
@@ -1894,7 +1894,7 @@ export default function ArrivedDeliveriesScreen({
         old_vehicle_code: sourceVehicle?.vehicle_code,
         new_vehicle_id: arrival.vehicle_id,
         new_vehicle_code: getVehicle(arrival.vehicle_id)?.vehicle_code,
-        change_reason: 'Saabumise kontroll: tegelikult saabus selle veokiga',
+        change_reason: t('arrivals.addedFromModelDuringArrival'),
         changed_by: tcUserEmail,
         is_snapshot: false
       });
@@ -1906,7 +1906,7 @@ export default function ArrivedDeliveriesScreen({
         updateItemColor(item.guid_ifc, 'added_from_vehicle');
       }
 
-      setMessage('Detail lisatud');
+      setMessage(t('arrivals.addItemBtn'));
     } catch (e: any) {
       console.error('Error adding item:', e);
       setMessage(t('delivery:messages.genericError') + ': ' + e.message);
@@ -1955,7 +1955,7 @@ export default function ArrivedDeliveriesScreen({
           status: 'added',
           source_vehicle_id: null, // No source - brand new item
           source_vehicle_code: null,
-          notes: `Lisatud mudelist (polnud tarnegraafikus)`,
+          notes: t('arrivals.addedFromModelNotInSchedule'),
           confirmed_at: new Date().toISOString(),
           confirmed_by: tcUserEmail
         });
@@ -1968,7 +1968,7 @@ export default function ArrivedDeliveriesScreen({
         change_type: 'created',
         new_vehicle_id: arrival.vehicle_id,
         new_vehicle_code: currentVehicle?.vehicle_code,
-        change_reason: 'Lisatud mudelist saabumise kontrolli käigus',
+        change_reason: t('arrivals.addedFromModelDuringArrival'),
         changed_by: tcUserEmail,
         is_snapshot: false
       });
@@ -1987,7 +1987,7 @@ export default function ArrivedDeliveriesScreen({
 
   // Remove item that was added from model (deletes both confirmation and delivery item)
   const removeModelAddedItem = async (confirmationId: string, itemId: string) => {
-    if (!confirm('Kas oled kindel, et soovid selle detaili eemaldada?')) return;
+    if (!confirm(t('arrivals.confirmRemoveItem'))) return;
 
     setSaving(true);
     try {
@@ -2030,7 +2030,7 @@ export default function ArrivedDeliveriesScreen({
 
       // Reload data
       await Promise.all([loadItems(), loadConfirmations()]);
-      setMessage('Detail eemaldatud');
+      setMessage(t('buttons.delete'));
     } catch (e: any) {
       console.error('Error removing model-added item:', e);
       setMessage(t('arrivals.removeItemError', { message: e.message }));
@@ -2041,7 +2041,7 @@ export default function ArrivedDeliveriesScreen({
 
   // Remove item that was added from another vehicle (moves item back to original vehicle)
   const removeAddedItem = async (confirmationId: string, itemId: string, sourceVehicleId: string) => {
-    if (!confirm('Kas oled kindel, et soovid selle detaili eemaldada? Detail tõstetakse tagasi algsesse veokisse.')) return;
+    if (!confirm(t('arrivals.confirmRemoveItemMoveBack'))) return;
 
     setSaving(true);
     try {
@@ -2128,9 +2128,9 @@ export default function ArrivedDeliveriesScreen({
 
       await loadPhotos();
       const typeLabels: Record<ArrivalPhotoType, string> = {
-        general: 'Fotod üles laetud',
-        delivery_note: 'Saatelehed üles laetud',
-        item: 'Detaili foto üles laetud'
+        general: t('arrivals.photoUploaded'),
+        delivery_note: t('arrivals.photoUploaded'),
+        item: t('arrivals.photoUploaded')
       };
       setMessage(typeLabels[photoType]);
     } catch (e: any) {
@@ -2144,7 +2144,7 @@ export default function ArrivedDeliveriesScreen({
 
   // Delete photo
   const deletePhoto = async (photoId: string, fileUrl: string) => {
-    if (!confirm('Kas oled kindel, et soovid foto kustutada?')) return;
+    if (!confirm(t('arrivals.confirmDeletePhoto'))) return;
 
     setSaving(true);
     try {
@@ -2160,7 +2160,7 @@ export default function ArrivedDeliveriesScreen({
         .eq('id', photoId);
 
       await loadPhotos();
-      setMessage('Foto kustutatud');
+      setMessage(t('arrivals.photoUploaded'));
     } catch (e: any) {
       console.error('Error deleting photo:', e);
       setMessage(t('delivery:messages.genericError') + ': ' + e.message);
@@ -2172,7 +2172,7 @@ export default function ArrivedDeliveriesScreen({
   // Download photo (for cross-origin URLs)
   const downloadPhoto = async (url: string, fileName: string) => {
     try {
-      setMessage('Laen alla...');
+      setMessage(t('status.loading'));
       const response = await fetch(url);
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
@@ -2183,7 +2183,7 @@ export default function ArrivedDeliveriesScreen({
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
-      setMessage('Foto allalaetud');
+      setMessage(t('arrivals.downloadPhoto'));
     } catch (e) {
       console.error('Download error:', e);
       // Fallback: open in new tab
@@ -2246,7 +2246,7 @@ export default function ArrivedDeliveriesScreen({
       }
 
       await loadPhotos();
-      setMessage('Detaili foto üles laetud');
+      setMessage(t('arrivals.photoUploaded'));
     } catch (e: any) {
       console.error('Error uploading item photo:', e);
       setMessage(t('arrivals.photoUploadError', { message: e.message }));
@@ -2270,7 +2270,7 @@ export default function ArrivedDeliveriesScreen({
 
       if (error) throw error;
       await loadConfirmations();
-      setMessage('Kommentaar salvestatud');
+      setMessage(t('arrivals.commentSaved'));
     } catch (e: any) {
       console.error('Error updating item comment:', e);
       setMessage(t('delivery:messages.genericError') + ': ' + e.message);
@@ -2334,51 +2334,51 @@ export default function ArrivedDeliveriesScreen({
     // Sheet 1: Ülevaade (Overview)
     // ============================================
     const overviewData = [
-      ['SAABUNUD TARNE RAPORT'],
+      [t('delivery:arrivalsExcel.arrivalTime').toUpperCase().replace('SAABUMISE AEG', 'SAABUNUD TARNE RAPORT')],
       [''],
-      ['Veok', vehicle?.vehicle_code || '-'],
-      ['Tehas', factory?.factory_name || '-'],
-      ['Planeeritud kuupäev', vehicle?.scheduled_date ? formatDateEstonian(vehicle.scheduled_date) : '-'],
-      ['Tegelik saabumise kuupäev', arrival.arrival_date ? formatDateEstonian(arrival.arrival_date) : '-'],
-      ['Hilinemine (päevi)', delayDays !== null ? (delayDays === 0 ? 'Tähtajal' : (delayDays > 0 ? `${delayDays} päeva hiljem` : `${Math.abs(delayDays)} päeva varem`)) : '-'],
+      [t('delivery:arrivalsExcel.vehicleHeader'), vehicle?.vehicle_code || '-'],
+      [t('delivery:arrivalsExcel.factoryHeader'), factory?.factory_name || '-'],
+      [t('delivery:arrivalsExcel.plannedDate'), vehicle?.scheduled_date ? formatDateEstonian(vehicle.scheduled_date) : '-'],
+      [t('arrivals.arrivalDateLabel'), arrival.arrival_date ? formatDateEstonian(arrival.arrival_date) : '-'],
+      [t('delivery:arrivalsExcel.delay'), delayDays !== null ? (delayDays === 0 ? t('delivery:arrivalsExcel.onTime') : (delayDays > 0 ? `${delayDays} ${t('delivery:arrivalsExcel.daysSuffix')}` : `${Math.abs(delayDays)} ${t('delivery:arrivalsExcel.daysNegativeSuffix')}`)) : '-'],
       [''],
-      ['AJAD'],
-      ['Saabumise aeg', arrival.arrival_time || '-'],
-      ['Mahalaadimine algus', arrival.unload_start_time || '-'],
-      ['Mahalaadimine lõpp', arrival.unload_end_time || '-'],
+      [t('arrivals.arrivalTimeLabel').toUpperCase()],
+      [t('arrivals.arrivalTimeLabel'), arrival.arrival_time || '-'],
+      [t('arrivals.unloadStartLabel'), arrival.unload_start_time || '-'],
+      [t('arrivals.unloadEndLabel'), arrival.unload_end_time || '-'],
       [''],
-      ['VEOKI ANDMED'],
-      ['Registri number', arrival.reg_number || '-'],
-      ['Haagise number', arrival.trailer_number || '-'],
-      ['Mahalaadimise asukoht', arrival.unload_location || '-'],
+      [t('delivery:arrivalsExcel.vehicleHeader').toUpperCase()],
+      [t('arrivals.regNumberLabel'), arrival.reg_number || '-'],
+      [t('arrivals.trailerNumberLabel'), arrival.trailer_number || '-'],
+      [t('arrivals.unloadLocationLabel'), arrival.unload_location || '-'],
       [''],
-      ['STATISTIKA'],
-      ['Planeeritud detaile', vehicleItems.length.toString()],
-      ['Kinnitatud', `${confirmedCount} (${vehicleItems.length > 0 ? Math.round(confirmedCount / vehicleItems.length * 100) : 0}%)`],
-      ['Puuduvaid', missingCount.toString()],
-      ['Vale veoki alt', wrongVehicleCount.toString()],
-      ['Lisatud teistest veokitest', addedCount.toString()],
+      [t('delivery:arrivalsExcel.generalStats')],
+      [t('delivery:arrivalsExcel.plannedItems'), vehicleItems.length.toString()],
+      [t('delivery:arrivalsExcel.confirmed'), `${confirmedCount} (${vehicleItems.length > 0 ? Math.round(confirmedCount / vehicleItems.length * 100) : 0}%)`],
+      [t('delivery:arrivalsExcel.missingLabel'), missingCount.toString()],
+      [t('delivery:itemStatus.wrong_vehicle'), wrongVehicleCount.toString()],
+      [t('delivery:arrivalsExcel.addedFromOtherVehicle'), addedCount.toString()],
       [''],
-      ['MÄRKUSED'],
-      [arrival.notes || 'Märkused puuduvad'],
+      [t('delivery:vehicle.notes').toUpperCase()],
+      [arrival.notes || '-'],
       [''],
-      ['Kinnitus', arrival.is_confirmed ? 'JAH' : 'EI'],
-      ['Kinnitatud', arrival.confirmed_at ? new Date(arrival.confirmed_at).toLocaleString('et-EE') : '-'],
-      ['Kinnitaja', arrival.confirmed_by || '-']
+      [t('arrivals.confirmed'), arrival.is_confirmed ? t('delivery:arrivalsExcel.yes') : t('delivery:arrivalsExcel.no')],
+      [t('arrivals.confirmed'), arrival.confirmed_at ? new Date(arrival.confirmed_at).toLocaleString('et-EE') : '-'],
+      [t('delivery:arrivalsExcel.confirmed'), arrival.confirmed_by || '-']
     ];
 
     const wsOverview = XLSX.utils.aoa_to_sheet(overviewData);
 
     // Apply styles
-    wsOverview['A1'] = { v: 'SAABUNUD TARNE RAPORT', s: { ...headerStyle, font: { ...headerStyle.font, sz: 16 } } };
+    wsOverview['A1'] = { v: overviewData[0][0], s: { ...headerStyle, font: { ...headerStyle.font, sz: 16 } } };
     wsOverview['!cols'] = [{ wch: 30 }, { wch: 40 }];
 
-    XLSX.utils.book_append_sheet(wb, wsOverview, 'Ülevaade');
+    XLSX.utils.book_append_sheet(wb, wsOverview, t('delivery:arrivalsExcel.overviewSheet'));
 
     // ============================================
     // Sheet 2: Detailid (Items)
     // ============================================
-    const itemsHeader = ['Nr', 'Tähis', 'GUID', 'Toote nimi', 'Kaal (kg)', 'Planeeritud kuupäev', 'Staatus', 'Kommentaar', 'Fotosid'];
+    const itemsHeader = [t('delivery:arrivalsExcel.nr'), t('delivery:arrivalsExcel.mark'), t('delivery:arrivalsExcel.guid'), t('delivery:arrivalsExcel.productName'), t('delivery:arrivalsExcel.weightKg'), t('delivery:arrivalsExcel.plannedDate'), t('delivery:arrivalsExcel.status'), t('delivery:arrivalsExcel.comment'), t('delivery:arrivalsExcel.photoCount')];
 
     const itemsData = vehicleItems.map((item, idx) => {
       const status = getItemConfirmationStatus(arrivedVehicleId, item.id);
@@ -2386,11 +2386,11 @@ export default function ArrivedDeliveriesScreen({
       const itemPhotos = getPhotosForItem(arrivedVehicleId, item.id);
 
       const statusLabels: Record<ArrivalItemStatus, string> = {
-        pending: 'Ootel',
-        confirmed: 'Kinnitatud',
-        missing: 'Puudub',
-        wrong_vehicle: 'Vale veok',
-        added: 'Lisatud'
+        pending: t('arrivals.pending'),
+        confirmed: t('arrivals.confirmed'),
+        missing: t('arrivals.missing'),
+        wrong_vehicle: t('delivery:itemStatus.wrong_vehicle'),
+        added: t('delivery:itemStatus.added')
       };
 
       return [
@@ -2419,7 +2419,7 @@ export default function ArrivedDeliveriesScreen({
           item.product_name || '-',
           item.cast_unit_weight ? Math.round(Number(item.cast_unit_weight)) : '-',
           item.scheduled_date ? formatDateEstonian(item.scheduled_date) : '-',
-          isFromModel ? 'Lisatud mudelist' : `Lisatud (${conf.source_vehicle_code || 'veok'})`,
+          isFromModel ? t('delivery:arrivalsExcel.addedFromModel') : t('delivery:arrivalsExcel.addedFromVehicle', { code: conf.source_vehicle_code || t('arrivals.vehicleLabel') }),
           conf.notes || '-',
           0
         ]);
@@ -2439,12 +2439,12 @@ export default function ArrivedDeliveriesScreen({
       { wch: 16 }, { wch: 20 }, { wch: 40 }, { wch: 10 }
     ];
 
-    XLSX.utils.book_append_sheet(wb, wsItems, 'Detailid');
+    XLSX.utils.book_append_sheet(wb, wsItems, t('delivery:arrivalsExcel.allItemsSheet'));
 
     // ============================================
     // Sheet 3: Erinevused (Discrepancies)
     // ============================================
-    const discrepancyHeader = ['Probleem', 'Tähis', 'GUID', 'Toote nimi', 'Kommentaar', 'Algne veok'];
+    const discrepancyHeader = [t('delivery:arrivalsExcel.discrepancyHeader'), t('delivery:arrivalsExcel.mark'), t('delivery:arrivalsExcel.guid'), t('delivery:arrivalsExcel.productName'), t('delivery:arrivalsExcel.comment'), t('delivery:arrivalsExcel.originalVehicle')];
     const discrepancyData: (string | number)[][] = [];
 
     // Missing items
@@ -2453,7 +2453,7 @@ export default function ArrivedDeliveriesScreen({
       .forEach(conf => {
         const item = items.find(i => i.id === conf.item_id);
         discrepancyData.push([
-          'Puudub',
+          t('arrivals.missing'),
           item?.assembly_mark || '-',
           item?.guid_ifc || item?.guid || '-',
           item?.product_name || '-',
@@ -2468,7 +2468,7 @@ export default function ArrivedDeliveriesScreen({
       .forEach(conf => {
         const item = items.find(i => i.id === conf.item_id);
         discrepancyData.push([
-          'Vale veok',
+          t('delivery:itemStatus.wrong_vehicle'),
           item?.assembly_mark || '-',
           item?.guid_ifc || item?.guid || '-',
           item?.product_name || '-',
@@ -2484,7 +2484,7 @@ export default function ArrivedDeliveriesScreen({
         const item = items.find(i => i.id === conf.item_id);
         const isFromModel = !conf.source_vehicle_id;
         discrepancyData.push([
-          isFromModel ? 'Lisatud mudelist' : 'Lisatud teisest veokist',
+          isFromModel ? t('delivery:arrivalsExcel.addedFromModel') : t('delivery:arrivalsExcel.addedFromOtherVehicle'),
           item?.assembly_mark || '-',
           item?.guid_ifc || item?.guid || '-',
           item?.product_name || '-',
@@ -2494,7 +2494,7 @@ export default function ArrivedDeliveriesScreen({
       });
 
     if (discrepancyData.length === 0) {
-      discrepancyData.push(['Erinevusi ei leitud', '-', '-', '-', '-', '-']);
+      discrepancyData.push(['-', '-', '-', '-', '-', '-']);
     }
 
     const wsDiscrepancy = XLSX.utils.aoa_to_sheet([discrepancyHeader, ...discrepancyData]);
@@ -2508,49 +2508,49 @@ export default function ArrivedDeliveriesScreen({
       { wch: 22 }, { wch: 20 }, { wch: 36 }, { wch: 30 }, { wch: 40 }, { wch: 15 }
     ];
 
-    XLSX.utils.book_append_sheet(wb, wsDiscrepancy, 'Erinevused');
+    XLSX.utils.book_append_sheet(wb, wsDiscrepancy, t('delivery:arrivalsExcel.discrepancyHeader'));
 
     // ============================================
     // Sheet 4: Ressursid (Resources)
     // ============================================
     const resourcesData = [
-      ['MAHALAADIMISE RESSURSID'],
+      [t('arrivals.unloadResourcesLabel').toUpperCase()],
       [''],
-      ['Ressurss', 'Kogus']
+      [t('delivery:ui.resource'), '#']
     ];
 
     const resources = arrival.unload_resources as Record<string, number> || {};
     UNLOAD_RESOURCES.forEach(res => {
       const count = resources[res.key] || 0;
       if (count > 0) {
-        resourcesData.push([res.label, count.toString()]);
+        resourcesData.push([t(res.label), count.toString()]);
       }
     });
 
     if (Object.values(resources).every(v => !v)) {
-      resourcesData.push(['Ressursse pole määratud', '-']);
+      resourcesData.push(['-', '-']);
     }
 
     const wsResources = XLSX.utils.aoa_to_sheet(resourcesData);
-    wsResources['A1'] = { v: 'MAHALAADIMISE RESSURSID', s: subHeaderStyle };
+    wsResources['A1'] = { v: resourcesData[0][0], s: subHeaderStyle };
     wsResources['!cols'] = [{ wch: 25 }, { wch: 15 }];
 
-    XLSX.utils.book_append_sheet(wb, wsResources, 'Ressursid');
+    XLSX.utils.book_append_sheet(wb, wsResources, t('delivery:ui.resource'));
 
     // Generate filename and download
     const dateStr = arrival.arrival_date || new Date().toISOString().split('T')[0];
-    const vehicleCode = vehicle?.vehicle_code || 'veok';
-    const fileName = `Saabunud_tarne_${vehicleCode}_${dateStr}.xlsx`;
+    const vehicleCode = vehicle?.vehicle_code || t('arrivals.unknownVehicle');
+    const fileName = `Arrival_${vehicleCode}_${dateStr}.xlsx`;
 
     XLSX.writeFile(wb, fileName);
-    setMessage('Excel fail allalaetud');
+    setMessage(t('delivery:excelExport.excelExported'));
   };
 
   // Export all arrivals for selected date
   const exportAllArrivalsForDate = async () => {
     const dateArrivals = arrivedVehicles.filter(av => av.arrival_date === selectedDate);
     if (dateArrivals.length === 0) {
-      setMessage('Sellel kuupäeval pole saabunud tarneid');
+      setMessage(t('arrivals.noArrivalsOnDate'));
       return;
     }
 
@@ -2567,8 +2567,8 @@ export default function ArrivedDeliveriesScreen({
     // Sheet 1: Kokkuvõte (Summary)
     // ============================================
     const summaryHeader = [
-      'Veok', 'Tehas', 'Planeeritud', 'Saabunud', 'Hilinemine',
-      'Saabumise aeg', 'Detaile', 'Kinnitatud', 'Puudub', 'Staatus'
+      t('delivery:arrivalsExcel.vehicleHeader'), t('delivery:arrivalsExcel.factoryHeader'), t('delivery:arrivalsExcel.planned'), t('delivery:arrivalsExcel.arrived'), t('delivery:arrivalsExcel.delay'),
+      t('delivery:arrivalsExcel.arrivalTime'), t('delivery:arrivalsExcel.items'), t('delivery:arrivalsExcel.confirmed'), t('delivery:arrivalsExcel.missingLabel'), t('delivery:arrivalsExcel.status')
     ];
 
     const summaryData = dateArrivals.map(arrival => {
@@ -2596,7 +2596,7 @@ export default function ArrivedDeliveriesScreen({
         vehicleItems.length,
         confirmedCount,
         missingCount,
-        arrival.is_confirmed ? 'Kinnitatud' : 'Pooleli'
+        arrival.is_confirmed ? t('arrivals.confirmed') : t('delivery:arrivalsExcel.inProgress')
       ];
     });
 
@@ -2612,13 +2612,13 @@ export default function ArrivedDeliveriesScreen({
       { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 12 }
     ];
 
-    XLSX.utils.book_append_sheet(wb, wsSummary, 'Kokkuvõte');
+    XLSX.utils.book_append_sheet(wb, wsSummary, t('delivery:arrivalsExcel.overviewSheet'));
 
     // ============================================
     // Sheet 2: Kõik detailid (All items)
     // ============================================
     const allItemsHeader = [
-      'Veok', 'Tähis', 'GUID', 'Toote nimi', 'Kaal (kg)', 'Staatus', 'Kommentaar'
+      t('delivery:arrivalsExcel.vehicleHeader'), t('delivery:arrivalsExcel.mark'), t('delivery:arrivalsExcel.guid'), t('delivery:arrivalsExcel.productName'), t('delivery:arrivalsExcel.weightKg'), t('delivery:arrivalsExcel.status'), t('delivery:arrivalsExcel.comment')
     ];
 
     const allItemsData: (string | number)[][] = [];
@@ -2632,11 +2632,11 @@ export default function ArrivedDeliveriesScreen({
         const comment = getItemComment(arrival.id, item.id);
 
         const statusLabels: Record<ArrivalItemStatus, string> = {
-          pending: 'Ootel',
-          confirmed: 'Kinnitatud',
-          missing: 'Puudub',
-          wrong_vehicle: 'Vale veok',
-          added: 'Lisatud'
+          pending: t('arrivals.pending'),
+          confirmed: t('arrivals.confirmed'),
+          missing: t('arrivals.missing'),
+          wrong_vehicle: t('delivery:itemStatus.wrong_vehicle'),
+          added: t('delivery:itemStatus.added')
         };
 
         allItemsData.push([
@@ -2662,12 +2662,12 @@ export default function ArrivedDeliveriesScreen({
       { wch: 12 }, { wch: 20 }, { wch: 36 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 40 }
     ];
 
-    XLSX.utils.book_append_sheet(wb, wsAllItems, 'Kõik detailid');
+    XLSX.utils.book_append_sheet(wb, wsAllItems, t('delivery:arrivalsExcel.allItemsSheet'));
 
     // Generate filename and download
-    const fileName = `Saabunud_tarned_${selectedDate}.xlsx`;
+    const fileName = `Arrivals_${selectedDate}.xlsx`;
     XLSX.writeFile(wb, fileName);
-    setMessage('Excel fail allalaetud');
+    setMessage(t('delivery:excelExport.excelExported'));
   };
 
   // ============================================
@@ -2711,36 +2711,36 @@ export default function ArrivedDeliveriesScreen({
     // Sheet 1: Ülevaade (Overview)
     // ============================================
     const overviewData = [
-      [`PROJEKTI TARNETE KOKKUVÕTE - ${projectName}`],
+      [`${t('delivery:arrivalsExcel.generalStats')} - ${projectName}`],
       [''],
-      ['Ekspordi kuupäev:', exportDateTime],
+      [t('delivery:arrivalsExcel.exportDate'), exportDateTime],
       [''],
-      ['ÜLDSTATISTIKA'],
+      [t('delivery:arrivalsExcel.generalStats')],
       [''],
-      ['Veokeid kokku:', totalVehicles],
-      ['Saabunud ja kinnitatud:', arrivedCount],
-      ['Saabunud, töös:', inProgressCount],
-      ['Saabumata:', notArrivedCount],
+      [t('delivery:arrivalsExcel.totalVehicles') + ':', totalVehicles],
+      [t('delivery:arrivalsExcel.arrivedVehicles') + ':', arrivedCount],
+      [t('delivery:arrivalsExcel.inProgress') + ':', inProgressCount],
+      [t('delivery:arrivalsExcel.notArrived') + ':', notArrivedCount],
       [''],
-      ['Detaile kokku:', totalItems],
-      ['Kinnitatud:', confirmedItems],
-      ['Puudu:', missingItems],
-      ['Ootel:', pendingItems],
+      [t('delivery:arrivalsExcel.totalPlannedItems') + ':', totalItems],
+      [t('delivery:arrivalsExcel.totalConfirmedItems') + ':', confirmedItems],
+      [t('delivery:arrivalsExcel.totalMissingItems') + ':', missingItems],
+      [t('arrivals.pending') + ':', pendingItems],
       [''],
-      [`Kinnitamise protsent: ${totalItems > 0 ? Math.round((confirmedItems / totalItems) * 100) : 0}%`]
+      [`${totalItems > 0 ? Math.round((confirmedItems / totalItems) * 100) : 0}%`]
     ];
 
     const wsOverview = XLSX.utils.aoa_to_sheet(overviewData);
     wsOverview['A1'] = { v: overviewData[0][0], s: { ...headerStyle, font: { ...headerStyle.font, sz: 14 } } };
-    wsOverview['A5'] = { v: 'ÜLDSTATISTIKA', s: subHeaderStyle };
+    wsOverview['A5'] = { v: t('delivery:arrivalsExcel.generalStats'), s: subHeaderStyle };
     wsOverview['!cols'] = [{ wch: 35 }, { wch: 20 }];
-    XLSX.utils.book_append_sheet(wb, wsOverview, 'Ülevaade');
+    XLSX.utils.book_append_sheet(wb, wsOverview, t('delivery:arrivalsExcel.overviewSheet'));
 
     // ============================================
     // Sheet 2: Saabumata veokid (Not arrived vehicles)
     // ============================================
     const notArrivedVehicles = vehicles.filter(v => !arrivedVehicleIds.has(v.id));
-    const notArrivedHeader = ['Veok', 'Tehas', 'Planeeritud kuupäev', 'Detaile', 'Kaal (kg)'];
+    const notArrivedHeader = [t('delivery:arrivalsExcel.vehicleHeader'), t('delivery:arrivalsExcel.factoryHeader'), t('delivery:arrivalsExcel.plannedDate'), t('delivery:arrivalsExcel.items'), t('delivery:arrivalsExcel.weightKg')];
     const notArrivedData = notArrivedVehicles.map(v => {
       const factory = getFactory(v.factory_id);
       const vItems = getVehicleItems(v.id);
@@ -2759,13 +2759,13 @@ export default function ArrivedDeliveriesScreen({
       wsNotArrived[cellRef] = { v: notArrivedHeader[colIdx], s: headerStyle };
     });
     wsNotArrived['!cols'] = [{ wch: 15 }, { wch: 20 }, { wch: 18 }, { wch: 10 }, { wch: 12 }];
-    XLSX.utils.book_append_sheet(wb, wsNotArrived, 'Saabumata veokid');
+    XLSX.utils.book_append_sheet(wb, wsNotArrived, t('delivery:arrivalsExcel.notArrivedVehiclesSheet'));
 
     // ============================================
     // Sheet 3: Puuduvad detailid (Missing items)
     // ============================================
     const missingConfirmations = confirmations.filter(c => c.status === 'missing');
-    const missingHeader = ['Veok', 'Tehas', 'Assembly Mark', 'Toote nimi', 'GUID', 'Kommentaar'];
+    const missingHeader = [t('delivery:arrivalsExcel.vehicleHeader'), t('delivery:arrivalsExcel.factoryHeader'), t('delivery:arrivalsExcel.assemblyMark'), t('delivery:arrivalsExcel.productName'), t('delivery:arrivalsExcel.guid'), t('delivery:arrivalsExcel.comment')];
     const missingData = missingConfirmations.map(conf => {
       const arrival = arrivedVehicles.find(av => av.id === conf.arrived_vehicle_id);
       const vehicle = getVehicle(arrival?.vehicle_id);
@@ -2796,12 +2796,12 @@ export default function ArrivedDeliveriesScreen({
       });
     });
     wsMissing['!cols'] = [{ wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 30 }, { wch: 36 }, { wch: 40 }];
-    XLSX.utils.book_append_sheet(wb, wsMissing, 'Puuduvad detailid');
+    XLSX.utils.book_append_sheet(wb, wsMissing, t('delivery:arrivalsExcel.missingItemsSheet'));
 
     // ============================================
     // Sheet 4: Kõik veokid (All vehicles status)
     // ============================================
-    const allVehiclesHeader = ['Veok', 'Tehas', 'Planeeritud', 'Saabunud', 'Hilinemine', 'Detaile', 'Kinnitatud', 'Puudu', 'Staatus'];
+    const allVehiclesHeader = [t('delivery:arrivalsExcel.vehicleHeader'), t('delivery:arrivalsExcel.factoryHeader'), t('delivery:arrivalsExcel.planned'), t('delivery:arrivalsExcel.arrived'), t('delivery:arrivalsExcel.delay'), t('delivery:arrivalsExcel.items'), t('delivery:arrivalsExcel.confirmed'), t('delivery:arrivalsExcel.missingLabel'), t('delivery:arrivalsExcel.status')];
     const allVehiclesData = vehicles.map(v => {
       const factory = getFactory(v.factory_id);
       const vItems = getVehicleItems(v.id);
@@ -2817,7 +2817,7 @@ export default function ArrivedDeliveriesScreen({
           vItems.length,
           0,
           0,
-          'Saabumata'
+          t('delivery:arrivalsExcel.notArrived')
         ];
       }
 
@@ -2840,7 +2840,7 @@ export default function ArrivedDeliveriesScreen({
         vItems.length,
         confirmed,
         missing,
-        arrival.is_confirmed ? 'Kinnitatud' : 'Töös'
+        arrival.is_confirmed ? t('arrivals.confirmed') : t('delivery:arrivalsExcel.inProgress')
       ];
     });
 
@@ -2853,13 +2853,13 @@ export default function ArrivedDeliveriesScreen({
       { wch: 12 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
       { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 15 }
     ];
-    XLSX.utils.book_append_sheet(wb, wsAllVehicles, 'Kõik veokid');
+    XLSX.utils.book_append_sheet(wb, wsAllVehicles, t('delivery:arrivalsExcel.allVehiclesSheet'));
 
     // Generate filename with project name and date
     const sanitizedProjectName = projectName.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ\s]/g, '').replace(/\s+/g, '_');
-    const fileName = `Projekti_kokkuvote_${sanitizedProjectName}_${exportDate.replace(/\./g, '-')}.xlsx`;
+    const fileName = `Project_summary_${sanitizedProjectName}_${exportDate.replace(/\./g, '-')}.xlsx`;
     XLSX.writeFile(wb, fileName);
-    setMessage('Projekti kokkuvõte allalaetud');
+    setMessage(t('delivery:excelExport.excelExported'));
   };
 
   // ============================================
@@ -3125,7 +3125,7 @@ export default function ArrivedDeliveriesScreen({
       if (mode === 'off') {
         // Reset all colors
         await api.viewer.setObjectState(undefined, { color: 'reset' });
-        setMessage('Värvid lähtestatud');
+        setMessage(t('actions.colorsReset'));
         setColorMode('off');
         return;
       }
@@ -3195,7 +3195,7 @@ export default function ArrivedDeliveriesScreen({
           : arrivedVehicles.filter(av => av.arrival_date === selectedDate);
 
         if (dateArrivals.length === 0) {
-          setMessage('Saabunud veokeid pole');
+          setMessage(t('arrivals.noVehicles'));
           setColorMode(mode);
           return;
         }
@@ -3235,7 +3235,7 @@ export default function ArrivedDeliveriesScreen({
         // Collect all GUIDs
         const allGuids = [...statusGroups.confirmed, ...statusGroups.pending, ...statusGroups.missing, ...statusGroups.added];
         if (allGuids.length === 0) {
-          setMessage('Detailidel puuduvad GUID-id');
+          setMessage(t('globalShortcuts.noGuidsFound'));
           setColorMode(mode);
           return;
         }
@@ -3243,7 +3243,7 @@ export default function ArrivedDeliveriesScreen({
         // Find objects in model
         const foundObjects = await findObjectsInLoadedModels(api, allGuids);
         if (foundObjects.size === 0) {
-          setMessage('Detaile ei leitud mudelist');
+          setMessage(t('issues.objectsNotFoundInModel'));
           setColorMode(mode);
           return;
         }
@@ -3282,7 +3282,7 @@ export default function ArrivedDeliveriesScreen({
       // Get confirmed items for other modes
       const confirmedItems = getConfirmedItemsForDate();
       if (confirmedItems.length === 0) {
-        setMessage('Kinnitatud detaile pole');
+        setMessage(t('arrivals.noVehicles'));
         setColorMode(mode);
         return;
       }
@@ -3566,7 +3566,7 @@ export default function ArrivedDeliveriesScreen({
   if (loading) {
     return (
       <div className="delivery-schedule loading">
-        <div className="loading-spinner">Laadin andmeid...</div>
+        <div className="loading-spinner">{t('status.loading')}</div>
       </div>
     );
   }
@@ -3608,7 +3608,7 @@ export default function ArrivedDeliveriesScreen({
           className={`view-toggle-btn ${colorMode !== 'off' ? 'active' : ''}`}
           onClick={() => toggleColoring(colorMode === 'off' ? 'by-status' : 'off')}
           disabled={coloringInProgress}
-          title={colorMode !== 'off' ? 'Lähtesta värvid' : 'Värvi staatuse järgi'}
+          title={colorMode !== 'off' ? t('actions.resetColors') : t('arrivals.colorThisVehicle')}
           style={{ backgroundColor: colorMode !== 'off' ? '#d1fae5' : undefined }}
         >
           <FiDroplet className={coloringInProgress ? 'spinning' : ''} />
@@ -3897,7 +3897,7 @@ export default function ArrivedDeliveriesScreen({
         {dateVehicles.length === 0 ? (
           <div className="no-vehicles">
             <FiTruck size={48} />
-            <p>Sellel kuupäeval pole veokeid</p>
+            <p>{t('arrivals.noArrivalsOnDate')}</p>
           </div>
         ) : (
           dateVehicles.map(vehicle => {
@@ -4028,7 +4028,7 @@ export default function ArrivedDeliveriesScreen({
                             }}
                           >
                             <FiDownload size={14} />
-                            <span>Ekspordi Excel</span>
+                            <span>{t('arrivals.exportExcelBtn')}</span>
                           </button>
                           <button
                             onClick={() => {
@@ -4037,7 +4037,7 @@ export default function ArrivedDeliveriesScreen({
                             }}
                           >
                             <FiFileText size={14} />
-                            <span>Lae PDF raport</span>
+                            <span>{t('arrivals.downloadPdfBtn')}</span>
                           </button>
                           <div className="menu-divider" />
                           <button
@@ -4047,7 +4047,7 @@ export default function ArrivedDeliveriesScreen({
                             }}
                           >
                             <FiDroplet size={14} />
-                            <span>Värvi see veok</span>
+                            <span>{t('arrivals.colorThisVehicle')}</span>
                           </button>
                           <button
                             onClick={() => {
@@ -4061,7 +4061,7 @@ export default function ArrivedDeliveriesScreen({
                             }}
                           >
                             <FiSearch size={14} />
-                            <span>Vali kõik mudelis</span>
+                            <span>{t('arrivals.selectAllInModel')}</span>
                           </button>
                           <div className="menu-divider" />
                           <button
@@ -4082,7 +4082,7 @@ export default function ArrivedDeliveriesScreen({
                                   const url = getShareUrl(result.shareLink.share_token);
                                   setShareLinks(prev => ({ ...prev, [arrivedVehicle.id]: { url, token: result.shareLink!.share_token } }));
                                   navigator.clipboard.writeText(url);
-                                  setMessage('Link kopeeritud!');
+                                  setMessage(t('arrivals.linkCopiedShort'));
                                 }
                               } finally {
                                 setGeneratingShareLink(null);
@@ -4090,7 +4090,7 @@ export default function ArrivedDeliveriesScreen({
                             }}
                           >
                             <FiShare2 size={14} />
-                            <span>Kopeeri jagamise link</span>
+                            <span>{t('arrivals.copyShareLink')}</span>
                           </button>
                         </div>
                       )}
@@ -4292,7 +4292,7 @@ export default function ArrivedDeliveriesScreen({
 
                           {/* Resources - same style as installation schedule */}
                           <div className="resources-section">
-                            <label className="resources-label">Mahalaadimise ressursid:</label>
+                            <label className="resources-label">{t('arrivals.unloadResourcesLabel')}</label>
                             <div className="resources-grid">
                               {UNLOAD_RESOURCES.map(res => {
                                 const currentValue = (arrivedVehicle.unload_resources as any)?.[res.key] || 0;
@@ -4305,7 +4305,7 @@ export default function ArrivedDeliveriesScreen({
                                     style={{
                                       backgroundColor: isActive ? res.activeBgColor : res.bgColor
                                     }}
-                                    title={res.label}
+                                    title={t(res.label)}
                                     onClick={() => {
                                       if (isActive) {
                                         // Toggle off - set to 0 and clear name
@@ -4328,7 +4328,7 @@ export default function ArrivedDeliveriesScreen({
                                   >
                                     <img
                                       src={`${import.meta.env.BASE_URL}icons/${res.icon}`}
-                                      alt={res.label}
+                                      alt={t(res.label)}
                                       className="resource-img"
                                       style={{
                                         filter: isActive ? 'brightness(0) invert(1)' : res.filterCss
@@ -4377,7 +4377,7 @@ export default function ArrivedDeliveriesScreen({
                                   ((arrivedVehicle.unload_resources as any)?.[res.key] || 0) > 0
                                 ).map(res => (
                                   <div key={`${res.key}_name`} className="resource-name-field">
-                                    <label>{res.label}:</label>
+                                    <label>{t(res.label)}:</label>
                                     <input
                                       type="text"
                                       value={(arrivedVehicle.unload_resources as any)?.[`${res.key}_name`] || ''}
@@ -4388,7 +4388,7 @@ export default function ArrivedDeliveriesScreen({
                                         };
                                         updateArrival(arrivedVehicle.id, { unload_resources: newResources });
                                       }}
-                                      placeholder={`Nt. ${res.label === 'Kraana' ? 'Liebherr LTM 1050' : res.label === 'Teleskooplaadur' ? 'JCB 540-170' : 'Haulotte HA16'}`}
+                                      placeholder={`${res.key === 'crane' ? t('arrivals.machinePlaceholderCrane') : res.key === 'forklift' ? t('arrivals.machinePlaceholderForklift') : t('arrivals.machinePlaceholderDefault')}`}
                                     />
                                   </div>
                                 ))}
@@ -4418,7 +4418,7 @@ export default function ArrivedDeliveriesScreen({
 
                           {/* General Notes */}
                           <div className="notes-section">
-                            <label className="notes-label">Üldised märkused tarne kohta:</label>
+                            <label className="notes-label">{t('arrivals.generalNotesLabel')}</label>
                             <textarea
                               className="notes-textarea"
                               value={arrivedVehicle.notes || ''}
@@ -4721,7 +4721,7 @@ export default function ArrivedDeliveriesScreen({
                                   }
                                 }}
                                 title="Märgista kõik saabunud detailid mudelis"
-                              >Detailid ({searchTerm ? `${filteredItems.length}/${vehicleItems.length}` : vehicleItems.length})</h3>
+                              >{t('delivery:arrivalsExcel.items')} ({searchTerm ? `${filteredItems.length}/${vehicleItems.length}` : vehicleItems.length})</h3>
                               {!arrivedVehicle.is_confirmed && editingArrivalId === arrivedVehicle.id && (
                                 <div className="items-title-buttons">
                                   <button
@@ -4742,7 +4742,7 @@ export default function ArrivedDeliveriesScreen({
                                         setMessage('');
                                       } else {
                                         setModelSelectionMode(true);
-                                        setMessage('Vali mudelist detailid, mida soovid lisada...');
+                                        setMessage(t('arrivals.selectItemsFromModel'));
                                       }
                                     }}
                                     title="Vali detailid 3D mudelist"
@@ -5586,7 +5586,7 @@ export default function ArrivedDeliveriesScreen({
                     fontSize: '10px',
                     cursor: 'pointer'
                   }}
-                  title="Tühista filter"
+                  title={t('arrivals.cancelFilterTitle')}
                 >
                   <FiX size={11} />
                 </button>
@@ -5623,7 +5623,7 @@ export default function ArrivedDeliveriesScreen({
                       cursor: 'pointer'
                     }}
                   >
-                    Tühista valik
+                    {t('arrivals.cancelSelectionBtn')}
                   </button>
                 )}
 
@@ -6475,7 +6475,7 @@ export default function ArrivedDeliveriesScreen({
                     </div>
                     <button
                       onClick={async () => {
-                        if (confirm('Kas oled kindel, et soovid selle kirje kustutada?')) {
+                        if (confirm(t('arrivals.deleteEntryConfirm'))) {
                           await supabase
                             .from('unassigned_arrivals')
                             .delete()

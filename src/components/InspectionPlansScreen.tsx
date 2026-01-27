@@ -238,7 +238,7 @@ export default function InspectionPlansScreen({
             <p>{t('plans.noPlans')}</p>
             {checkIsAdmin(user) && (
               <p style={{ marginTop: '8px', fontSize: '14px', color: '#6b7280' }}>
-                Koosta inspektsiooni kava administratsiooni menüüst
+                {t('plans.createHint')}
               </p>
             )}
           </div>

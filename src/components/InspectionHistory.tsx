@@ -106,7 +106,7 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
             alignItems: 'center'
           }}
         >
-          <h3 style={{ margin: 0, color: '#111827' }}>Tegevuste ajalugu</h3>
+          <h3 style={{ margin: 0, color: '#111827' }}>{t('partDatabase.activityHistory')}</h3>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
               onClick={refresh}

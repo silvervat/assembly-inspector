@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { supabase, TrimbleExUserExtended, UserProfileExtension } from '../supabase';
 
 export interface UseUserProfileResult {
@@ -15,6 +16,7 @@ export interface UseUserProfileResult {
  * Hook for managing user profile with signature support
  */
 export function useUserProfile(userEmail: string | null, projectId?: string): UseUserProfileResult {
+  const { t } = useTranslation('errors');
   const [profile, setProfile] = useState<TrimbleExUserExtended | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +51,7 @@ export function useUserProfile(userEmail: string | null, projectId?: string): Us
       setProfile(data as TrimbleExUserExtended);
     } catch (err) {
       console.error('Error loading user profile:', err);
-      setError(err instanceof Error ? err.message : 'Viga profiili laadimisel');
+      setError(err instanceof Error ? err.message : t('profile.loadError'));
     } finally {
       setLoading(false);
     }
@@ -60,7 +62,7 @@ export function useUserProfile(userEmail: string | null, projectId?: string): Us
     updates: Partial<UserProfileExtension>
   ): Promise<boolean> => {
     if (!userEmail || !profile) {
-      setError('Kasutaja pole sisselogitud');
+      setError(t('general.userNotLoggedIn'));
       return false;
     }
 
@@ -80,7 +82,7 @@ export function useUserProfile(userEmail: string | null, projectId?: string): Us
       return true;
     } catch (err) {
       console.error('Error updating profile:', err);
-      setError(err instanceof Error ? err.message : 'Viga profiili uuendamisel');
+      setError(err instanceof Error ? err.message : t('profile.updateError'));
       return false;
     }
   }, [userEmail, profile, loadProfile]);
@@ -88,7 +90,7 @@ export function useUserProfile(userEmail: string | null, projectId?: string): Us
   // Upload signature image
   const uploadSignature = useCallback(async (dataUrl: string): Promise<string | null> => {
     if (!userEmail || !profile) {
-      setError('Kasutaja pole sisselogitud');
+      setError(t('general.userNotLoggedIn'));
       return null;
     }
 
@@ -141,7 +143,7 @@ export function useUserProfile(userEmail: string | null, projectId?: string): Us
       return urlData.publicUrl;
     } catch (err) {
       console.error('Error uploading signature:', err);
-      setError(err instanceof Error ? err.message : 'Viga allkirja üleslaadimisel');
+      setError(err instanceof Error ? err.message : t('profile.signatureUploadError'));
       return null;
     }
   }, [userEmail, profile, loadProfile]);
@@ -149,7 +151,7 @@ export function useUserProfile(userEmail: string | null, projectId?: string): Us
   // Delete signature
   const deleteSignature = useCallback(async (): Promise<boolean> => {
     if (!userEmail || !profile) {
-      setError('Kasutaja pole sisselogitud');
+      setError(t('general.userNotLoggedIn'));
       return false;
     }
 
@@ -178,7 +180,7 @@ export function useUserProfile(userEmail: string | null, projectId?: string): Us
       return true;
     } catch (err) {
       console.error('Error deleting signature:', err);
-      setError(err instanceof Error ? err.message : 'Viga allkirja kustutamisel');
+      setError(err instanceof Error ? err.message : t('profile.signatureDeleteError'));
       return false;
     }
   }, [userEmail, profile, loadProfile]);
