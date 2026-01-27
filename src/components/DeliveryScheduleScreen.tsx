@@ -23,7 +23,7 @@ import {
   FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload,
   FiTruck, FiPackage, FiLayers, FiClock, FiMessageSquare, FiDroplet,
   FiEye, FiEyeOff, FiZoomIn, FiAlertTriangle, FiExternalLink, FiTag,
-  FiCamera, FiImage
+  FiCamera, FiImage, FiCheckCircle
 } from 'react-icons/fi';
 import './DeliveryScheduleScreen.css';
 
@@ -689,7 +689,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   ]);
 
   // Color mode for model visualization - default to vehicle coloring
-  const [colorMode, setColorMode] = useState<'none' | 'vehicle' | 'date'>('vehicle');
+  const [colorMode, setColorMode] = useState<'none' | 'vehicle' | 'date' | 'timeline' | 'progress'>('vehicle');
   const [showColorMenu, setShowColorMenu] = useState(false);
   const [showImportExportMenu, setShowImportExportMenu] = useState(false);
   const [showPlaybackMenu, setShowPlaybackMenu] = useState(false);
@@ -4978,23 +4978,48 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
           // Batch update existing items and log history
           const historyEntries: any[] = [];
-          for (const item of itemsToUpdate) {
-            const { error } = await supabase
-              .from('trimble_delivery_items')
-              .update({
-                vehicle_id: item.vehicle_id,
-                scheduled_date: item.scheduled_date,
-                sort_order: item.sort_order,
-                notes: item.notes
-              })
-              .eq('id', item.id);
 
-            if (error) {
-              console.error('Error updating existing item:', error);
-              continue;
+          // First: bulk update vehicle_id and scheduled_date for ALL items in this group (same values)
+          if (itemsToUpdate.length > 0) {
+            const idsToUpdate = itemsToUpdate.map(item => item.id);
+            const UPDATE_BATCH_SIZE = 100;
+            for (let i = 0; i < idsToUpdate.length; i += UPDATE_BATCH_SIZE) {
+              const batch = idsToUpdate.slice(i, i + UPDATE_BATCH_SIZE);
+              const { error } = await supabase
+                .from('trimble_delivery_items')
+                .update({
+                  vehicle_id: itemsToUpdate[0].vehicle_id,
+                  scheduled_date: itemsToUpdate[0].scheduled_date
+                })
+                .in('id', batch);
+
+              if (error) {
+                console.error('Error batch updating items:', error);
+              }
             }
 
-            // Track changes in history
+            // Second: update sort_order and notes individually only where needed
+            const itemsNeedingSortOrNotes = itemsToUpdate.filter((item, idx) => {
+              const needsSort = item.sort_order !== item.oldItem.sort_order;
+              const needsNotes = item.notes !== (item.oldItem.notes || null);
+              return needsSort || needsNotes;
+            });
+
+            // Run sort_order/notes updates in parallel batches
+            const PARALLEL_LIMIT = 10;
+            for (let i = 0; i < itemsNeedingSortOrNotes.length; i += PARALLEL_LIMIT) {
+              const batch = itemsNeedingSortOrNotes.slice(i, i + PARALLEL_LIMIT);
+              await Promise.all(batch.map(item =>
+                supabase
+                  .from('trimble_delivery_items')
+                  .update({ sort_order: item.sort_order, notes: item.notes })
+                  .eq('id', item.id)
+              ));
+            }
+          }
+
+          // Build history entries
+          for (const item of itemsToUpdate) {
             const oldVehicle = vehicles.find(v => v.id === item.oldItem.vehicle_id);
             const dateChanged = item.oldItem.scheduled_date !== item.scheduled_date;
             const vehicleChanged = item.oldItem.vehicle_id !== item.vehicle_id;
@@ -6606,6 +6631,152 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             setMessage(`Värvin kuupäevad... ${coloredCount}/${colorGuids.size}`);
           }
         }
+      } else if (mode === 'timeline') {
+        // Timeline coloring: past=green, today=blue, future=dark gray
+        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+        const TIMELINE_COLORS = {
+          past:   { r: 34, g: 197, b: 94, a: 255 },   // green
+          today:  { r: 59, g: 130, b: 246, a: 255 },   // blue
+          future: { r: 75, g: 85, b: 99, a: 255 }      // dark gray
+        };
+
+        setVehicleColors({});
+        setDateColors({});
+
+        // Build runtime ID mapping
+        const scheduleByGuid = new Map<string, { modelId: string; runtimeId: number }>();
+        for (const item of itemsToColor) {
+          const guid = item.guid_ifc || item.guid;
+          if (guid && foundObjects.has(guid)) {
+            scheduleByGuid.set(guid, foundObjects.get(guid)!);
+          }
+        }
+
+        // Group items by timeline category
+        const byCategory: Record<'past' | 'today' | 'future', Record<string, number[]>> = {
+          past: {}, today: {}, future: {}
+        };
+
+        for (const vehicle of vehicles) {
+          const date = vehicle.scheduled_date;
+          if (!date) continue;
+
+          const category: 'past' | 'today' | 'future' =
+            date < today ? 'past' : date === today ? 'today' : 'future';
+
+          const vehicleItems = itemsToColor.filter(i => i.vehicle_id === vehicle.id);
+          for (const item of vehicleItems) {
+            const guid = item.guid_ifc || item.guid;
+            if (guid && scheduleByGuid.has(guid)) {
+              const found = scheduleByGuid.get(guid)!;
+              if (!byCategory[category][found.modelId]) byCategory[category][found.modelId] = [];
+              byCategory[category][found.modelId].push(found.runtimeId);
+            }
+          }
+        }
+
+        // Apply colors per category
+        let coloredCount = 0;
+        for (const [category, byModel] of Object.entries(byCategory) as ['past' | 'today' | 'future', Record<string, number[]>][]) {
+          const color = TIMELINE_COLORS[category];
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color }
+            );
+            coloredCount += runtimeIds.length;
+            setMessage(`Värvin ajatelje... ${coloredCount}/${colorGuids.size}`);
+          }
+        }
+      } else if (mode === 'progress') {
+        // Progress coloring: installed=dark blue, delivered today but not installed=green
+        const today = new Date().toISOString().slice(0, 10);
+
+        const PROGRESS_COLORS = {
+          installed:  { r: 30, g: 64, b: 175, a: 255 },  // dark blue (#1e40af)
+          delivered:  { r: 34, g: 197, b: 94, a: 255 }    // green (#22c55e)
+        };
+
+        setVehicleColors({});
+        setDateColors({});
+
+        setMessage('Laen paigalduse andmeid...');
+
+        // 1. Fetch installed items from installation_schedule
+        const installedGuids = new Set<string>();
+        let offset = 0;
+        const PAGE = 5000;
+        while (true) {
+          const { data } = await supabase
+            .from('installation_schedule')
+            .select('guid_ifc, guid')
+            .eq('trimble_project_id', projectId)
+            .eq('status', 'completed')
+            .range(offset, offset + PAGE - 1);
+
+          if (!data || data.length === 0) break;
+          for (const row of data) {
+            const g = (row.guid_ifc || row.guid || '').toLowerCase();
+            if (g) installedGuids.add(g);
+          }
+          if (data.length < PAGE) break;
+          offset += PAGE;
+        }
+
+        console.log(`📊 Progress: ${installedGuids.size} installed items`);
+
+        // 2. Find delivered-by-today items (from current delivery schedule data)
+        const deliveredGuids = new Set<string>();
+        for (const vehicle of vehicles) {
+          const date = vehicle.scheduled_date;
+          if (!date || date > today) continue; // only today or past
+          const vehicleItems = itemsToColor.filter(i => i.vehicle_id === vehicle.id);
+          for (const item of vehicleItems) {
+            const g = (item.guid_ifc || item.guid || '').toLowerCase();
+            if (g && !installedGuids.has(g)) {
+              deliveredGuids.add(g);
+            }
+          }
+        }
+
+        console.log(`📊 Progress: ${deliveredGuids.size} delivered but not installed`);
+
+        // 3. Build runtime ID mapping and color
+        const byCategory: Record<'installed' | 'delivered', Record<string, number[]>> = {
+          installed: {}, delivered: {}
+        };
+
+        for (const [guid, found] of foundObjects) {
+          const guidLower = guid.toLowerCase();
+          let category: 'installed' | 'delivered' | null = null;
+
+          if (installedGuids.has(guidLower)) {
+            category = 'installed';
+          } else if (deliveredGuids.has(guidLower)) {
+            category = 'delivered';
+          }
+
+          if (category) {
+            if (!byCategory[category][found.modelId]) byCategory[category][found.modelId] = [];
+            byCategory[category][found.modelId].push(found.runtimeId);
+          }
+        }
+
+        let coloredCount = 0;
+        for (const [category, byModel] of Object.entries(byCategory) as ['installed' | 'delivered', Record<string, number[]>][]) {
+          const color = PROGRESS_COLORS[category];
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color }
+            );
+            coloredCount += runtimeIds.length;
+            setMessage(`Värvin edenemist... ${coloredCount}`);
+          }
+        }
+
+        console.log(`📊 Progress coloring: ${coloredCount} colored (installed+delivered)`);
       }
 
       setMessage(`✓ Värvitud! Valged=${whiteCount}, Graafikudetaile=${colorGuids.size}`);
@@ -6634,6 +6805,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         color = vehicleColors[targetVehicleId];
       } else if (colorMode === 'date' && targetDate) {
         color = dateColors[targetDate];
+      } else if (colorMode === 'timeline' && targetDate) {
+        const today = new Date().toISOString().slice(0, 10);
+        if (targetDate < today) color = { r: 34, g: 197, b: 94 };       // green
+        else if (targetDate === today) color = { r: 59, g: 130, b: 246 }; // blue
+        else color = { r: 75, g: 85, b: 99 };                             // dark gray
       }
 
       // If no color found in existing colors, generate one continuing the sequence
@@ -8855,6 +9031,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 >
                   <FiCalendar size={14} /> {t('toolbar.colorByDate')}
                   {colorMode === 'date' && <FiCheck size={14} />}
+                </button>
+                <button
+                  className={colorMode === 'timeline' ? 'active' : ''}
+                  onClick={() => applyColorMode(colorMode === 'timeline' ? 'none' : 'timeline')}
+                >
+                  <FiClock size={14} /> {t('toolbar.colorByTimeline')}
+                  {colorMode === 'timeline' && <FiCheck size={14} />}
+                </button>
+                <button
+                  className={colorMode === 'progress' ? 'active' : ''}
+                  onClick={() => applyColorMode(colorMode === 'progress' ? 'none' : 'progress')}
+                >
+                  <FiCheckCircle size={14} /> {t('toolbar.colorByProgress')}
+                  {colorMode === 'progress' && <FiCheck size={14} />}
                 </button>
               </div>
             )}

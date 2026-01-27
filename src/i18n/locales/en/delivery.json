@@ -102,6 +102,8 @@
     "exportExcel": "Export Excel",
     "importExcel": "Import Excel",
     "colorByDate": "Color by Date",
+    "colorByTimeline": "Color by Timeline",
+    "colorByProgress": "Installed / Delivered",
     "colorByVehicle": "Color by Vehicle",
     "colorWhite": "Color White",
     "selectInModel": "Select in Model",
