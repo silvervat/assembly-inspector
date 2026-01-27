@@ -6690,12 +6690,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           }
         }
       } else if (mode === 'progress') {
-        // Progress coloring: installed=dark blue, delivered today but not installed=green
+        // Progress coloring: installed=dark blue, delivered=green/dark green, rest=gray
         const today = new Date().toISOString().slice(0, 10);
 
         const PROGRESS_COLORS = {
-          installed:  { r: 10, g: 58, b: 103, a: 255 },   // dark blue (#0a3a67) - same as Alt+Shift+3
-          delivered:  { r: 34, g: 197, b: 94, a: 255 }     // green (#22c55e)
+          installed:      { r: 10, g: 58, b: 103, a: 255 },   // dark blue (#0a3a67) - same as Alt+Shift+3
+          deliveredPast:  { r: 34, g: 197, b: 94, a: 255 },   // green (#22c55e) - delivered before today
+          deliveredToday: { r: 22, g: 128, b: 61, a: 255 },   // dark green (#16803d) - delivered today
+          notDelivered:   { r: 156, g: 163, b: 175, a: 255 }  // gray (#9ca3af) - not yet delivered
         };
 
         setVehicleColors({});
@@ -6725,8 +6727,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
         console.log(`📊 Progress: ${installedGuids.size} installed items`);
 
-        // 2. Find delivered-by-today items (from current delivery schedule data)
-        const deliveredGuids = new Set<string>();
+        // 2. Categorize delivery items by date relative to today
+        const deliveredPastGuids = new Set<string>();
+        const deliveredTodayGuids = new Set<string>();
         for (const vehicle of vehicles) {
           const date = vehicle.scheduled_date;
           if (!date || date > today) continue; // only today or past
@@ -6734,26 +6737,42 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           for (const item of vehicleItems) {
             const g = (item.guid_ifc || item.guid || '').toLowerCase();
             if (g && !installedGuids.has(g)) {
-              deliveredGuids.add(g);
+              if (date === today) {
+                deliveredTodayGuids.add(g);
+              } else {
+                deliveredPastGuids.add(g);
+              }
             }
           }
         }
 
-        console.log(`📊 Progress: ${deliveredGuids.size} delivered but not installed`);
+        console.log(`📊 Progress: ${deliveredPastGuids.size} delivered (past), ${deliveredTodayGuids.size} delivered (today)`);
 
         // 3. Build runtime ID mapping and color
-        const byCategory: Record<'installed' | 'delivered', Record<string, number[]>> = {
-          installed: {}, delivered: {}
+        // All schedule GUIDs that are NOT installed/delivered get gray
+        const allScheduleGuids = new Set<string>();
+        for (const item of itemsToColor) {
+          const g = (item.guid_ifc || item.guid || '').toLowerCase();
+          if (g) allScheduleGuids.add(g);
+        }
+
+        type ProgressCategory = 'installed' | 'deliveredPast' | 'deliveredToday' | 'notDelivered';
+        const byCategory: Record<ProgressCategory, Record<string, number[]>> = {
+          installed: {}, deliveredPast: {}, deliveredToday: {}, notDelivered: {}
         };
 
         for (const [guid, found] of foundObjects) {
           const guidLower = guid.toLowerCase();
-          let category: 'installed' | 'delivered' | null = null;
+          let category: ProgressCategory | null = null;
 
           if (installedGuids.has(guidLower)) {
             category = 'installed';
-          } else if (deliveredGuids.has(guidLower)) {
-            category = 'delivered';
+          } else if (deliveredTodayGuids.has(guidLower)) {
+            category = 'deliveredToday';
+          } else if (deliveredPastGuids.has(guidLower)) {
+            category = 'deliveredPast';
+          } else if (allScheduleGuids.has(guidLower)) {
+            category = 'notDelivered';
           }
 
           if (category) {
@@ -6763,7 +6782,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
 
         let coloredCount = 0;
-        for (const [category, byModel] of Object.entries(byCategory) as ['installed' | 'delivered', Record<string, number[]>][]) {
+        for (const [category, byModel] of Object.entries(byCategory) as [ProgressCategory, Record<string, number[]>][]) {
           const color = PROGRESS_COLORS[category];
           for (const [modelId, runtimeIds] of Object.entries(byModel)) {
             await api.viewer.setObjectState(
@@ -6775,7 +6794,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           }
         }
 
-        console.log(`📊 Progress coloring: ${coloredCount} colored (installed+delivered)`);
+        console.log(`📊 Progress coloring: ${coloredCount} colored`);
       }
 
       setMessage(`✓ Värvitud! Valged=${whiteCount}, Graafikudetaile=${colorGuids.size}`);
