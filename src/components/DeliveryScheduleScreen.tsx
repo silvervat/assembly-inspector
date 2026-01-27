@@ -4493,19 +4493,45 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
       }
 
-      if (uniqueGuids.length === 0) {
+      // For detailed imports, allow duplicates - update existing items with new vehicle/date
+      let guidsToImport: string[];
+      // Map of existing item IDs by GUID (lowercase) for UPDATE instead of INSERT
+      const existingItemsByGuid = new Map<string, typeof items[0]>();
+
+      if (hasDetailedData && duplicateGuids.length > 0) {
+        console.log(`🔄 Detailed import: will update ${duplicateGuids.length} existing items with new vehicle/date data`);
+
+        // Build lookup of existing items by GUID for later UPDATE
+        const duplicateGuidsLower = new Set(duplicateGuids.map(g => g.toLowerCase()));
+        const duplicateIfcGuids = new Set(duplicateGuids.map(g => {
+          if (g.length === 36) return msToIfcGuid(g).toLowerCase();
+          if (g.length === 22) return g.toLowerCase();
+          return '';
+        }).filter(Boolean));
+
+        for (const item of items) {
+          const guidLower = item.guid?.toLowerCase();
+          const ifcLower = item.guid_ifc?.toLowerCase();
+          if (guidLower && duplicateGuidsLower.has(guidLower)) {
+            existingItemsByGuid.set(guidLower, item);
+          } else if (ifcLower && duplicateIfcGuids.has(ifcLower)) {
+            existingItemsByGuid.set(ifcLower, item);
+          }
+        }
+
+        // Import all GUIDs (new ones will be inserted, existing ones updated)
+        guidsToImport = guids;
+      } else if (uniqueGuids.length === 0) {
         setMessage(`Kõik ${duplicateGuids.length} GUID-i on juba graafikus`);
         setImporting(false);
         return;
+      } else {
+        // Log skipped duplicates for simple imports
+        if (duplicateGuids.length > 0) {
+          console.log(`Skipping ${duplicateGuids.length} duplicate GUIDs:`, duplicateGuids.slice(0, 10));
+        }
+        guidsToImport = uniqueGuids;
       }
-
-      // Log skipped duplicates
-      if (duplicateGuids.length > 0) {
-        console.log(`Skipping ${duplicateGuids.length} duplicate GUIDs:`, duplicateGuids.slice(0, 10));
-      }
-
-      // Continue with unique GUIDs only
-      const guidsToImport = uniqueGuids;
 
       // NEW APPROACH: Search loaded models directly (like refresh does)
       // This is more reliable than relying on database which may be stale
@@ -4892,45 +4918,120 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             createdVehicles.push(newVehicle.vehicle_code);
           }
 
-          // Create items for this group - use FRESH data from Trimble model!
-          const newItems = groupItems.map((row, idx) => {
+          // Create/update items for this group - use FRESH data from Trimble model!
+          const itemsToInsert: any[] = [];
+          const itemsToUpdate: { id: string; vehicle_id: string; scheduled_date: string | null; sort_order: number; notes: string | null; oldItem: typeof items[0] }[] = [];
+
+          groupItems.forEach((row, idx) => {
             const ifcGuid = row.guid.length === 22 ? row.guid : (row.guid.length === 36 ? msToIfcGuid(row.guid) : '');
             const foundObj = ifcGuid ? foundObjects.get(ifcGuid) : undefined;
             const freshProps = ifcGuid ? freshPropertiesMap.get(ifcGuid) : undefined;
 
-            return {
-              trimble_project_id: projectId,
-              vehicle_id: vehicle!.id,
-              guid: row.guid,
-              guid_ifc: ifcGuid,
-              guid_ms: row.guid.length === 36 ? row.guid : (row.guid.length === 22 ? ifcToMsGuid(row.guid) : ''),
-              // Use FRESH properties from model!
-              assembly_mark: freshProps?.assembly_mark || `Import-${totalImported + idx + 1}`,
-              product_name: freshProps?.product_name || null,
-              cast_unit_weight: freshProps?.cast_unit_weight || null,
-              cast_unit_position_code: freshProps?.cast_unit_position_code || null,
-              // Model references from loaded models
-              model_id: foundObj?.modelId || null,
-              object_runtime_id: foundObj?.runtimeId || null,
-              scheduled_date: scheduledDate,
-              sort_order: idx,
-              status: 'planned' as const,
-              created_by: tcUserEmail,
-              notes: row.comment || null
-            };
+            // Check if this GUID already exists in the schedule
+            const guidLower = row.guid.toLowerCase();
+            const ifcLower = ifcGuid?.toLowerCase() || '';
+            const existingItem = existingItemsByGuid.get(guidLower) || existingItemsByGuid.get(ifcLower);
+
+            if (existingItem) {
+              // UPDATE existing item - move to new vehicle/date, preserve status
+              itemsToUpdate.push({
+                id: existingItem.id,
+                vehicle_id: vehicle!.id,
+                scheduled_date: scheduledDate,
+                sort_order: idx,
+                notes: row.comment || existingItem.notes || null,
+                oldItem: existingItem
+              });
+            } else {
+              // INSERT new item
+              itemsToInsert.push({
+                trimble_project_id: projectId,
+                vehicle_id: vehicle!.id,
+                guid: row.guid,
+                guid_ifc: ifcGuid,
+                guid_ms: row.guid.length === 36 ? row.guid : (row.guid.length === 22 ? ifcToMsGuid(row.guid) : ''),
+                assembly_mark: freshProps?.assembly_mark || `Import-${totalImported + idx + 1}`,
+                product_name: freshProps?.product_name || null,
+                cast_unit_weight: freshProps?.cast_unit_weight || null,
+                cast_unit_position_code: freshProps?.cast_unit_position_code || null,
+                model_id: foundObj?.modelId || null,
+                object_runtime_id: foundObj?.runtimeId || null,
+                scheduled_date: scheduledDate,
+                sort_order: idx,
+                status: 'planned' as const,
+                created_by: tcUserEmail,
+                notes: row.comment || null
+              });
+            }
           });
 
-          // Batch insert to avoid Supabase row limits
+          // Batch insert new items
           const INSERT_BATCH_SIZE = 500;
-          for (let i = 0; i < newItems.length; i += INSERT_BATCH_SIZE) {
-            const batch = newItems.slice(i, i + INSERT_BATCH_SIZE);
+          for (let i = 0; i < itemsToInsert.length; i += INSERT_BATCH_SIZE) {
+            const batch = itemsToInsert.slice(i, i + INSERT_BATCH_SIZE);
             const { error } = await supabase
               .from('trimble_delivery_items')
               .insert(batch);
 
             if (error) throw error;
           }
-          totalImported += newItems.length;
+
+          // Batch update existing items and log history
+          const historyEntries: any[] = [];
+          for (const item of itemsToUpdate) {
+            const { error } = await supabase
+              .from('trimble_delivery_items')
+              .update({
+                vehicle_id: item.vehicle_id,
+                scheduled_date: item.scheduled_date,
+                sort_order: item.sort_order,
+                notes: item.notes
+              })
+              .eq('id', item.id);
+
+            if (error) {
+              console.error('Error updating existing item:', error);
+              continue;
+            }
+
+            // Track changes in history
+            const oldVehicle = vehicles.find(v => v.id === item.oldItem.vehicle_id);
+            const dateChanged = item.oldItem.scheduled_date !== item.scheduled_date;
+            const vehicleChanged = item.oldItem.vehicle_id !== item.vehicle_id;
+
+            if (dateChanged || vehicleChanged) {
+              historyEntries.push({
+                trimble_project_id: projectId,
+                item_id: item.id,
+                vehicle_id: item.oldItem.vehicle_id,
+                change_type: 'schedule_import',
+                old_date: item.oldItem.scheduled_date || null,
+                new_date: item.scheduled_date,
+                old_vehicle_id: item.oldItem.vehicle_id || null,
+                new_vehicle_id: item.vehicle_id,
+                old_vehicle_code: oldVehicle?.vehicle_code || null,
+                new_vehicle_code: vehicleCode || null,
+                change_reason: 'Detailne import',
+                changed_by: tcUserEmail,
+                is_snapshot: false
+              });
+            }
+          }
+
+          // Insert history entries in batch
+          if (historyEntries.length > 0) {
+            const { error } = await supabase.from('trimble_delivery_history').insert(historyEntries);
+            if (error) {
+              console.error('Error inserting history:', error);
+            }
+            console.log(`📝 Logged ${historyEntries.length} history entries for group ${vehicleCode || 'unknown'}`);
+          }
+
+          if (itemsToUpdate.length > 0) {
+            console.log(`🔄 Updated ${itemsToUpdate.length} existing items in group ${vehicleCode || 'unknown'}`);
+          }
+
+          totalImported += itemsToInsert.length + itemsToUpdate.length;
         }
 
         await Promise.all([loadItems(), loadVehicles()]);
@@ -4938,7 +5039,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         const vehicleInfo = createdVehicles.length > 0
           ? ` (loodud veokid: ${createdVehicles.join(', ')})`
           : '';
-        const skippedInfo = duplicateGuids.length > 0 ? `, ${duplicateGuids.length} vahele jäetud (duplikaadid)` : '';
+        const updatedInfo = duplicateGuids.length > 0 && hasDetailedData ? `, ${duplicateGuids.length} uuendatud (olemasolevad)` : '';
+        const skippedInfo = duplicateGuids.length > 0 && !hasDetailedData ? `, ${duplicateGuids.length} vahele jäetud (duplikaadid)` : '';
         setShowImportModal(false);
         setImportText('');
         setParsedImportData([]);
@@ -4949,7 +5051,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           ? `. ⚠️ Ei leitud mudelis: ${notFoundGuids.length}`
           : '';
 
-        setMessage(`✅ ${totalImported} detaili imporditud MUDELIST${vehicleInfo}${skippedInfo}, ${linkedCount} värsket andmestikku${notFoundInfo}`);
+        setMessage(`✅ ${totalImported} detaili imporditud MUDELIST${vehicleInfo}${updatedInfo}${skippedInfo}, ${linkedCount} värsket andmestikku${notFoundInfo}`);
       } else {
         // SIMPLE IMPORT: All items to one new vehicle
         // Create vehicle for import
