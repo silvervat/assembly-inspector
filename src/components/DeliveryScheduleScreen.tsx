@@ -4978,23 +4978,48 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
           // Batch update existing items and log history
           const historyEntries: any[] = [];
-          for (const item of itemsToUpdate) {
-            const { error } = await supabase
-              .from('trimble_delivery_items')
-              .update({
-                vehicle_id: item.vehicle_id,
-                scheduled_date: item.scheduled_date,
-                sort_order: item.sort_order,
-                notes: item.notes
-              })
-              .eq('id', item.id);
 
-            if (error) {
-              console.error('Error updating existing item:', error);
-              continue;
+          // First: bulk update vehicle_id and scheduled_date for ALL items in this group (same values)
+          if (itemsToUpdate.length > 0) {
+            const idsToUpdate = itemsToUpdate.map(item => item.id);
+            const UPDATE_BATCH_SIZE = 100;
+            for (let i = 0; i < idsToUpdate.length; i += UPDATE_BATCH_SIZE) {
+              const batch = idsToUpdate.slice(i, i + UPDATE_BATCH_SIZE);
+              const { error } = await supabase
+                .from('trimble_delivery_items')
+                .update({
+                  vehicle_id: itemsToUpdate[0].vehicle_id,
+                  scheduled_date: itemsToUpdate[0].scheduled_date
+                })
+                .in('id', batch);
+
+              if (error) {
+                console.error('Error batch updating items:', error);
+              }
             }
 
-            // Track changes in history
+            // Second: update sort_order and notes individually only where needed
+            const itemsNeedingSortOrNotes = itemsToUpdate.filter((item, idx) => {
+              const needsSort = item.sort_order !== item.oldItem.sort_order;
+              const needsNotes = item.notes !== (item.oldItem.notes || null);
+              return needsSort || needsNotes;
+            });
+
+            // Run sort_order/notes updates in parallel batches
+            const PARALLEL_LIMIT = 10;
+            for (let i = 0; i < itemsNeedingSortOrNotes.length; i += PARALLEL_LIMIT) {
+              const batch = itemsNeedingSortOrNotes.slice(i, i + PARALLEL_LIMIT);
+              await Promise.all(batch.map(item =>
+                supabase
+                  .from('trimble_delivery_items')
+                  .update({ sort_order: item.sort_order, notes: item.notes })
+                  .eq('id', item.id)
+              ));
+            }
+          }
+
+          // Build history entries
+          for (const item of itemsToUpdate) {
             const oldVehicle = vehicles.find(v => v.id === item.oldItem.vehicle_id);
             const dateChanged = item.oldItem.scheduled_date !== item.scheduled_date;
             const vehicleChanged = item.oldItem.vehicle_id !== item.vehicle_id;
