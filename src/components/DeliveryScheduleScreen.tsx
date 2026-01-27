@@ -4493,19 +4493,57 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
       }
 
-      if (uniqueGuids.length === 0) {
+      // For detailed imports, allow duplicates - delete existing items and re-import with new data
+      let guidsToImport: string[];
+      if (hasDetailedData && duplicateGuids.length > 0) {
+        console.log(`🔄 Detailed import: removing ${duplicateGuids.length} existing items to re-import with new data`);
+
+        // Delete existing delivery items that match the duplicate GUIDs
+        const duplicateGuidsLower = new Set(duplicateGuids.map(g => g.toLowerCase()));
+        const duplicateIfcGuids = new Set(duplicateGuids.map(g => {
+          if (g.length === 36) return msToIfcGuid(g).toLowerCase();
+          if (g.length === 22) return g.toLowerCase();
+          return '';
+        }).filter(Boolean));
+
+        // Find item IDs to delete
+        const itemIdsToDelete = items
+          .filter(item => {
+            const guidMatch = item.guid && duplicateGuidsLower.has(item.guid.toLowerCase());
+            const ifcMatch = item.guid_ifc && duplicateIfcGuids.has(item.guid_ifc.toLowerCase());
+            return guidMatch || ifcMatch;
+          })
+          .map(item => item.id);
+
+        if (itemIdsToDelete.length > 0) {
+          // Delete in batches
+          const DELETE_BATCH_SIZE = 100;
+          for (let i = 0; i < itemIdsToDelete.length; i += DELETE_BATCH_SIZE) {
+            const batch = itemIdsToDelete.slice(i, i + DELETE_BATCH_SIZE);
+            const { error } = await supabase
+              .from('trimble_delivery_items')
+              .delete()
+              .in('id', batch);
+            if (error) {
+              console.error('Error deleting duplicate items:', error);
+            }
+          }
+          console.log(`✅ Deleted ${itemIdsToDelete.length} existing items for re-import`);
+        }
+
+        // Import all GUIDs (both previously unique and previously duplicate)
+        guidsToImport = guids;
+      } else if (uniqueGuids.length === 0) {
         setMessage(`Kõik ${duplicateGuids.length} GUID-i on juba graafikus`);
         setImporting(false);
         return;
+      } else {
+        // Log skipped duplicates for simple imports
+        if (duplicateGuids.length > 0) {
+          console.log(`Skipping ${duplicateGuids.length} duplicate GUIDs:`, duplicateGuids.slice(0, 10));
+        }
+        guidsToImport = uniqueGuids;
       }
-
-      // Log skipped duplicates
-      if (duplicateGuids.length > 0) {
-        console.log(`Skipping ${duplicateGuids.length} duplicate GUIDs:`, duplicateGuids.slice(0, 10));
-      }
-
-      // Continue with unique GUIDs only
-      const guidsToImport = uniqueGuids;
 
       // NEW APPROACH: Search loaded models directly (like refresh does)
       // This is more reliable than relying on database which may be stale
