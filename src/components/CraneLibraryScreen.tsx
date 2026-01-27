@@ -1782,7 +1782,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
       const singleCraneSheet = workbook.Sheets['Kraana'];
 
       if (!cranesSheet && !singleCraneSheet) {
-        setFullImportResult({ cranes: [], error: 'Excel fail peab sisaldama "Kraanid" või "Kraana" lehte!' });
+        setFullImportResult({ cranes: [], error: t('crane.excelMustContainCranesSheet') });
         return;
       }
 
@@ -1841,7 +1841,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
             cab_position: 'rear',
             default_crane_color: DEFAULT_CRANE_COLOR,
             default_radius_color: DEFAULT_RADIUS_COLOR,
-            notes: 'Imporditud Excelist koos tõstegraafikutega',
+            notes: t('crane.importedFromExcel'),
             is_active: true,
             created_by_email: userEmail
           });
@@ -1932,7 +1932,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
         const model = String(craneData['mudel'] || '').trim();
 
         if (!manufacturer || !model) {
-          setFullImportResult({ cranes: [], error: 'Kraana lehel peavad olema täidetud "Tootja" ja "Mudel" väljad!' });
+          setFullImportResult({ cranes: [], error: t('crane.manufacturerModelRequired') });
           return;
         }
 
@@ -1953,13 +1953,13 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
           cab_position: cabPosition,
           default_crane_color: DEFAULT_CRANE_COLOR,
           default_radius_color: DEFAULT_RADIUS_COLOR,
-          notes: String(craneData['märkused'] || 'Imporditud Excelist koos tõstegraafikutega'),
+          notes: String(craneData['märkused'] || t('crane.importedFromExcel')),
           is_active: true,
           created_by_email: userEmail
         });
 
         if (!newCrane) {
-          setFullImportResult({ cranes: [], error: 'Kraana loomine ebaõnnestus!' });
+          setFullImportResult({ cranes: [], error: t('crane.craneCreationFailed') });
           return;
         }
 
