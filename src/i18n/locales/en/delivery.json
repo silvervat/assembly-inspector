@@ -283,6 +283,8 @@
     "color": "Color",
     "colorByVehicle": "By vehicle",
     "colorByDate": "By date",
+    "colorByTimeline": "Timeline",
+    "colorByProgress": "Installed / delivered",
     "colorByFactory": "By factory",
     "colorWhite": "Color white",
     "playback": "Playback",
