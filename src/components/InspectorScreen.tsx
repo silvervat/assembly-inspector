@@ -116,21 +116,21 @@ export default function InspectorScreen({
       keevis: t('modes.keevis', 'Keeviste inspektsioon'),
       paigaldatud_detailid: t('modes.paigaldatud_detailid', 'Paigaldatud detailid'),
       eos2: t('modes.eos2', 'Saada EOS2 tabelisse'),
-      admin: 'Administratsioon',
-      inspection_plan: 'Inspektsiooni kava',
-      inspection_plans: 'Kontrollplaanid',
-      inspection_admin: 'Kontrollkavade Admin',
-      inspection_type: 'Inspektsioon',
-      installations: 'Paigaldamised',
-      schedule: 'Paigaldusgraafik',
-      delivery_schedule: 'Tarnegraafik',
-      arrived_deliveries: 'Saabunud tarned',
-      organizer: 'Organiseerija',
-      issues: 'Probleemid',
-      tools: 'Tööriistad',
-      crane_planner: 'Kraanade Planeerimine',
-      crane_library: 'Kraanade Andmebaas',
-      keyboard_shortcuts: 'Klaviatuuri otseteed'
+      admin: t('inspector.administration'),
+      inspection_plan: t('inspector.inspectionPlan'),
+      inspection_plans: t('inspector.inspectionPlans'),
+      inspection_admin: t('inspector.inspectionAdmin'),
+      inspection_type: t('inspector.inspection'),
+      installations: t('inspector.installations'),
+      schedule: t('inspector.installationSchedule'),
+      delivery_schedule: t('inspector.deliverySchedule'),
+      arrived_deliveries: t('inspector.arrivedDeliveries'),
+      organizer: t('inspector.organizer'),
+      issues: t('inspector.issues'),
+      tools: t('inspector.tools'),
+      crane_planner: t('inspector.cranePlanner'),
+      crane_library: t('inspector.craneLibrary'),
+      keyboard_shortcuts: t('inspector.keyboardShortcuts')
     };
     return titles[mode] || mode;
   };
@@ -196,11 +196,11 @@ export default function InspectorScreen({
     pollInterval: 2000,
     onNavigationStart: () => {
       setEos2NavStatus('searching');
-      setMessage('🔍 EOS2: Otsin elementi...');
+      setMessage(`🔍 ${t('inspector.eos2SearchingElement')}`);
     },
     onNavigationSuccess: (command) => {
       setEos2NavStatus('found');
-      setMessage(`✅ EOS2: Element leitud! ${command.assembly_mark || command.guid?.substring(0, 8) || ''}`);
+      setMessage(`✅ ${t('inspector.eos2ElementFound', { mark: command.assembly_mark || command.guid?.substring(0, 8) || '' })}`);
       setTimeout(() => {
         setEos2NavStatus('idle');
         setMessage('');
@@ -208,7 +208,7 @@ export default function InspectorScreen({
     },
     onNavigationError: (_error, command) => {
       setEos2NavStatus('error');
-      setMessage(`❌ EOS2: Elementi ei leitud (${command.assembly_mark || 'GUID'})`);
+      setMessage(`❌ ${t('inspector.eos2ElementNotFound', { mark: command.assembly_mark || 'GUID' })}`);
       setTimeout(() => {
         setEos2NavStatus('idle');
         setMessage('');
@@ -585,9 +585,9 @@ export default function InspectorScreen({
     if (objects.length > 1) {
       setCanInspect(false);
       if (inspectionMode === 'poldid') {
-        setMessage('⚠️ Vali ainult üks poldikomplekt inspekteerimiseks');
+        setMessage(`⚠️ ${t('inspector.selectOneBoltSet')}`);
       } else {
-        setMessage('⚠️ Vali ainult üks detail inspekteerimiseks');
+        setMessage(`⚠️ ${t('inspector.selectOneDetail')}`);
       }
       return;
     }
@@ -598,7 +598,7 @@ export default function InspectorScreen({
     if (inspectionMode === 'poldid') {
       if (!obj.boltName) {
         setCanInspect(false);
-        setMessage('⚠️ Poltide inspektsiooniks märgistada poldikomplekt');
+        setMessage(`⚠️ ${t('inspector.markBoltSetForInspection')}`);
         return;
       }
     }
@@ -1108,7 +1108,7 @@ export default function InspectorScreen({
     try {
       // 1. Laadi üles kasutaja fotod
       if (photos.length > 0) {
-        setMessage(`📤 Laadin üles ${photos.length} fotot...`);
+        setMessage(`📤 ${t('inspector.uploadingPhotos', { count: photos.length })}`);
 
         for (let i = 0; i < photos.length; i++) {
           const photo = photos[i];
@@ -1136,7 +1136,7 @@ export default function InspectorScreen({
       }
 
       // 2. Tee 3D vaate snapshot (praegune vaade)
-      setMessage('📸 Teen 3D pilti...');
+      setMessage(`📸 ${t('inspector.taking3dPhoto')}`);
       const snapshotDataUrl = await api.viewer.getSnapshot();
       const blob = dataURLtoBlob(snapshotDataUrl);
       const snapshotFileName = `${projectId}_${obj.modelId}_${obj.runtimeId}_3d_${Date.now()}.png`;
@@ -1159,7 +1159,7 @@ export default function InspectorScreen({
 
       // 3. Tee topview snapshot kui valitud
       if (includeTopView) {
-        setMessage('📸 Teen pealtvaate pilti...');
+        setMessage(`📸 ${t('inspector.takingTopviewPhoto')}`);
 
         // Salvesta praegune kaamera
         const currentCamera = await api.viewer.getCamera();
@@ -1253,7 +1253,7 @@ export default function InspectorScreen({
         }
       }
 
-      setMessage('💾 Salvestan...');
+      setMessage(`💾 ${t('inspector.saving')}`);
 
       // Poltide režiimis kasuta boltName'i, muidu assemblyMark'i
       // Fallback: use productName, objectName, or GUID if no mark
@@ -1332,7 +1332,7 @@ export default function InspectorScreen({
       photos.forEach(p => URL.revokeObjectURL(p.preview));
       setPhotos([]);
 
-      setMessage(`✅ Inspekteeritud: ${markToSave}`);
+      setMessage(`✅ ${t('inspector.inspected', { mark: markToSave })}`);
       setInspectionCount(prev => prev + 1);
 
       // Tühjenda valik
@@ -1355,7 +1355,7 @@ export default function InspectorScreen({
 
     } catch (e: any) {
       console.error('Inspection failed:', e);
-      setMessage(`❌ Viga: ${e.message}`);
+      setMessage(`❌ ${t('inspector.errorMessage', { message: e.message })}`);
     } finally {
       setInspecting(false);
     }
@@ -1474,7 +1474,7 @@ export default function InspectorScreen({
     const files = e.target.files;
     if (!files) return;
 
-    setMessage('📸 Optimeerin pilte...');
+    setMessage(`📸 ${t('inspector.optimizingImages')}`);
 
     const newPhotos: { file: File; preview: string }[] = [];
     for (let i = 0; i < files.length; i++) {
@@ -1528,7 +1528,7 @@ export default function InspectorScreen({
         if (resultsError) throw resultsError;
 
         if (!resultsData || resultsData.length === 0) {
-          setMessage('ℹ️ Sul pole veel inspektsioone');
+          setMessage(`ℹ️ ${t('inspector.noInspectionsYet')}`);
           setTimeout(() => setMessage(''), 3000);
           setInspectionListLoading(false);
           return;
@@ -1690,7 +1690,7 @@ export default function InspectorScreen({
       setInspectionListMode('mine');
     } catch (e: any) {
       console.error('Failed to show my inspections:', e);
-      setMessage('❌ Viga inspektsioonide laadimisel');
+      setMessage(`❌ ${t('inspector.errorLoadingInspections')}`);
     } finally {
       setInspectionListLoading(false);
     }
@@ -1720,7 +1720,7 @@ export default function InspectorScreen({
         if (resultsError) throw resultsError;
 
         if (!resultsData || resultsData.length === 0) {
-          setMessage('ℹ️ Inspektsioone pole veel tehtud');
+          setMessage(`ℹ️ ${t('inspector.noInspectionsDone')}`);
           setTimeout(() => setMessage(''), 3000);
           setInspectionListLoading(false);
           return;
@@ -1828,7 +1828,7 @@ export default function InspectorScreen({
       setInspectionListTotal(totalCount);
 
       if (totalCount === 0) {
-        setMessage('ℹ️ Inspektsioone pole veel tehtud');
+        setMessage(`ℹ️ ${t('inspector.noInspectionsDone')}`);
         setTimeout(() => setMessage(''), 3000);
         setInspectionListLoading(false);
         return;
@@ -1879,7 +1879,7 @@ export default function InspectorScreen({
       setInspectionListMode('all');
     } catch (e: any) {
       console.error('Failed to show all inspections:', e);
-      setMessage('❌ Viga inspektsioonide laadimisel');
+      setMessage(`❌ ${t('inspector.errorLoadingInspections')}`);
     } finally {
       setInspectionListLoading(false);
     }
@@ -1991,7 +1991,7 @@ export default function InspectorScreen({
       if (planError) throw planError;
 
       if (!planItems || planItems.length === 0) {
-        setMessage('ℹ️ Kavas pole ühtegi objekti');
+        setMessage(`ℹ️ ${t('inspector.noPlanObjects')}`);
         setTimeout(() => setMessage(''), 3000);
         setInspectionListLoading(false);
         return;
@@ -2080,8 +2080,8 @@ export default function InspectorScreen({
         : itemsWithStatus;
 
       if (filteredItems.length === 0) {
-        const statusLabel = status ? INSPECTION_STATUS_COLORS[status as keyof typeof INSPECTION_STATUS_COLORS]?.label || status : 'valitud staatusega';
-        setMessage(`ℹ️ ${statusLabel} objekte pole`);
+        const statusLabel = status ? INSPECTION_STATUS_COLORS[status as keyof typeof INSPECTION_STATUS_COLORS]?.label || status : '';
+        setMessage(`ℹ️ ${t('inspector.noObjectsWithStatus', { status: statusLabel })}`);
         setTimeout(() => setMessage(''), 3000);
         setInspectionListLoading(false);
         return;
@@ -2195,7 +2195,7 @@ export default function InspectorScreen({
       }
     } catch (e: any) {
       console.error('Failed to show plan items by status:', e);
-      setMessage('❌ Viga nimekirja laadimisel');
+      setMessage(`❌ ${t('inspector.errorLoadingList')}`);
     } finally {
       setInspectionListLoading(false);
     }
@@ -2251,7 +2251,7 @@ export default function InspectorScreen({
       }
     } catch (e: any) {
       console.error('Failed to load more inspections:', e);
-      setMessage('❌ Viga juurde laadimisel');
+      setMessage(`❌ ${t('inspector.errorLoadingMore')}`);
       setTimeout(() => setMessage(''), 3000);
     } finally {
       setInspectionListLoadingMore(false);
@@ -2526,10 +2526,10 @@ export default function InspectorScreen({
                 <button
                   className={`status-indicator-btn all ${activeStatusFilter === null ? 'active' : ''}`}
                   onClick={() => showPlanItemsByStatus(null)}
-                  title="Kõik objektid"
+                  title={t('inspector.allObjects')}
                   disabled={inspectionListLoading}
                 >
-                  Kõik
+                  {t('inspector.all')}
                 </button>
               </div>
             )}
@@ -2548,8 +2548,8 @@ export default function InspectorScreen({
             </button>
             <span className="list-title">
               {activeStatusFilter
-                ? INSPECTION_STATUS_COLORS[activeStatusFilter as keyof typeof INSPECTION_STATUS_COLORS]?.label || 'Nimekiri'
-                : 'Kõik objektid'}
+                ? INSPECTION_STATUS_COLORS[activeStatusFilter as keyof typeof INSPECTION_STATUS_COLORS]?.label || t('inspector.list')
+                : t('inspector.allObjects')}
             </span>
             <span className="list-count">({inspectionListTotal})</span>
           </div>
@@ -2559,22 +2559,22 @@ export default function InspectorScreen({
       {/* Only show warning if assembly is required AND not intentionally locked OFF */}
       {requiresAssemblySelection && !assemblySelectionEnabled && lockedAssemblyMode !== false && (
         <div className="warning-banner">
-          ⚠️ Assembly Selection pole sisse lülitatud
+          ⚠️ {t('inspector.assemblySelectionOff')}
         </div>
       )}
 
       {inspectionMode === 'poldid' && assemblySelectionEnabled && (
         <div className="warning-banner info-banner">
-          ℹ️ Poltide režiimis lülita Assembly Selection VÄLJA
+          ℹ️ {t('inspector.boltModeAssemblyOff')}
         </div>
       )}
 
       {/* EOS2 Navigation Status */}
       {eos2NavStatus !== 'idle' && (
         <div className={`eos2-nav-status ${eos2NavStatus}`}>
-          {eos2NavStatus === 'searching' && '🔍 Otsin EOS2 elementi...'}
-          {eos2NavStatus === 'found' && '✅ Element leitud!'}
-          {eos2NavStatus === 'error' && '❌ Elementi ei leitud'}
+          {eos2NavStatus === 'searching' && `🔍 ${t('inspector.eos2Searching')}`}
+          {eos2NavStatus === 'found' && `✅ ${t('inspector.eos2Found')}`}
+          {eos2NavStatus === 'error' && `❌ ${t('inspector.eos2NotFound')}`}
         </div>
       )}
 
@@ -2624,7 +2624,7 @@ export default function InspectorScreen({
       {inspectionListMode === 'none' && existingInspection && inspectionMode !== 'inspection_type' && (
         <div className="existing-inspection">
           <div className="existing-header">
-            <span className="existing-badge">✓ Inspekteeritud</span>
+            <span className="existing-badge">✓ {t('inspector.inspectedBadge')}</span>
             <span className="existing-date">
               {new Date(existingInspection.inspectedAt).toLocaleString('et-EE')}
             </span>
@@ -2643,7 +2643,7 @@ export default function InspectorScreen({
                   className="existing-photo-thumb"
                   onClick={() => openGallery(existingInspection.photoUrls, idx)}
                 >
-                  <img src={url} alt={`Foto ${idx + 1}`} />
+                  <img src={url} alt={t('inspector.photoAlt', { index: idx + 1 })} />
                 </div>
               ))}
             </div>
@@ -2655,7 +2655,7 @@ export default function InspectorScreen({
       {inspectionListMode === 'none' && inspectionMode === 'inspection_type' && selectedObjects.length === 0 && !assignedPlan && (
         <div className="select-detail-prompt">
           <div className="select-detail-icon">👆</div>
-          <div className="select-detail-text">Inspekteerimiseks vali esmalt üks detail mudelist</div>
+          <div className="select-detail-text">{t('inspector.selectDetailPrompt')}</div>
         </div>
       )}
 

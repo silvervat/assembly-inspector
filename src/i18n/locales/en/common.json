@@ -573,5 +573,29 @@
     "selectionError": "Error selecting",
     "foundOnSite": "{{mark}} found on site!",
     "detail": "Detail"
+  },
+  "shortcuts": {
+    "title": "User Guides",
+    "searchPlaceholder": "Search guides...",
+    "noResults": "No results found for \"{{query}}\"",
+    "globalShortcuts": "Global shortcuts",
+    "topicSingular": "topic",
+    "topicPlural": "topics",
+    "hint": "Hint:",
+    "hintText": "Shortcuts work when the extension panel is active. Select details in model, then click on extension panel and press shortcut. Some shortcuts (e.g. markups) require a detail to be selected in model.",
+    "alt_shift_a_desc": "Colors all arrived (confirmed) but not yet installed details green, rest of model is colored white.",
+    "alt_shift_m_desc": "Adds markups with black text and 500mm line to selected details. If details are closer than 4m, 2m height difference is used.",
+    "alt_shift_s_desc": "Opens quick search modal and expands extension panel. Allows searching details by assembly mark from any page.",
+    "alt_shift_w_desc": "Colors entire model white - same function as on Tools page.",
+    "alt_shift_b_desc": "Adds bolt markups in dark blue color to selected details. If bolts are closer than 4m, 1.5m height difference is used.",
+    "alt_shift_i_desc": "Opens Installation entry page directly, regardless of which page you are currently on.",
+    "alt_shift_d_desc": "Adds two-line markups with vehicle code and delivery date to selected details. Each vehicle gets different color, nearby markups get different height.",
+    "alt_shift_r_desc": "Removes all markups in model. Useful when you need to quickly delete all markups without going to Tools page.",
+    "alt_shift_c_desc": "Colors entire model white (like ALT+SHIFT+W), but selected details in model are colored dark green. Useful for highlighting specific details.",
+    "alt_shift_t_desc": "Opens delivery schedule and colors today's deliveries. Each vehicle gets different color (same as in delivery schedule list). If no deliveries for today, notifies you.",
+    "alt_shift_1_desc": "Copies selected details' assembly marks in Excel format (tab-separated MARK and GUID). Suitable for pasting directly into Excel.",
+    "alt_shift_2_desc": "Copies selected details' assembly marks as simple list (each mark on separate line). Suitable for sending via email or messenger.",
+    "alt_shift_3_desc": "Colors all installed details dark blue, rest of model is colored white. Same logic as on Installations page.",
+    "alt_shift_4_desc": "Selects all installed details (without coloring). Works in batches, supports large volumes (20k+ details)."
   }
 }
