@@ -4972,17 +4972,17 @@ export default function AdminScreen({
 
             {/* CALIBRATION section - Building orientation */}
             <div className="function-section" style={{ background: calibrationMode !== 'off' ? '#fef3c7' : undefined, border: calibrationMode !== 'off' ? '2px solid #f59e0b' : undefined }}>
-              <h4>🧭 Hoone kalibreerimine</h4>
+              <h4>🧭 {t('calibration.buildingCalibration')}</h4>
               <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
-                Määra hoone suund valides 2 punkti pika profiili teljel. Seejärel arvutatakse mõõtmed õigesti ka nurga all oleva hoone jaoks.
+                {t('calibration.buildingCalibrationDesc')}
               </p>
               <div style={{ marginBottom: '12px', padding: '8px', background: '#f0f9ff', borderRadius: '6px', fontSize: '11px' }}>
-                <strong>Juhend:</strong>
+                <strong>{t('calibration.instructions')}</strong>
                 <ol style={{ margin: '4px 0 0 16px', padding: 0 }}>
-                  <li>Vajuta "Alusta kalibreerimist"</li>
-                  <li>Vali mudelist punkt 1 (pika profiili ühes otsas)</li>
-                  <li>Vali punkt 2 (sama profiili teises otsas)</li>
-                  <li>Hoone pöördenurk arvutatakse automaatselt</li>
+                  <li>{t('calibration.step1')}</li>
+                  <li>{t('calibration.step2')}</li>
+                  <li>{t('calibration.step3')}</li>
+                  <li>{t('calibration.step4')}</li>
                 </ol>
               </div>
 
@@ -5002,7 +5002,7 @@ export default function AdminScreen({
                       fontSize: '12px'
                     }}
                   >
-                    🎯 Alusta kalibreerimist
+                    🎯 {t('calibration.startCalibration')}
                   </button>
                 ) : (
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -5015,7 +5015,7 @@ export default function AdminScreen({
                       fontWeight: 600,
                       animation: 'pulse 2s infinite'
                     }}>
-                      {calibrationMode === 'pickingPoint1' ? '⏳ Vali punkt 1...' : '⏳ Vali punkt 2...'}
+                      {calibrationMode === 'pickingPoint1' ? `⏳ ${t('calibration.selectingPoint1')}` : `⏳ ${t('calibration.selectingPoint2')}`}
                     </span>
                     <button
                       onClick={onCancelCalibration}
@@ -5029,7 +5029,7 @@ export default function AdminScreen({
                         fontSize: '11px'
                       }}
                     >
-                      ❌ Tühista
+                      ❌ {t('calibration.cancelCalibration')}
                     </button>
                   </div>
                 )}
@@ -5038,27 +5038,27 @@ export default function AdminScreen({
               {/* Display picked points and calculated angle */}
               {(calibrationPoint1 || calibrationPoint2) && (
                 <div style={{ padding: '8px', background: '#ecfdf5', borderRadius: '6px', fontSize: '11px', marginBottom: '12px' }}>
-                  <strong>Kalibreeringu andmed:</strong>
+                  <strong>{t('calibration.calibrationData')}</strong>
                   {calibrationPoint1 && (
                     <div style={{ marginTop: '4px' }}>
-                      📍 Punkt 1: X={calibrationPoint1.x.toFixed(3)}m, Y={calibrationPoint1.y.toFixed(3)}m, Z={calibrationPoint1.z.toFixed(3)}m
+                      📍 {t('calibration.point1Coords', { x: calibrationPoint1.x.toFixed(3), y: calibrationPoint1.y.toFixed(3), z: calibrationPoint1.z.toFixed(3) })}
                     </div>
                   )}
                   {calibrationPoint2 && (
                     <div style={{ marginTop: '4px' }}>
-                      📍 Punkt 2: X={calibrationPoint2.x.toFixed(3)}m, Y={calibrationPoint2.y.toFixed(3)}m, Z={calibrationPoint2.z.toFixed(3)}m
+                      📍 {t('calibration.point2Coords', { x: calibrationPoint2.x.toFixed(3), y: calibrationPoint2.y.toFixed(3), z: calibrationPoint2.z.toFixed(3) })}
                     </div>
                   )}
                   {calibrationPoint1 && calibrationPoint2 && (
                     <>
                       <div style={{ marginTop: '8px', padding: '6px', background: '#d1fae5', borderRadius: '4px' }}>
-                        🧭 <strong>Hoone pöördenurk:</strong> {(Math.atan2(
+                        🧭 <strong>{t('calibration.buildingRotationAngle')}</strong> {(Math.atan2(
                           calibrationPoint2.y - calibrationPoint1.y,
                           calibrationPoint2.x - calibrationPoint1.x
                         ) * 180 / Math.PI).toFixed(2)}°
                       </div>
                       <div style={{ marginTop: '4px', color: '#059669' }}>
-                        ✅ Kalibreerimine aktiivne! Mõõtmisfunktsioonid kasutavad nüüd seda nurka.
+                        ✅ {t('calibration.calibrationActive')}
                       </div>
                     </>
                   )}
@@ -8111,12 +8111,12 @@ export default function AdminScreen({
                 />
               </div>
               <div style={{ marginTop: '12px', padding: '10px', background: '#fefce8', borderRadius: '6px', fontSize: '11px', color: '#854d0e' }}>
-                <strong>⚠️ Pööratud objektide mõõtmine:</strong>
+                <strong>⚠️ {t('boundingBox.rotatedObjectMeasurement')}</strong>
                 <ul style={{ marginTop: '4px', paddingLeft: '16px' }}>
-                  <li>Bounding box on alati telgedega joondatud (axis-aligned)</li>
-                  <li>Pööratud objekti tegelik pikkus ≈ diagonaal × cos(nurk)</li>
-                  <li>45° pööratud objektil: tegelik pikkus ≈ diagonaal × 0.707</li>
-                  <li>Kasuta "Alamdetailide mõõdud" täpsemaks arvutuseks</li>
+                  <li>{t('boundingBox.tip1')}</li>
+                  <li>{t('boundingBox.tip2')}</li>
+                  <li>{t('boundingBox.tip3')}</li>
+                  <li>{t('boundingBox.tip4')}</li>
                 </ul>
               </div>
             </div>

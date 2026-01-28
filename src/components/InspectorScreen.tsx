@@ -2936,7 +2936,7 @@ export default function InspectorScreen({
             <button className="photo-modal-close" onClick={closeGallery}>
               ✕
             </button>
-            <img src={modalGallery.photos[modalGallery.currentIndex]} alt="Inspektsiooni foto" />
+            <img src={modalGallery.photos[modalGallery.currentIndex]} alt={t('inspector.inspectionPhoto')} />
 
             {/* Navigation arrows */}
             {modalGallery.photos.length > 1 && (

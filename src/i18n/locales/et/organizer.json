@@ -27,7 +27,9 @@
     "colorLocked": "Grupi värvi ei saa muuta - grupp on lukustatud",
     "allItemsAlreadyInGroup": "Kõik valitud detailid on juba selles grupis",
     "noPermissionDelete": "Sul pole õigust detaile kustutada",
-    "noPermissionDeleteOthers": "Sul pole õigust teiste lisatud detaile kustutada ({{count}} detaili)"
+    "noPermissionDeleteOthers": "Sul pole õigust teiste lisatud detaile kustutada ({{count}} detaili)",
+    "noGroupsYet": "Gruppe pole veel loodud",
+    "clickAddNewGroup": "Kliki \"Lisa uus grupp\" et alustada"
   },
   "field": {
     "new": "Lisa väli",

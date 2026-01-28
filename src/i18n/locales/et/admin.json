@@ -140,6 +140,33 @@
     "usersLoadError": "Viga kasutajate laadimisel: {{error}}",
     "teamMembersAdded": "{{count}} meeskonna liiget lisatud"
   },
+  "calibration": {
+    "buildingCalibration": "Hoone kalibreerimine",
+    "buildingCalibrationDesc": "Määra hoone suund valides 2 punkti pika profiili teljel. Seejärel arvutatakse mõõtmed õigesti ka nurga all oleva hoone jaoks.",
+    "instructions": "Juhend:",
+    "step1": "Vajuta \"Alusta kalibreerimist\"",
+    "step2": "Vali mudelist punkt 1 (pika profiili ühes otsas)",
+    "step3": "Vali punkt 2 (sama profiili teises otsas)",
+    "step4": "Hoone pöördenurk arvutatakse automaatselt",
+    "startCalibration": "Alusta kalibreerimist",
+    "selectingPoint1": "Vali punkt 1...",
+    "selectingPoint2": "Vali punkt 2...",
+    "rotationDegrees": "Pöördenurk: {{degrees}}°",
+    "notCalibrated": "Pole kalibreeritud",
+    "cancelCalibration": "Tühista",
+    "calibrationData": "Kalibreeringu andmed:",
+    "point1Coords": "Punkt 1: X={{x}}m, Y={{y}}m, Z={{z}}m",
+    "point2Coords": "Punkt 2: X={{x}}m, Y={{y}}m, Z={{z}}m",
+    "buildingRotationAngle": "Hoone pöördenurk:",
+    "calibrationActive": "Kalibreerimine aktiivne! Mõõtmisfunktsioonid kasutavad nüüd seda nurka."
+  },
+  "boundingBox": {
+    "rotatedObjectMeasurement": "Pööratud objektide mõõtmine:",
+    "tip1": "Bounding box on alati telgedega joondatud (axis-aligned)",
+    "tip2": "Pööratud objekti tegelik pikkus ≈ diagonaal × cos(nurk)",
+    "tip3": "45° pööratud objektil: tegelik pikkus ≈ diagonaal × 0.707",
+    "tip4": "Kasuta \"Alamdetailide mõõdud\" täpsemaks arvutuseks"
+  },
   "settings": {
     "title": "Seaded",
     "teklaPropertySettings": "Tekla property seaded",

@@ -140,6 +140,33 @@
     "usersLoadError": "Error loading users: {{error}}",
     "teamMembersAdded": "{{count}} team members added"
   },
+  "calibration": {
+    "buildingCalibration": "Building calibration",
+    "buildingCalibrationDesc": "Set building direction by selecting 2 points on a long profile axis. Dimensions will then be calculated correctly for rotated buildings.",
+    "instructions": "Instructions:",
+    "step1": "Click \"Start calibration\"",
+    "step2": "Select point 1 from model (at one end of a long profile)",
+    "step3": "Select point 2 (at the other end of the same profile)",
+    "step4": "Building rotation angle is calculated automatically",
+    "startCalibration": "Start calibration",
+    "selectingPoint1": "Select point 1...",
+    "selectingPoint2": "Select point 2...",
+    "rotationDegrees": "Rotation: {{degrees}}°",
+    "notCalibrated": "Not calibrated",
+    "cancelCalibration": "Cancel",
+    "calibrationData": "Calibration data:",
+    "point1Coords": "Point 1: X={{x}}m, Y={{y}}m, Z={{z}}m",
+    "point2Coords": "Point 2: X={{x}}m, Y={{y}}m, Z={{z}}m",
+    "buildingRotationAngle": "Building rotation angle:",
+    "calibrationActive": "Calibration active! Measurement functions now use this angle."
+  },
+  "boundingBox": {
+    "rotatedObjectMeasurement": "Rotated objects measurement:",
+    "tip1": "Bounding box is always axis-aligned",
+    "tip2": "Actual length of rotated object ≈ diagonal × cos(angle)",
+    "tip3": "45° rotated object: actual length ≈ diagonal × 0.707",
+    "tip4": "Use \"Sub-component dimensions\" for more accurate calculation"
+  },
   "settings": {
     "title": "Settings",
     "teklaPropertySettings": "Tekla property settings",

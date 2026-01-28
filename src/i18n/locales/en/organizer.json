@@ -27,7 +27,9 @@
     "colorLocked": "Cannot change group color - group is locked",
     "allItemsAlreadyInGroup": "All selected items are already in this group",
     "noPermissionDelete": "You do not have permission to delete items",
-    "noPermissionDeleteOthers": "You do not have permission to delete items added by others ({{count}} items)"
+    "noPermissionDeleteOthers": "You do not have permission to delete items added by others ({{count}} items)",
+    "noGroupsYet": "No groups created yet",
+    "clickAddNewGroup": "Click \"Add new group\" to start"
   },
   "field": {
     "new": "Add field",

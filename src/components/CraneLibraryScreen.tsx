@@ -2220,21 +2220,21 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
         )}
 
         <div style={{ marginTop: '12px', padding: '10px', backgroundColor: '#ecfdf5', borderRadius: '6px', fontSize: '11px', color: '#047857' }}>
-          <strong>Excel faili struktuur:</strong>
+          <strong>{t('crane.excelStructure')}</strong>
           <ul style={{ margin: '4px 0 0 0', paddingLeft: '16px' }}>
-            <li><strong>"Kraanid"</strong> leht - kõik kraanid tabelina (ID, Tootja, Mudel, jne)</li>
-            <li><strong>"1-72t", "1-48t"</strong> jne - kraana nr 1 tõstegraafikud</li>
-            <li><strong>"2-60t", "2-40t"</strong> jne - kraana nr 2 tõstegraafikud</li>
-            <li>Lehe nimi = [kraana ID]-[vastukaal]t</li>
+            <li dangerouslySetInnerHTML={{ __html: t('crane.excelStructureCranes') }} />
+            <li dangerouslySetInnerHTML={{ __html: t('crane.excelStructureCharts1') }} />
+            <li dangerouslySetInnerHTML={{ __html: t('crane.excelStructureCharts2') }} />
+            <li>{t('crane.excelStructureSheetName')}</li>
           </ul>
         </div>
       </div>
 
       {/* BASIC IMPORT - just crane list, no load charts */}
       <div style={{ marginBottom: '20px' }}>
-        <h3 style={{ fontSize: '15px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>Kraanide Nimekiri (ilma tõstegraafikuteta)</h3>
+        <h3 style={{ fontSize: '15px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>{t('crane.craneListNoChartsTitle')}</h3>
         <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
-          Impordi mitu kraana korraga. Tõstegraafikuid saad lisada hiljem käsitsi.
+          {t('crane.craneListNoChartsDesc')}
         </p>
       </div>
 
@@ -2256,9 +2256,9 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
             1
           </div>
           <div style={{ flex: 1 }}>
-            <h4 style={{ fontSize: '13px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>Lae alla mall</h4>
+            <h4 style={{ fontSize: '13px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>{t('crane.downloadTemplateStep')}</h4>
             <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 12px 0' }}>
-              Lae alla Excel mall ja täida see oma kraanide andmetega.
+              {t('crane.downloadTemplateDesc')}
             </p>
             <button
               onClick={downloadTemplate}
@@ -2277,7 +2277,7 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
               }}
             >
               <FiDownload size={14} />
-              Lae alla mall
+              {t('crane.downloadTemplateStep')}
             </button>
           </div>
         </div>
@@ -2301,9 +2301,9 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
             2
           </div>
           <div style={{ flex: 1 }}>
-            <h4 style={{ fontSize: '13px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>Lae üles täidetud fail</h4>
+            <h4 style={{ fontSize: '13px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>{t('crane.uploadCompletedFileStep')}</h4>
             <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 12px 0' }}>
-              Vali täidetud Excel fail oma arvutist ja impordi kraanid andmebaasi.
+              {t('crane.uploadCompletedFileDesc')}
             </p>
             <label style={{
               display: 'inline-flex',
@@ -2321,12 +2321,12 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
               {importing ? (
                 <>
                   <FiLoader className="animate-spin" size={14} />
-                  Importin...
+                  {t('crane.importing')}
                 </>
               ) : (
                 <>
                   <FiUpload size={14} />
-                  Vali fail ja impordi
+                  {t('crane.selectFileAndImport')}
                 </>
               )}
               <input
@@ -2353,22 +2353,22 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
             {importResults.failed === 0 ? (
               <>
                 <span style={{ fontSize: '16px' }}>✓</span>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#166534' }}>Import õnnestus!</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#166534' }}>{t('crane.importSuccess')}</span>
               </>
             ) : (
               <>
                 <FiAlertCircle size={16} style={{ color: '#dc2626' }} />
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#dc2626' }}>Import osaliselt ebaõnnestus</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#dc2626' }}>{t('crane.importPartialFail')}</span>
               </>
             )}
           </div>
           <div style={{ fontSize: '12px', color: '#374151', marginBottom: importResults.errors.length > 0 ? '12px' : '0' }}>
-            <p style={{ margin: 0 }}>Õnnestunud: <strong>{importResults.success}</strong></p>
-            {importResults.failed > 0 && <p style={{ margin: '4px 0 0 0' }}>Ebaõnnestunud: <strong>{importResults.failed}</strong></p>}
+            <p style={{ margin: 0 }}>{t('crane.succeeded')} <strong>{importResults.success}</strong></p>
+            {importResults.failed > 0 && <p style={{ margin: '4px 0 0 0' }} dangerouslySetInnerHTML={{ __html: t('crane.failedCount', { count: importResults.failed }) }} />}
           </div>
           {importResults.errors.length > 0 && (
             <div style={{ fontSize: '11px', color: '#dc2626', backgroundColor: 'white', padding: '8px', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto' }}>
-              <strong>Vead:</strong>
+              <strong>{t('crane.errors')}</strong>
               <ul style={{ margin: '4px 0 0 0', paddingLeft: '20px' }}>
                 {importResults.errors.map((err, idx) => (
                   <li key={idx}>{err}</li>
@@ -2383,12 +2383,12 @@ function CraneImportTab({ userEmail }: { userEmail: string }) {
         <div style={{ display: 'flex', gap: '8px' }}>
           <FiInfo size={14} style={{ color: '#0369a1', flexShrink: 0, marginTop: '2px' }} />
           <div style={{ fontSize: '11px', color: '#0369a1' }}>
-            <strong>Näpunäited:</strong>
+            <strong>{t('crane.tips')}</strong>
             <ul style={{ margin: '4px 0 0 0', paddingLeft: '16px' }}>
-              <li>Kraana tüüp peab olema täpselt üks järgnevatest: Mobiilkraana, Roomikkraana, Manipulaator, Tornkraana, Pöörlev teleskooplaadur</li>
-              <li>Tootja ja Mudel on kohustuslikud väljad</li>
-              <li>Iga imporditud kraana saab automaatselt unikaalse ID (C001, C002, jne)</li>
-              <li>Vastukaal ja lisanool on valikulised - jäta tühjaks kui ei ole</li>
+              <li>{t('crane.tipCraneType')}</li>
+              <li>{t('crane.tipRequiredFields')}</li>
+              <li>{t('crane.tipAutoId')}</li>
+              <li>{t('crane.tipOptional')}</li>
             </ul>
           </div>
         </div>

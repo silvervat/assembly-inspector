@@ -13066,8 +13066,8 @@ export default function OrganizerScreen({
               <div style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
                 {groups.length === 0 ? (
                   <div style={{ padding: '32px 16px', textAlign: 'center', color: '#6b7280' }}>
-                    <p style={{ marginBottom: '8px' }}>Gruppe pole veel loodud</p>
-                    <p style={{ fontSize: '12px' }}>Kliki "Lisa uus grupp" et alustada</p>
+                    <p style={{ marginBottom: '8px' }}>{t('organizer:group.noGroupsYet')}</p>
+                    <p style={{ fontSize: '12px' }}>{t('organizer:group.clickAddNewGroup')}</p>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
