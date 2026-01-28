@@ -292,6 +292,9 @@
     "deleteGroup": "Delete"
   },
   "groupForm": {
+    "nameLabel": "Name",
+    "descriptionLabel": "Description",
+    "sharingLabel": "Sharing",
     "fieldName": "Field name *",
     "fieldPlaceholder": "e.g. Comments, Price",
     "showInList": "Show in list",
@@ -300,7 +303,21 @@
     "uniqueItemsDesc": "The same item cannot be added multiple times to this group or subgroups.",
     "customFields": "Custom fields ({{count}})",
     "decimals": "Decimals",
-    "allDecimals": "All"
+    "allDecimals": "All",
+    "permissionsLabel": "Permissions for other users",
+    "defaultPermissions": "Default permissions for all project members:",
+    "canAddItems": "Can add items",
+    "canDeleteOwn": "Can delete own items",
+    "canDeleteAll": "Can delete all items",
+    "canEditGroup": "Can edit group name and description",
+    "canManageFields": "Can create and edit custom fields",
+    "assemblySelectionRequired": "Assembly Selection required",
+    "assemblySelectionDesc": "Assembly Selection must be on to add items to this group and subgroups",
+    "assemblySelectionDescSubgroup": "Assembly Selection must be on to add items to this subgroup",
+    "noCustomFieldsYet": "No custom fields added yet",
+    "loadProjectMembers": "Load project members",
+    "selectedUsersCount": "Selected: {{count}} users",
+    "perUserPermissions": "Per-user permissions:"
   },
   "fieldsManagement": {
     "title": "Manage fields: {{name}}",

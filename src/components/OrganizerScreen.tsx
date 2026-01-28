@@ -9885,11 +9885,11 @@ export default function OrganizerScreen({
                 </div>
               )}
               <div className="org-field">
-                <label>Nimi *</label>
+                <label>{t('organizer:groupForm.nameLabel')} *</label>
                 <input type="text" value={formName} onChange={(e) => setFormName(e.target.value)} placeholder={t('organizer:ui.groupNamePlaceholder')} autoFocus />
               </div>
               <div className="org-field">
-                <label>Kirjeldus</label>
+                <label>{t('organizer:groupForm.descriptionLabel')}</label>
                 <textarea value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder={t('organizer:ui.optionalDescription')} rows={2} />
               </div>
               <div className="org-field">
@@ -9907,7 +9907,7 @@ export default function OrganizerScreen({
               </div>
               {/* Sharing settings - available for all groups including subgroups */}
               <div className="org-field">
-                <label>Jagamine</label>
+                <label>{t('organizer:groupForm.sharingLabel')}</label>
                   <div className="org-sharing-options">
                     <label className={`org-sharing-option ${formSharingMode === 'project' ? 'selected' : ''}`}>
                       <input
@@ -9958,7 +9958,7 @@ export default function OrganizerScreen({
                       ) : teamMembers.length === 0 ? (
                         <div className="org-no-users">
                           <button className="org-load-users-btn" onClick={loadTeamMembers}>
-                            Laadi projekti liikmed
+                            {t('organizer:groupForm.loadProjectMembers')}
                           </button>
                         </div>
                       ) : (
@@ -9987,7 +9987,7 @@ export default function OrganizerScreen({
                           </div>
                           {formAllowedUsers.length > 0 && (
                             <div className="org-selected-count">
-                              Valitud: {formAllowedUsers.length} kasutajat
+                              {t('organizer:groupForm.selectedUsersCount', { count: formAllowedUsers.length })}
                             </div>
                           )}
                         </>
@@ -10000,14 +10000,14 @@ export default function OrganizerScreen({
               {formSharingMode !== 'private' && (
                 <div className="org-field">
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    Õigused teistele kasutajatele
+                    {t('organizer:groupForm.permissionsLabel')}
                   </label>
 
                   {/* Default permissions for all project members */}
                   {formSharingMode === 'project' && (
                     <div style={{ background: '#f9fafb', padding: '12px', borderRadius: '6px', marginTop: '8px' }}>
                       <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '10px' }}>
-                        Vaikimisi õigused kõigile projekti liikmetele:
+                        {t('organizer:groupForm.defaultPermissions')}
                       </p>
 
                       <div className="org-field checkbox" style={{ marginBottom: '6px' }}>
@@ -10017,7 +10017,7 @@ export default function OrganizerScreen({
                             checked={formDefaultPermissions.can_add}
                             onChange={(e) => setFormDefaultPermissions(prev => ({ ...prev, can_add: e.target.checked }))}
                           />
-                          Saavad lisada detaile
+                          {t('organizer:groupForm.canAddItems')}
                         </label>
                       </div>
 
@@ -10028,7 +10028,7 @@ export default function OrganizerScreen({
                             checked={formDefaultPermissions.can_delete_own}
                             onChange={(e) => setFormDefaultPermissions(prev => ({ ...prev, can_delete_own: e.target.checked }))}
                           />
-                          Saavad kustutada enda lisatud detaile
+                          {t('organizer:groupForm.canDeleteOwn')}
                         </label>
                       </div>
 
@@ -10039,7 +10039,7 @@ export default function OrganizerScreen({
                             checked={formDefaultPermissions.can_delete_all}
                             onChange={(e) => setFormDefaultPermissions(prev => ({ ...prev, can_delete_all: e.target.checked }))}
                           />
-                          Saavad kustutada kõiki detaile
+                          {t('organizer:groupForm.canDeleteAll')}
                         </label>
                       </div>
 
@@ -10050,7 +10050,7 @@ export default function OrganizerScreen({
                             checked={formDefaultPermissions.can_edit_group}
                             onChange={(e) => setFormDefaultPermissions(prev => ({ ...prev, can_edit_group: e.target.checked }))}
                           />
-                          Saavad muuta grupi nime ja kirjeldust
+                          {t('organizer:groupForm.canEditGroup')}
                         </label>
                       </div>
 
@@ -10061,7 +10061,7 @@ export default function OrganizerScreen({
                             checked={formDefaultPermissions.can_manage_fields}
                             onChange={(e) => setFormDefaultPermissions(prev => ({ ...prev, can_manage_fields: e.target.checked }))}
                           />
-                          Saavad luua ja muuta lisaveerge
+                          {t('organizer:groupForm.canManageFields')}
                         </label>
                       </div>
                     </div>
@@ -10071,7 +10071,7 @@ export default function OrganizerScreen({
                   {formSharingMode === 'shared' && formAllowedUsers.length > 0 && (
                     <div style={{ background: '#f9fafb', padding: '12px', borderRadius: '6px', marginTop: '8px' }}>
                       <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '10px' }}>
-                        Kasutajapõhised õigused:
+                        {t('organizer:groupForm.perUserPermissions')}
                       </p>
 
                       {formAllowedUsers.map(email => {
@@ -10094,7 +10094,7 @@ export default function OrganizerScreen({
                                     [email]: { ...userPerms, can_add: e.target.checked }
                                   }))}
                                 />
-                                Lisa detaile
+                                {t('organizer:groupInfo.canAdd')}
                               </label>
 
                               <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -10106,7 +10106,7 @@ export default function OrganizerScreen({
                                     [email]: { ...userPerms, can_delete_own: e.target.checked }
                                   }))}
                                 />
-                                Kustuta omi
+                                {t('organizer:groupInfo.canDeleteOwn')}
                               </label>
 
                               <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -10118,7 +10118,7 @@ export default function OrganizerScreen({
                                     [email]: { ...userPerms, can_delete_all: e.target.checked }
                                   }))}
                                 />
-                                Kustuta kõiki
+                                {t('organizer:groupInfo.canDeleteAll')}
                               </label>
 
                               <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -10130,7 +10130,7 @@ export default function OrganizerScreen({
                                     [email]: { ...userPerms, can_edit_group: e.target.checked }
                                   }))}
                                 />
-                                Muuda gruppi
+                                {t('organizer:groupInfo.canEditGroup')}
                               </label>
 
                               <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -10142,7 +10142,7 @@ export default function OrganizerScreen({
                                     [email]: { ...userPerms, can_manage_fields: e.target.checked }
                                   }))}
                                 />
-                                Halda veerge
+                                {t('organizer:groupInfo.canManageFields')}
                               </label>
                             </div>
                           </div>
@@ -10156,11 +10156,11 @@ export default function OrganizerScreen({
               {/* Assembly Selection and Unique Items settings - available for ALL groups */}
               <div className="org-toggle-field">
                 <div className="org-toggle-label">
-                  <div className="title">Assembly Selection nõutud</div>
+                  <div className="title">{t('organizer:groupForm.assemblySelectionRequired')}</div>
                   <div className="description">
                     {formParentId
-                      ? 'Kas sellesse alamgruppi lisamiseks peab Assembly Selection olema sees'
-                      : 'Kas sellesse gruppi ja alamgruppidesse lisamiseks peab Assembly Selection olema sees'
+                      ? t('organizer:groupForm.assemblySelectionDescSubgroup')
+                      : t('organizer:groupForm.assemblySelectionDesc')
                     }
                   </div>
                 </div>
@@ -11575,7 +11575,7 @@ export default function OrganizerScreen({
 
                   {/* Auto-stagger heights */}
                   <div className="markup-height-row" style={{ marginTop: '8px' }}>
-                    <label>Auto kõrgused:</label>
+                    <label>{t('organizer:markupModal.autoHeights')}</label>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
                       <input
                         type="checkbox"
@@ -11584,7 +11584,7 @@ export default function OrganizerScreen({
                         style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                       />
                       <span style={{ fontSize: '12px', color: markupSettings.autoStaggerHeight ? '#0891b2' : '#6b7280', fontWeight: markupSettings.autoStaggerHeight ? 500 : 400 }}>
-                        {markupSettings.autoStaggerHeight ? 'Sees' : 'Väljas'}
+                        {markupSettings.autoStaggerHeight ? t('organizer:markupModal.on') : t('organizer:markupModal.off')}
                       </span>
                     </label>
                     <button
