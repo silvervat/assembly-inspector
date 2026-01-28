@@ -42,7 +42,10 @@ import {
   OrganizerToolbar,
   OrganizerSearchBar,
   OrganizerBulkActionsBar,
-  OrganizerGroupsList
+  OrganizerGroupsList,
+  DeleteConfirmModal,
+  ImportModal,
+  ExcelImportModal
 } from '../features/organizer';
 import {
   generateUUID,
@@ -11058,54 +11061,13 @@ export default function OrganizerScreen({
       })()}
 
       {/* Delete confirmation modal - compact */}
-      {showDeleteConfirm && deleteGroupData && (
-        <div className="org-modal-overlay" style={{ zIndex: 1010 }} onClick={() => setShowDeleteConfirm(false)}>
-          <div className="org-modal delete-confirm-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 340 }}>
-            <div className="org-modal-header" style={{ padding: '12px 16px' }}>
-              <h2 style={{ fontSize: 14 }}>Kustuta grupp</h2>
-              <button onClick={() => setShowDeleteConfirm(false)}><FiX size={16} /></button>
-            </div>
-            <div className="org-modal-body" style={{ padding: '12px 16px' }}>
-              <p style={{ margin: '0 0 10px', fontSize: 13, color: '#374151' }}>
-                Kustutad grupi <strong>"{deleteGroupData.group.name}"</strong>
-              </p>
-              {(deleteGroupData.childCount > 0 || deleteGroupData.itemCount > 0) && (
-                <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
-                  {deleteGroupData.childCount > 0 && (
-                    <div style={{ padding: '6px 10px', background: '#fef2f2', borderRadius: 6, fontSize: 12 }}>
-                      <strong style={{ color: '#dc2626' }}>{deleteGroupData.childCount}</strong>
-                      <span style={{ color: '#7f1d1d', marginLeft: 4 }}>alamgruppi</span>
-                    </div>
-                  )}
-                  <div style={{ padding: '6px 10px', background: '#fef2f2', borderRadius: 6, fontSize: 12 }}>
-                    <strong style={{ color: '#dc2626' }}>{deleteGroupData.itemCount}</strong>
-                    <span style={{ color: '#7f1d1d', marginLeft: 4 }}>detaili</span>
-                  </div>
-                </div>
-              )}
-              {deleteGroupData.childCount === 0 && deleteGroupData.itemCount === 0 && (
-                <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>Grupp on tühi.</p>
-              )}
-              {(deleteGroupData.childCount > 0 || deleteGroupData.itemCount > 0) && (
-                <p style={{ margin: 0, fontSize: 11, color: '#ef4444', fontWeight: 500 }}>
-                  Andmed, fotod ja failid kustutatakse jäädavalt!
-                </p>
-              )}
-            </div>
-            <div className="org-modal-footer" style={{ padding: '10px 16px', gap: 8 }}>
-              <button className="cancel" onClick={() => setShowDeleteConfirm(false)} style={{ padding: '6px 12px', fontSize: 12 }}>{t('organizer:cancel')}</button>
-              <button
-                className="save"
-                style={{ background: '#dc2626', padding: '6px 12px', fontSize: 12 }}
-                onClick={deleteGroup}
-                disabled={saving}
-              >
-                {saving ? 'Kustutan...' : 'Kustuta'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteConfirmModal
+        show={showDeleteConfirm}
+        deleteGroupData={deleteGroupData}
+        saving={saving}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={deleteGroup}
+      />
 
       {/* Markup modal */}
       {showMarkupModal && markupGroupId && (() => {
@@ -11737,175 +11699,33 @@ export default function OrganizerScreen({
       )}
 
       {/* Import GUID modal */}
-      {showImportModal && importGroupId && (() => {
-        const importGroup = groups.find(g => g.id === importGroupId);
+      <ImportModal
+        show={showImportModal}
+        importGroupId={importGroupId}
+        importText={importText}
+        importProgress={importProgress}
+        saving={saving}
+        groups={groups}
+        onClose={() => { setShowImportModal(false); setImportGroupId(null); }}
+        onImportTextChange={setImportText}
+        onImport={importItemsToGroup}
+        isMsGuid={isMsGuid}
+        isIfcGuid={isIfcGuid}
+      />
 
-        // Parse input to show preview
-        const previewValues = importText
-          .split(/[\n,;\t]+/)
-          .map(v => v.trim())
-          .filter(v => v.length > 0);
-        const firstValue = previewValues[0] || '';
-        const detectedType = isMsGuid(firstValue) ? 'GUID_MS (konverteeritakse IFC-ks)' : isIfcGuid(firstValue) ? 'IFC GUID' : 'Assembly mark';
-
-        return (
-          <div className="org-modal-overlay" onClick={() => { setShowImportModal(false); setImportGroupId(null); }}>
-            <div className="org-modal" onClick={e => e.stopPropagation()}>
-              <div className="org-modal-header">
-                <h2>{t('organizer:guidImport.title')}</h2>
-                <button onClick={() => { setShowImportModal(false); setImportGroupId(null); }}><FiX size={18} /></button>
-              </div>
-              <div className="org-modal-body">
-                <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
-                  Grupp: <strong>{importGroup?.name}</strong>
-                </p>
-
-                <div className="org-field">
-                  <label>
-                    Kleebi GUID või GUID_MS väärtused
-                    <span style={{ fontSize: '11px', color: '#888', display: 'block' }}>
-                      (eraldajaks sobib reavahetus, koma, semikoolon või tabulaator)
-                    </span>
-                  </label>
-                  <textarea
-                    className="org-import-textarea"
-                    placeholder="Näiteks:&#10;3f2504e0-4f89-11d3-9a0c-0305e82c3301&#10;3f2504e0-4f89-11d3-9a0c-0305e82c3302&#10;&#10;või&#10;&#10;W-101&#10;W-102&#10;W-103"
-                    value={importText}
-                    onChange={(e) => setImportText(e.target.value)}
-                    rows={10}
-                    style={{
-                      width: '100%',
-                      fontFamily: 'monospace',
-                      fontSize: '12px',
-                      padding: '8px',
-                      border: '1px solid var(--modus-border)',
-                      borderRadius: '4px',
-                      resize: 'vertical'
-                    }}
-                  />
-                </div>
-
-                {previewValues.length > 0 && (
-                  <div style={{ marginTop: '8px', padding: '8px', background: '#f5f5f5', borderRadius: '4px', fontSize: '12px' }}>
-                    <strong>Tuvastatud tüüp:</strong> {detectedType}
-                    <br />
-                    <strong>Väärtusi:</strong> {previewValues.length}
-                  </div>
-                )}
-
-                {importProgress && (
-                  <div className="org-batch-progress" style={{ marginTop: '12px' }}>
-                    <div className="progress-bar">
-                      <div className="progress-fill" style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }} />
-                    </div>
-                    <span>
-                      Impordin: {importProgress.current} / {importProgress.total} (leitud: {importProgress.found})
-                    </span>
-                  </div>
-                )}
-              </div>
-              <div className="org-modal-footer">
-                <button className="cancel" onClick={() => { setShowImportModal(false); setImportGroupId(null); }}>{t('organizer:cancel')}</button>
-                <button
-                  className="save"
-                  onClick={importItemsToGroup}
-                  disabled={saving || previewValues.length === 0}
-                >
-                  {saving ? 'Impordin...' : `Impordi ${previewValues.length} väärtust`}
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Excel Import Modal */}
-      {showExcelImportModal && excelImportGroupId && (() => {
-        const importGroup = groups.find(g => g.id === excelImportGroupId);
-
-        return (
-          <div className="org-modal-overlay" onClick={() => { setShowExcelImportModal(false); setExcelImportGroupId(null); }}>
-            <div className="org-modal" onClick={e => e.stopPropagation()}>
-              <div className="org-modal-header">
-                <h2>{t('organizer:excelImport.title')}</h2>
-                <button onClick={() => { setShowExcelImportModal(false); setExcelImportGroupId(null); }}><FiX size={18} /></button>
-              </div>
-              <div className="org-modal-body">
-                <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
-                  Grupp: <strong>{importGroup?.name}</strong>
-                </p>
-
-                <div style={{ marginBottom: '16px', padding: '12px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
-                  <p style={{ margin: 0, fontSize: '12px', color: '#166534' }}>
-                    <strong>Nõuded:</strong><br/>
-                    • GUID_IFC või GUID_MS veerg (vähemalt üks kohustuslik)<br/>
-                    • GUID_MS konverteeritakse automaatselt IFC formaati<br/>
-                    • Alamgrupp veerg loob uued alamgrupid automaatselt
-                  </p>
-                </div>
-
-                <div className="org-field" style={{ marginBottom: '16px' }}>
-                  <label>Vali Excel fail (.xlsx)</label>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={handleExcelFileSelect}
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      padding: '8px',
-                      border: '1px solid var(--modus-border)',
-                      borderRadius: '4px',
-                      marginTop: '4px'
-                    }}
-                  />
-                </div>
-
-                {excelImportPreview && (
-                  <div style={{ padding: '12px', background: '#eff6ff', borderRadius: '8px', marginBottom: '16px' }}>
-                    <p style={{ margin: 0, fontSize: '12px', color: '#1e40af' }}>
-                      <strong>Eelvaade:</strong><br/>
-                      • Ridu: {excelImportPreview.rows}<br/>
-                      {excelImportPreview.subgroups.length > 0 && (
-                        <>• Alamgrupid: {excelImportPreview.subgroups.join(', ')}</>
-                      )}
-                    </p>
-                  </div>
-                )}
-
-                <button
-                  onClick={() => downloadImportTemplate(excelImportGroupId)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '8px 12px',
-                    background: 'white',
-                    border: '1px solid var(--modus-border)',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    color: '#374151'
-                  }}
-                >
-                  <FiDownload size={14} /> Lae alla template
-                </button>
-              </div>
-              <div className="org-modal-footer">
-                <button className="cancel" onClick={() => { setShowExcelImportModal(false); setExcelImportGroupId(null); }}>{t('organizer:cancel')}</button>
-                <button
-                  className="save"
-                  onClick={importFromExcel}
-                  disabled={saving || !excelImportFile}
-                >
-                  {saving ? 'Impordin...' : 'Impordi'}
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      <ExcelImportModal
+        show={showExcelImportModal}
+        excelImportGroupId={excelImportGroupId}
+        excelImportFile={excelImportFile}
+        excelImportPreview={excelImportPreview}
+        saving={saving}
+        groups={groups}
+        fileInputRef={fileInputRef}
+        onClose={() => { setShowExcelImportModal(false); setExcelImportGroupId(null); }}
+        onFileSelect={handleExcelFileSelect}
+        onImport={importFromExcel}
+        onDownloadTemplate={downloadImportTemplate}
+      />
 
       {/* Activity Log Modal */}
       {showActivityLogModal && (
