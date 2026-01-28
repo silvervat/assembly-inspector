@@ -13,12 +13,12 @@
 | 2 | AdminScreen tükeldamine | šŸ"„ Pooleli | 10/12 |
 | 3 | State Management | ✅ Lõpetatud | 4/4 |
 | 4 | OrganizerScreen tükeldamine | 🔄 Pooleli | 6/7 |
-| 5 | DeliveryScreen tükeldamine | ⏳ Ootel | 0/7 |
+| 5 | DeliveryScreen tükeldamine | 🔄 Pooleli | 6/7 |
 | 6 | Testimine | ⏳ Ootel | 0/5 |
 | 7 | Error Handling & UX | ⏳ Ootel | 0/4 |
 | 8 | i18n (FI, RU) | ⏳ Ootel | 0/3 |
 
-**Kokku: 27/48 ülesannet lõpetatud**
+**Kokku: 33/48 ülesannet lõpetatud**
 
 ---
 
@@ -533,49 +533,63 @@ Pärast kõigi paneelide ekstraktimist peaks AdminScreen olema ~200 rida:
 ### [F5-001] Loo DeliveryVehiclesPanel
 **Prioriteet:** P1 | **Aeg:** 3h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/delivery/hooks/useDeliveryVehicles.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useDeliveryVehicles - vehicle CRUD)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F5-002] Loo DeliveryItemsPanel
 **Prioriteet:** P1 | **Aeg:** 4h
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ Kaetud useDeliveryStore's (items management)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F5-003] Loo DeliveryCalendarView
 **Prioriteet:** P1 | **Aeg:** 4h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/delivery/hooks/useDeliveryCalendar.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useDeliveryCalendar - viewMode, dates, collapse)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F5-004] Loo DeliveryTimelineView
 **Prioriteet:** P1 | **Aeg:** 3h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/delivery/hooks/useDeliveryPlayback.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useDeliveryPlayback - playback state & controls)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F5-005] Loo DeliveryExportPanel
 **Prioriteet:** P1 | **Aeg:** 2.5h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/delivery/hooks/useDeliveryImportExport.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useDeliveryImportExport - import/export state)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F5-006] Loo DeliveryImportPanel
 **Prioriteet:** P1 | **Aeg:** 2h
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ Kaetud useDeliveryImportExport hook'is + useDeliveryColoring
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F5-007] Refaktoreeri DeliveryScheduleScreen shell
 **Prioriteet:** P1 | **Aeg:** 2h
 
-**Staatus:** ⏳ Ootel
+**Staatus:** 🔶 Blokeeritud - vajab kõigi UI paneelide ekstraktimist. Hooks loodud, UI panels TODO.
 
 ---
 
