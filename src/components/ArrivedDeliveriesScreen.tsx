@@ -4979,7 +4979,7 @@ export default function ArrivedDeliveriesScreen({
                             >
                               <FiAlertTriangle className="warning-icon" size={12} />
                               <span>{t('arrivals.removedFromDelivery', { count: removedItems.length })}</span>
-                              <span className="section-hint">Saabusid teise veokiga</span>
+                              <span className="section-hint">{t('common:arrivals.arrivedWithOtherVehicleHint')}</span>
                             </div>
                             <div className="items-list compact">
                               {removedItems.map(({ confirmation, item, receivingVehicle, receivingArrival }, idx) => (

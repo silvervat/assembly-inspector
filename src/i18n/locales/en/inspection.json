@@ -533,6 +533,8 @@
     "errorDeletingPhoto": "Error deleting photo",
     "commentUpdated": "Comment updated",
     "errorUpdatingComment": "Error updating comment",
+    "noComment": "No comment",
+    "noInspection": "No inspection",
     "selectItemsFirst": "Select items to delete first",
     "massDeleteConfirm": "Delete {{count}} items from plan? This action cannot be undone!",
     "itemsDeleted": "items deleted from plan",

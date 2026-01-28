@@ -421,7 +421,8 @@
     "unknownFactory": "Unknown factory",
     "confirmArrivalTitle": "Confirm arrival",
     "markMissingTitle": "Mark as missing",
-    "activateEditModeTitle": "Activate edit mode"
+    "activateEditModeTitle": "Activate edit mode",
+    "arrivedWithOtherVehicleHint": "Arrived with another vehicle"
   },
   "installations": {
     "title": "Installations",

@@ -1681,13 +1681,13 @@ export default function InspectionPlanScreen({
                 {selectedObjects.length > 0 ? (
                   <>
                     <span className="selection-count">{selectedObjects.length}</span>
-                    <span className="selection-label">objekti valitud</span>
+                    <span className="selection-label">{t('planScreenUi.objectsSelected')}</span>
                     {duplicates.length > 0 && (
-                      <span className="selection-duplicates">({duplicates.length} juba kavas)</span>
+                      <span className="selection-duplicates">({duplicates.length} {t('planScreenUi.alreadyInPlan')})</span>
                     )}
                   </>
                 ) : (
-                  <span className="selection-hint">Vali mudelis objekte lisamiseks kavasse</span>
+                  <span className="selection-hint">{t('planScreenUi.selectObjectsHint')}</span>
                 )}
               </div>
             </div>
@@ -2157,7 +2157,7 @@ export default function InspectionPlanScreen({
                                                                 <FiMessageSquare size={10} /> {result.comment}
                                                               </div>
                                                             ) : (
-                                                              <span className="result-no-comment">Kommentaar puudub</span>
+                                                              <span className="result-no-comment">{t('planScreenUi.noComment')}</span>
                                                             )}
                                                             <button
                                                               className="result-action-btn edit"
@@ -2232,7 +2232,7 @@ export default function InspectionPlanScreen({
                                                   })()}
                                                 </div>
                                               ) : (
-                                                <div className="item-no-inspection">Inspektsioon puudub</div>
+                                                <div className="item-no-inspection">{t('planScreenUi.noInspection')}</div>
                                               )}
                                             </div>
                                           )}

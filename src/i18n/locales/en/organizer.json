@@ -658,6 +658,17 @@
     "sort": "Sort",
     "coloringAndMarkups": "Coloring and markups",
     "resetColors": "Reset colors",
-    "colorByGroups": "Color by groups"
+    "colorByGroups": "Color by groups",
+    "selectedFromModel": "Selected from model: {{count}} items",
+    "selectGroupToAdd": "Select group to add to",
+    "editGroup": "Edit group",
+    "newGroup": "New group",
+    "newSubgroup": "New subgroup",
+    "loadingUsers": "Loading users...",
+    "entireProject": "Entire project",
+    "composeMarkup": "Compose markup",
+    "onlySelected": "Only selected",
+    "addPhotos": "Add photos",
+    "noCustomFieldsHint": "This group has no custom fields. Add a field from the group menu first."
   }
 }

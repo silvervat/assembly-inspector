@@ -533,6 +533,8 @@
     "errorDeletingPhoto": "Viga foto kustutamisel",
     "commentUpdated": "Kommentaar uuendatud",
     "errorUpdatingComment": "Viga kommentaari uuendamisel",
+    "noComment": "Kommentaar puudub",
+    "noInspection": "Inspektsioon puudub",
     "selectItemsFirst": "Valige kõigepealt elemendid kustutamiseks",
     "massDeleteConfirm": "Kas kustutada {{count}} elementi kavast? Seda tegevust ei saa tagasi võtta!",
     "itemsDeleted": "elementi kustutatud kavast",

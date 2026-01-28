@@ -421,7 +421,8 @@
     "unknownFactory": "Teadmata tehas",
     "confirmArrivalTitle": "Kinnita saabunuks",
     "markMissingTitle": "Märgi puuduvaks",
-    "activateEditModeTitle": "Aktiveeri muutmise režiim"
+    "activateEditModeTitle": "Aktiveeri muutmise režiim",
+    "arrivedWithOtherVehicleHint": "Saabusid teise veokiga"
   },
   "installations": {
     "title": "Paigaldamised",

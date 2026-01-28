@@ -658,6 +658,17 @@
     "sort": "Sorteeri",
     "coloringAndMarkups": "Värvimine ja markupid",
     "resetColors": "Lähtesta värvid",
-    "colorByGroups": "Värvi gruppide kaupa"
+    "colorByGroups": "Värvi gruppide kaupa",
+    "selectedFromModel": "Valitud mudelist: {{count}} detaili",
+    "selectGroupToAdd": "Vali grupp, kuhu lisada",
+    "editGroup": "Muuda gruppi",
+    "newGroup": "Uus grupp",
+    "newSubgroup": "Uus alamgrupp",
+    "loadingUsers": "Laadin kasutajaid...",
+    "entireProject": "Kogu projekt",
+    "composeMarkup": "Koosta markup",
+    "onlySelected": "Ainult valitud",
+    "addPhotos": "Lisa fotosid",
+    "noCustomFieldsHint": "Sellel grupil pole lisavälju. Lisa esmalt väli grupi menüüst."
   }
 }
