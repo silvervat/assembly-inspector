@@ -4050,8 +4050,7 @@
 .method-qty-dropdown {
   position: absolute;
   top: calc(100% - 4px);
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
   z-index: 200;
   background: white;
   border: 1px solid #d1d5db;
