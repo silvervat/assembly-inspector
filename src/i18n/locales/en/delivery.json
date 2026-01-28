@@ -133,7 +133,17 @@
     "deleteAll": "Delete all",
     "yesDeleteAll": "Yes, delete all!",
     "addComment": "Add comment",
-    "savingDb": "Saving to database..."
+    "savingDb": "Saving to database...",
+    "moveDate": "Move date",
+    "copyList": "Copy list",
+    "removeSelectedFromModel": "Remove {{count}} selected from model",
+    "registerArrival": "Register arrival",
+    "markups": "Markups",
+    "markupPosition": "Position",
+    "markupPositionMark": "Position + Mark",
+    "markupPositionMarkWeight": "Position + Mark + Weight",
+    "removeMarkups": "Remove markups",
+    "addSelected": "Add {{count}} selected"
   },
   "messages": {
     "loading": "Loading...",

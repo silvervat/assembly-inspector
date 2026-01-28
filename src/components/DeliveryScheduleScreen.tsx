@@ -8171,32 +8171,32 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               setShowVehicleModal(true);
                               setVehicleMenuId(null);
                             }}>
-                              <FiSettings /> Seaded
+                              <FiSettings /> {t('actions.settings')}
                             </button>
                             <button onClick={() => {
                               setMoveTargetDate(vehicle.scheduled_date || '');
                               setShowMoveModal(true);
                               setVehicleMenuId(null);
                             }}>
-                              <FiMove /> Tõsta kuupäeva
+                              <FiMove /> {t('actions.moveDate')}
                             </button>
                             <button onClick={() => {
                               copyVehicleItemsList(vehicleId);
                               setVehicleMenuId(null);
                             }}>
-                              <FiCopy /> Kopeeri nimekiri
+                              <FiCopy /> {t('actions.copyList')}
                             </button>
                             <button onClick={() => {
                               exportVehicleToExcel(vehicleId);
                               setVehicleMenuId(null);
                             }}>
-                              <FiDownload /> Ekspordi Excel
+                              <FiDownload /> {t('actions.exportExcel')}
                             </button>
                             <button onClick={() => {
                               loadHistory(vehicle.id);
                               setVehicleMenuId(null);
                             }}>
-                              <FiClock /> Ajalugu
+                              <FiClock /> {t('ui.history')}
                             </button>
                             {/* Markup submenu - inline expansion */}
                             <button
@@ -8214,7 +8214,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                   transform: showMarkupSubmenu === vehicleId ? 'rotate(180deg)' : 'rotate(0deg)'
                                 }}
                               />
-                              <FiTag /> Markupid
+                              <FiTag /> {t('actions.markups')}
                             </button>
                             {showMarkupSubmenu === vehicleId && (
                               <div className="submenu-inline">
@@ -8223,21 +8223,21 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                   setShowMarkupSubmenu(null);
                                   createMarkupsForVehicle(vehicleId, 'position');
                                 }}>
-                                  Järjekord
+                                  {t('actions.markupPosition')}
                                 </button>
                                 <button onClick={() => {
                                   setVehicleMenuId(null);
                                   setShowMarkupSubmenu(null);
                                   createMarkupsForVehicle(vehicleId, 'position_mark');
                                 }}>
-                                  Järjekord + Mark
+                                  {t('actions.markupPositionMark')}
                                 </button>
                                 <button onClick={() => {
                                   setVehicleMenuId(null);
                                   setShowMarkupSubmenu(null);
                                   createMarkupsForVehicle(vehicleId, 'position_mark_weight');
                                 }}>
-                                  Järjekord + Mark + Kaal
+                                  {t('actions.markupPositionMarkWeight')}
                                 </button>
                                 <div className="submenu-divider" />
                                 <button onClick={() => {
@@ -8245,7 +8245,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                   setShowMarkupSubmenu(null);
                                   removeAllMarkups();
                                 }}>
-                                  <FiTrash2 size={12} /> Eemalda markupid
+                                  <FiTrash2 size={12} /> {t('actions.removeMarkups')}
                                 </button>
                               </div>
                             )}
@@ -8258,7 +8258,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                   setVehicleMenuId(null);
                                   await addItemsToVehicle(vehicle.id, vehicle.scheduled_date);
                                 }}>
-                                  <FiPlus /> Lisa {newObjects.length} valitud
+                                  <FiPlus /> {t('actions.addSelected', { count: newObjects.length })}
                                 </button>
                               ) : null;
                             })()}
@@ -8342,7 +8342,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     setSaving(false);
                                   }
                                 }}>
-                                  <FiPackage /> Eemalda {modelSelectedInThisVehicle.length} mudelist valitud
+                                  <FiPackage /> {t('actions.removeSelectedFromModel', { count: modelSelectedInThisVehicle.length })}
                                 </button>
                               ) : null;
                             })()}
@@ -8352,7 +8352,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               setVehicleMenuId(null);
                               onNavigate?.('arrived_deliveries');
                             }}>
-                              <FiTruck /> Registreeri saabun
+                              <FiTruck /> {t('actions.registerArrival')}
                             </button>
                             <button
                               className="danger"
@@ -8361,7 +8361,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 setVehicleMenuId(null);
                               }}
                             >
-                              <FiTrash2 /> Kustuta
+                              <FiTrash2 /> {t('actions.delete')}
                             </button>
                           </div>
                         )}
