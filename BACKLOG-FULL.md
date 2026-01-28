@@ -11,14 +11,14 @@
 |------|------|---------|----------|
 | 1 | Infrastruktuur | āœ… Lƶpetatud | 6/6 |
 | 2 | AdminScreen tükeldamine | šŸ"„ Pooleli | 10/12 |
-| 3 | State Management | 🔄 Pooleli | 1/4 |
+| 3 | State Management | ✅ Lõpetatud | 4/4 |
 | 4 | OrganizerScreen tükeldamine | ⏳ Ootel | 0/7 |
 | 5 | DeliveryScreen tükeldamine | ⏳ Ootel | 0/7 |
 | 6 | Testimine | ⏳ Ootel | 0/5 |
 | 7 | Error Handling & UX | ⏳ Ootel | 0/4 |
 | 8 | i18n (FI, RU) | ⏳ Ootel | 0/3 |
 
-**Kokku: 18/48 ülesannet lõpetatud**
+**Kokku: 21/48 ülesannet lõpetatud**
 
 ---
 
@@ -431,28 +431,33 @@ Pärast kõigi paneelide ekstraktimist peaks AdminScreen olema ~200 rida:
 
 ---
 
-### [F3-002] Migreeri OrganizerCacheContext → React Query
+### [F3-002] Migreeri OrganizerCacheContext → Zustand
 **Prioriteet:** P0 | **Aeg:** 3h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/shared/stores/useOrganizerCacheStore.ts` ✅
+
+**Staatus:** ✅ Zustand store loodud (useOrganizerCacheStore + compat hook/functions)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F3-003] Loo DeliveryStore
 **Prioriteet:** P0 | **Aeg:** 4h
 
-**Fail:** `src/features/delivery/stores/useDeliveryStore.ts`
+**Fail:** `src/features/delivery/stores/useDeliveryStore.ts` ✅
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ Zustand store loodud (factories, vehicles, items, comments CRUD)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F3-004] Loo OrganizerStore
 **Prioriteet:** P0 | **Aeg:** 4h
 
-**Fail:** `src/features/organizer/stores/useOrganizerStore.ts`
+**Fail:** `src/features/organizer/stores/useOrganizerStore.ts` ✅
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ Zustand store loodud (groups, groupItems, groupTree)
+**Lõpetatud:** 2026-01-28
 
 ---
 
