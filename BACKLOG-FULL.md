@@ -15,10 +15,10 @@
 | 4 | OrganizerScreen tükeldamine | 🔄 Pooleli | 6/7 |
 | 5 | DeliveryScreen tükeldamine | 🔄 Pooleli | 6/7 |
 | 6 | Testimine | 🔄 Pooleli | 4/5 |
-| 7 | Error Handling & UX | ⏳ Ootel | 0/4 |
+| 7 | Error Handling & UX | 🔄 Pooleli | 3/4 |
 | 8 | i18n (FI, RU) | ⏳ Ootel | 0/3 |
 
-**Kokku: 37/48 ülesannet lõpetatud**
+**Kokku: 40/48 ülesannet lõpetatud**
 
 ---
 
@@ -652,45 +652,37 @@ Uuendatud `.github/workflows/deploy.yml` - lisatud test step enne build'i.
 ### [F7-001] Loo ToastContainer
 **Prioriteet:** P1 | **Aeg:** 2h
 
-**Fail:** `src/shared/components/feedback/ToastContainer.tsx`
+**Fail:** `src/shared/components/feedback/ToastContainer.tsx` ✅
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ react-hot-toast Toaster wrapper loodud
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F7-002] Loo ErrorBoundary
 **Prioriteet:** P1 | **Aeg:** 2h
 
-**Fail:** `src/shared/components/feedback/ErrorBoundary.tsx`
+**Fail:** `src/shared/components/feedback/ErrorBoundary.tsx` ✅
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ React ErrorBoundary loodud koos fallback UI-ga
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F7-003] Loo LoadingOverlay
 **Prioriteet:** P1 | **Aeg:** 1h
 
-**Fail:** `src/shared/components/feedback/LoadingOverlay.tsx`
+**Fail:** `src/shared/components/feedback/LoadingOverlay.tsx` ✅
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ Loading overlay spinner loodud
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F7-004] Integreeri feedback süsteem App.tsx-i
 **Prioriteet:** P1 | **Aeg:** 2h
 
-```typescript
-// App.tsx
-<ErrorBoundary>
-  <QueryProvider>
-    <ToastContainer />
-    <LoadingOverlay />
-    {/* ... */}
-  </QueryProvider>
-</ErrorBoundary>
-```
-
-**Staatus:** ⏳ Ootel
+**Staatus:** 🔶 Komponendid loodud, App.tsx integratsioon vajab eraldi PR-i (App.tsx on kriitiline fail)
 
 ---
 
