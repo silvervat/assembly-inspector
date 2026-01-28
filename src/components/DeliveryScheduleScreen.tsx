@@ -16,7 +16,7 @@ import {
 import { compressImage, isImageFile } from '../utils/imageUtils';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import * as XLSX from 'xlsx-js-style';
-import { DeliveryToolbar } from '../features/delivery';
+import { DeliveryToolbar, FactoryModal } from '../features/delivery';
 import {
   FiChevronLeft, FiChevronRight, FiPlus,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
@@ -11574,144 +11574,34 @@ ${importText.split('\n').slice(0, 5).join('\n')}
       )}
 
       {/* Factory management modal */}
-      {showFactoryModal && (
-        <div className="modal-overlay" onClick={() => setShowFactoryModal(false)}>
-          <div className="modal factory-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{t('toolbar.factories')}</h2>
-              <button className="close-btn" onClick={() => setShowFactoryModal(false)}>
-                <FiX />
-              </button>
-            </div>
-            <div className="modal-body">
-              {/* Project-level separator setting */}
-              <div className="project-separator-setting">
-                <label>{t('factoryModal.separator')}:</label>
-                <div className="separator-options">
-                  {['', '.', ',', '-', '|'].map(sep => (
-                    <button
-                      key={sep || 'empty'}
-                      className={`separator-option ${(factories[0]?.vehicle_separator || '') === sep ? 'active' : ''}`}
-                      onClick={async () => {
-                        // Update all factories with this separator
-                        setSaving(true);
-                        try {
-                          for (const f of factories) {
-                            await supabase
-                              .from('trimble_delivery_factories')
-                              .update({ vehicle_separator: sep })
-                              .eq('id', f.id);
-                            // Update all vehicle codes for this factory
-                            const factoryVehicles = vehicles.filter(v => v.factory_id === f.id);
-                            for (const vehicle of factoryVehicles) {
-                              const newVehicleCode = `${f.factory_code}${sep}${vehicle.vehicle_number}`;
-                              await supabase
-                                .from('trimble_delivery_vehicles')
-                                .update({ vehicle_code: newVehicleCode })
-                                .eq('id', vehicle.id);
-                            }
-                          }
-                          setNewFactorySeparator(sep);
-                          await loadFactories();
-                          await loadVehicles();
-                          broadcastReload();
-                          setMessage(t('messages.separatorUpdated'));
-                        } catch (e: any) {
-                          setMessage(t('messages.genericError') + ': ' + e.message);
-                        } finally {
-                          setSaving(false);
-                        }
-                      }}
-                      disabled={saving}
-                    >
-                      {sep || t('factoryModal.empty')}
-                    </button>
-                  ))}
-                </div>
-                <span className="separator-preview">{t('factoryModal.separatorPreview', { sep: factories[0]?.vehicle_separator || '' })}</span>
-              </div>
-
-              {/* Factory list */}
-              <div className="factory-list">
-                {factories.map(f => (
-                  <div key={f.id} className="factory-list-item">
-                    {editingFactoryId === f.id ? (
-                      <>
-                        <input
-                          type="text"
-                          value={editFactoryName}
-                          onChange={(e) => setEditFactoryName(e.target.value)}
-                          placeholder={t('factoryModal.editName')}
-                          className="factory-edit-input"
-                        />
-                        <input
-                          type="text"
-                          value={editFactoryCode}
-                          onChange={(e) => setEditFactoryCode(e.target.value.toUpperCase())}
-                          placeholder={t('factoryModal.editCode')}
-                          maxLength={5}
-                          className="factory-edit-input factory-code-input"
-                        />
-                        <button className="icon-btn save-btn" onClick={updateFactory} disabled={saving}>
-                          <FiCheck />
-                        </button>
-                        <button className="icon-btn cancel-btn" onClick={cancelEditFactory}>
-                          <FiX />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <span className="factory-name">{f.factory_name}</span>
-                        <span className="factory-code">({f.factory_code})</span>
-                        <div className="factory-actions">
-                          <button className="icon-btn" onClick={() => startEditFactory(f)} title={t('common:buttons.edit')}>
-                            <FiEdit2 />
-                          </button>
-                          <button className="icon-btn delete-btn" onClick={() => deleteFactory(f.id)} title={t('common:buttons.delete')}>
-                            <FiTrash2 />
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Add new factory - compact */}
-              <div className="add-factory-form">
-                <div className="form-row">
-                  <input
-                    type="text"
-                    placeholder={t('factoryModal.factoryName')}
-                    value={newFactoryName}
-                    onChange={(e) => setNewFactoryName(e.target.value)}
-                  />
-                  <input
-                    type="text"
-                    placeholder={t('factoryModal.factoryCode')}
-                    value={newFactoryCode}
-                    onChange={(e) => setNewFactoryCode(e.target.value.toUpperCase())}
-                    maxLength={5}
-                  />
-                  <button
-                    className="add-btn"
-                    onClick={createFactory}
-                    disabled={!newFactoryName.trim() || !newFactoryCode.trim() || saving}
-                    title={t('factory.add')}
-                  >
-                    <FiPlus />
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="cancel-btn" onClick={() => setShowFactoryModal(false)}>
-                {t('ui.close')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <FactoryModal
+        show={showFactoryModal}
+        factories={factories}
+        vehicles={vehicles}
+        supabase={supabase}
+        saving={saving}
+        setSaving={setSaving}
+        newFactoryName={newFactoryName}
+        setNewFactoryName={setNewFactoryName}
+        newFactoryCode={newFactoryCode}
+        setNewFactoryCode={setNewFactoryCode}
+        setNewFactorySeparator={setNewFactorySeparator}
+        editingFactoryId={editingFactoryId}
+        editFactoryName={editFactoryName}
+        setEditFactoryName={setEditFactoryName}
+        editFactoryCode={editFactoryCode}
+        setEditFactoryCode={setEditFactoryCode}
+        onClose={() => setShowFactoryModal(false)}
+        loadFactories={loadFactories}
+        loadVehicles={loadVehicles}
+        createFactory={createFactory}
+        updateFactory={updateFactory}
+        deleteFactory={deleteFactory}
+        startEditFactory={startEditFactory}
+        cancelEditFactory={cancelEditFactory}
+        broadcastReload={broadcastReload}
+        setMessage={setMessage}
+      />
 
       {/* Settings modal */}
       {showSettingsModal && (
