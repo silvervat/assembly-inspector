@@ -7247,7 +7247,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             className="calendar-toggle-btn"
             onClick={() => setCalendarCollapsed(!calendarCollapsed)}
           >
-            {calendarCollapsed ? 'Kuva' : 'Peida'}
+            {calendarCollapsed ? t('common:actions.show') : t('common:actions.hide')}
           </button>
         </div>
 
@@ -9517,14 +9517,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 setCollapsedVehicles(new Set(allVehicleIds));
               }
             }}
-            title={collapsedDates.size > 0 ? 'Ava kõik' : 'Sulge kõik'}
+            title={collapsedDates.size > 0 ? t('common:actions.openAll') : t('common:actions.closeAll')}
           >
             {collapsedDates.size > 0 ? <FiChevronDown /> : <FiChevronUp />}
           </button>
           <button
             className={`hide-past-btn ${hidePastDates ? 'active' : ''}`}
             onClick={() => setHidePastDates(!hidePastDates)}
-            title={hidePastDates ? 'Näita möödunud kuupäevi' : 'Peida möödunud kuupäevad'}
+            title={hidePastDates ? t('ui.showPastDates') : t('ui.hidePastDates')}
           >
             {hidePastDates ? <FiEyeOff /> : <FiEye />}
           </button>

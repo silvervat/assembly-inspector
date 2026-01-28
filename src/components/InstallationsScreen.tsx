@@ -7807,7 +7807,7 @@ export default function InstallationsScreen({
                   onClick={() => setCalendarCollapsed(!calendarCollapsed)}
                   style={{ padding: '4px 8px', border: 'none', background: '#e5e7eb', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}
                 >
-                  {calendarCollapsed ? 'Ava' : 'Peida'}
+                  {calendarCollapsed ? t('common:buttons.open') : t('common:actions.hide')}
                 </button>
               </div>
             </div>
