@@ -1,4 +1,120 @@
-# Assembly Inspector - Claude Memory
+# Assembly Inspector - Claude Code Reeglid (LISA CLAUDE.md ALGUSESSE!)
+
+## ā ļø¸ KRIITILISED LIMIIDID
+
+### Failide Maksimumsuurused
+| TĆ¼Ć¼p | Max ridu | Max KB | NĆ¤ide |
+|------|----------|--------|-------|
+| Komponent | 500 | 30 | XxxPanel.tsx |
+| Hook | 200 | 15 | useXxx.ts |
+| Util | 300 | 20 | xxxHelper.ts |
+| Types | 400 | 25 | types/index.ts |
+
+**REEGL:** Kui fail Ć¼letab limiiti ā†’ TĆKELDA enne muudatusi!
+
+### Blokeeritud Failid (Liiga suured!)
+```
+ā¯ AdminScreen.tsx (18,657 rida) - EI MUUDA, TĆKELDA!
+ā¯ OrganizerScreen.tsx (14,365 rida) - EI MUUDA, TĆKELDA!
+ā¯ DeliveryScheduleScreen.tsx (12,594 rida) - EI MUUDA, TĆKELDA!
+ā¯ InstallationsScreen.tsx (10,679 rida) - EI MUUDA, TĆKELDA!
+ā¯ InstallationScheduleScreen.tsx (8,974 rida) - EI MUUDA, TĆKELDA!
+ā¯ ArrivedDeliveriesScreen.tsx (7,701 rida) - EI MUUDA, TĆKELDA!
+```
+
+## š“ Uus Kausta Struktuur
+
+```
+src/
+ā”ā”€ā”€ features/           # Feature-pĆµhine kood
+ā”‚   ā”ā”€ā”€ admin/
+ā”‚   ā”‚   ā”ā”€ā”€ components/  # UI komponendid
+ā”‚   ā”‚   ā”ā”€ā”€ hooks/       # Custom hooks
+ā”‚   ā”‚   ā”ā”€ā”€ types/       # TypeScript tĆ¼Ć¼bid
+ā”‚   ā”‚   ā””ā”€ā”€ index.ts     # Re-exports
+ā”‚   ā”ā”€ā”€ delivery/
+ā”‚   ā”ā”€ā”€ organizer/
+ā”‚   ā”ā”€ā”€ installation/
+ā”‚   ā””ā”€ā”€ inspection/
+ā”ā”€ā”€ shared/             # Jagatud kood
+ā”‚   ā”ā”€ā”€ components/
+ā”‚   ā”ā”€ā”€ hooks/
+ā”‚   ā””ā”€ā”€ utils/
+ā””ā”€ā”€ i18n/
+```
+
+## š”„ Refaktoreerimise Muster
+
+### Samm 1: Loo Hook
+```typescript
+// src/features/admin/hooks/useUserPermissions.ts
+export function useUserPermissions(projectId: string) {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(false);
+  
+  // Kopeeri funktsioonid siia
+  const loadUsers = useCallback(async () => { /* ... */ }, [projectId]);
+  const saveUser = async (user: User) => { /* ... */ };
+  
+  useEffect(() => { loadUsers(); }, [loadUsers]);
+  
+  return { users, loading, saveUser, loadUsers };
+}
+```
+
+### Samm 2: Loo Komponent
+```typescript
+// src/features/admin/components/UserPermissionsPanel.tsx
+import { useUserPermissions } from '../hooks/useUserPermissions';
+
+export function UserPermissionsPanel({ projectId }: Props) {
+  const { users, loading, saveUser } = useUserPermissions(projectId);
+  // Kopeeri JSX siia (MAX 500 rida!)
+}
+```
+
+### Samm 3: Uuenda Parent
+```typescript
+// AdminScreen.tsx
+import { UserPermissionsPanel } from '../features/admin';
+
+// Asenda vana JSX:
+{adminView === 'userPermissions' && (
+  <UserPermissionsPanel projectId={projectId} />
+)}
+
+// KUSTUTA vanad useState'd ja funktsioonid!
+```
+
+## š“‹ Backlog
+
+**Loe BACKLOG.md faili Ć¼lesannete jĆ¤rjekorra jaoks!**
+
+## š¨ i18n Reeglid
+
+```typescript
+// ā… Ć•IGE
+const { t } = useTranslation('admin');
+<span>{t('users.title')}</span>
+
+// ā¯ VALE - Hardcoded tekst!
+<span>Users</span>
+```
+
+**Namespace'id:** common, admin, delivery, installation, inspection, organizer, errors, tools
+
+## š§Ŗ Testimise NĆµuded
+
+Iga uus hook PEAB omama testi:
+```
+src/features/admin/hooks/
+ā”ā”€ā”€ useUserPermissions.ts
+ā””ā”€ā”€ useUserPermissions.test.ts  ā† NĆ•UTUD!
+```
+
+---
+
+*Kui see fail on liiga pikk, loe BACKLOG.md konkreetsete Ć¼lesannete jaoks.*# Assembly Inspector - Claude Memory
 
 ## Kiire Ülevaade
 
