@@ -111,7 +111,7 @@ const formatDateFull = (dateStr: string) => {
 // ============================================
 
 // Memoized StatusBadge component
-const StatusBadge = memo(({ status, t }: { status: ArrivalItemStatus; t: (key: string) => string }) => {
+const StatusBadge = memo(({ status, t }: { status: ArrivalItemStatus; t: (key: string, options?: Record<string, unknown>) => string }) => {
   const config: Record<ArrivalItemStatus, { labelKey: string; color: string; bg: string }> = {
     pending: { labelKey: 'common:arrivals.pending', color: '#6b7280', bg: '#f3f4f6' },
     confirmed: { labelKey: 'common:arrivals.confirmed', color: '#059669', bg: '#d1fae5' },
@@ -153,7 +153,7 @@ interface ItemRowProps {
   itemCommentValue: string;
   itemPhotos: ArrivalPhoto[];
   vehicleCode: string;
-  t: (key: string) => string;
+  t: (key: string, options?: Record<string, unknown>) => string;
   onToggleSelect: (itemId: string, shiftKey: boolean) => void;
   onToggleExpand: (itemId: string) => void;
   onConfirmItem: (itemId: string, status: ArrivalItemStatus) => void;
