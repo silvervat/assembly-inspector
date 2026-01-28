@@ -9,7 +9,7 @@
 
 | Faas | Sisu | Staatus | Progress |
 |------|------|---------|----------|
-| 1 | Infrastruktuur | ⏳ Ootel | 0/6 |
+| 1 | Infrastruktuur | šŸ"„ Pooleli | 1/6 |
 | 2 | AdminScreen tükeldamine | ⏳ Ootel | 0/12 |
 | 3 | State Management | ⏳ Ootel | 0/4 |
 | 4 | OrganizerScreen tükeldamine | ⏳ Ootel | 0/7 |
@@ -18,7 +18,7 @@
 | 7 | Error Handling & UX | ⏳ Ootel | 0/4 |
 | 8 | i18n (FI, RU) | ⏳ Ootel | 0/3 |
 
-**Kokku: 0/48 ülesannet lõpetatud**
+**Kokku: 1/48 ülesannet lõpetatud**
 
 ---
 
@@ -54,7 +54,8 @@ npm install -D @vitest/coverage-v8 happy-dom
 npm install react-hot-toast
 ```
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
