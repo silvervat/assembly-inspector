@@ -10,7 +10,7 @@
 | Faas | Sisu | Staatus | Progress |
 |------|------|---------|----------|
 | 1 | Infrastruktuur | āœ… Lƶpetatud | 6/6 |
-| 2 | AdminScreen tükeldamine | ⏳ Ootel | 0/12 |
+| 2 | AdminScreen tükeldamine | šŸ"„ Pooleli | 4/12 |
 | 3 | State Management | ⏳ Ootel | 0/4 |
 | 4 | OrganizerScreen tükeldamine | ⏳ Ootel | 0/7 |
 | 5 | DeliveryScreen tükeldamine | ⏳ Ootel | 0/7 |
@@ -18,7 +18,7 @@
 | 7 | Error Handling & UX | ⏳ Ootel | 0/4 |
 | 8 | i18n (FI, RU) | ⏳ Ootel | 0/3 |
 
-**Kokku: 6/48 ülesannet lõpetatud**
+**Kokku: 10/48 ülesannet lõpetatud**
 
 ---
 
@@ -276,7 +276,8 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 - DetailPosition
 - jne.
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -289,7 +290,8 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 - useState: teamMembers, projectUsers, editingUser, userSearchQuery (read ~293-299)
 - Funktsioonid: loadTeamMembers, loadProjectUsers, saveUser, deleteUser
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -302,7 +304,8 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 - JSX read ~13000-14500
 - MAX 500 rida!
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -318,7 +321,8 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 - Funktsioonid: loadQrCodes, generateQrCode, deleteQrCode (read ~3139-3490)
 - JSX: read ~16000-17500
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
