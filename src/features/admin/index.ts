@@ -1,6 +1,12 @@
 export * from './types';
 export { UserPermissionsPanel } from './components/UserPermissionsPanel';
 export { QrActivatorPanel } from './components/QrActivatorPanel';
+export { CameraPositionsPanel } from './components/CameraPositionsPanel';
+export { ResourcesPanel } from './components/ResourcesPanel';
+export { PositionerPanel } from './components/PositionerPanel';
+export { DataExportPanel } from './components/DataExportPanel';
+export { GuidImportPanel } from './components/GuidImportPanel';
+export { PropertyMappingsPanel } from './components/PropertyMappingsPanel';
 export { useUserStore } from './stores/useUserStore';
 export { useQrCodes } from './hooks/useQrCodes';
 export { useResources } from './hooks/useResources';
