@@ -1553,19 +1553,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     });
   };
 
-  // Callback ref to keep quantity dropdown visible (not hidden behind Trimble sidebar)
-  const adjustDropdownPosition = useCallback((el: HTMLDivElement | null) => {
-    if (!el) return;
-    // Use fixed positioning to escape any parent overflow/clipping
-    const parent = el.parentElement;
-    if (!parent) return;
-    const parentRect = parent.getBoundingClientRect();
-    el.style.position = 'fixed';
-    el.style.top = `${parentRect.bottom - 4}px`;
-    // Ensure dropdown left edge is at least 100px from viewport left (clears Trimble sidebar)
-    const desiredLeft = parentRect.left;
-    el.style.left = `${Math.max(desiredLeft, 100)}px`;
-  }, []);
+  // No-op ref kept for compatibility - dropdown positioning handled by CSS
+  const adjustDropdownPosition = useCallback((_el: HTMLDivElement | null) => {}, []);
 
   // Get method config by key
   const getMethodConfig = (key: InstallMethodType): MethodConfig | undefined => {
