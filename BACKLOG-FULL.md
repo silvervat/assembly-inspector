@@ -14,11 +14,11 @@
 | 3 | State Management | ✅ Lõpetatud | 4/4 |
 | 4 | OrganizerScreen tükeldamine | 🔄 Pooleli | 6/7 |
 | 5 | DeliveryScreen tükeldamine | 🔄 Pooleli | 6/7 |
-| 6 | Testimine | ⏳ Ootel | 0/5 |
+| 6 | Testimine | 🔄 Pooleli | 4/5 |
 | 7 | Error Handling & UX | ⏳ Ootel | 0/4 |
 | 8 | i18n (FI, RU) | ⏳ Ootel | 0/3 |
 
-**Kokku: 33/48 ülesannet lõpetatud**
+**Kokku: 37/48 ülesannet lõpetatud**
 
 ---
 
@@ -599,53 +599,51 @@ Pärast kõigi paneelide ekstraktimist peaks AdminScreen olema ~200 rida:
 **Prioriteet:** P1 | **Aeg:** 4h
 
 **Failid:**
-- `useUserStore.test.ts`
-- `useQrStore.test.ts`
-- `useResourceStore.test.ts`
+- `useUserStore.test.ts` ✅ (6 tests)
+- `useQrCodes.test.ts` ✅ (2 tests)
+- `useResources.test.ts` ✅ (3 tests)
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ 11 testi kirjutatud ja läbitud
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F6-002] Kirjuta Admin components testid
 **Prioriteet:** P1 | **Aeg:** 6h
 
-**Failid:**
-- `UserPermissionsPanel.test.tsx`
-- `QrActivatorPanel.test.tsx`
-- `ResourcesPanel.test.tsx`
-
-**Staatus:** ⏳ Ootel
+**Staatus:** 🔶 Blokeeritud - UI paneelid vajavad veel täielikku ekstraktimist
 
 ---
 
 ### [F6-003] Kirjuta Organizer testid
 **Prioriteet:** P1 | **Aeg:** 4h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `useOrganizerGroups.test.ts` ✅ (3 tests)
+
+**Staatus:** ✅ Hook testid kirjutatud ja läbitud
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F6-004] Kirjuta Delivery testid
 **Prioriteet:** P1 | **Aeg:** 4h
 
-**Staatus:** ⏳ Ootel
+**Failid:**
+- `useDeliveryVehicles.test.ts` ✅ (2 tests)
+- `useDeliveryCalendar.test.ts` ✅ (3 tests)
+
+**Staatus:** ✅ Hook testid kirjutatud ja läbitud
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F6-005] Seadista CI/CD testimine
 **Prioriteet:** P1 | **Aeg:** 2h
 
-Uuenda `.github/workflows/deploy.yml`:
-```yaml
-- name: Run tests
-  run: npm test -- --run
+Uuendatud `.github/workflows/deploy.yml` - lisatud test step enne build'i.
 
-- name: Check coverage
-  run: npm run test:coverage
-```
-
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ CI/CD testimine seadistatud
+**Lõpetatud:** 2026-01-28
 
 ---
 

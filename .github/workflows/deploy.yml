@@ -44,6 +44,9 @@ jobs:
           echo "VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}" >> .env
           echo "VITE_SUPER_ADMIN_EMAILS=${{ secrets.VITE_SUPER_ADMIN_EMAILS }}" >> .env
 
+      - name: 🧪 Run tests
+        run: npx vitest run
+
       - name: 🔨 Build project
         run: npm run build
 
