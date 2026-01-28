@@ -8810,7 +8810,7 @@ export default function OrganizerScreen({
                   return (
                     <span
                       className="org-no-edit-indicator"
-                      title="Sul pole õigust seda gruppi muuta"
+                      title={t('organizer:ui.noPermissionEdit')}
                     >
                       <FiLock size={9} />
                     </span>
@@ -9099,7 +9099,7 @@ export default function OrganizerScreen({
                     <span className="org-item-index sortable" onClick={() => {
                       if (itemSortField === 'sort_order') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
                       else { setItemSortField('sort_order'); setItemSortDir('asc'); }
-                    }} title="Sorteeri järjekorra järgi">
+                    }} title={t('organizer:ui.sortByOrder')}>
                       # {itemSortField === 'sort_order' && (itemSortDir === 'asc' ? '↑' : '↓')}
                     </span>
                     <span className="org-header-spacer" /> {/* For drag handle */}
@@ -9465,7 +9465,7 @@ export default function OrganizerScreen({
                                       flexShrink: 0
                                     }}
                                     onClick={() => openLightbox(url, photoUrls, item.id, field.id)}
-                                    title="Kliki suurendamiseks"
+                                    title={t('organizer:ui.clickToEnlarge')}
                                   >
                                     <img
                                       src={url}
@@ -9712,7 +9712,7 @@ export default function OrganizerScreen({
 
       {/* Header */}
       <PageHeader
-        title="Organiseerija"
+        title={t('organizer:title')}
         onBack={onBackToMenu}
         onNavigate={(mode) => {
           if (mode === null) onBackToMenu();
@@ -9728,14 +9728,14 @@ export default function OrganizerScreen({
         <button
           className="org-icon-btn"
           onClick={toggleAllExpanded}
-          title={allExpanded ? 'Voldi kokku' : 'Voldi lahti'}
+          title={allExpanded ? t('organizer:ui.collapseAll') : t('organizer:ui.expandAll')}
         >
           {allExpanded ? <FiChevronsUp size={16} /> : <FiChevronsDown size={16} />}
         </button>
         <button
           className="org-icon-btn"
           onClick={() => setShowSettingsModal(true)}
-          title="Seaded"
+          title={t('common:navigation.settings')}
         >
           <FiSettings size={16} />
         </button>
@@ -10584,7 +10584,7 @@ export default function OrganizerScreen({
                           <button
                             onClick={() => moveCustomField(f.id, effectiveGroup.id, 'up')}
                             disabled={idx === 0}
-                            title="Liiguta üles"
+                            title={t('organizer:item.moveUp')}
                             style={{
                               background: 'none',
                               border: 'none',
@@ -10601,7 +10601,7 @@ export default function OrganizerScreen({
                           <button
                             onClick={() => moveCustomField(f.id, effectiveGroup.id, 'down')}
                             disabled={idx === customFields.length - 1}
-                            title="Liiguta alla"
+                            title={t('organizer:item.moveDown')}
                             style={{
                               background: 'none',
                               border: 'none',
@@ -11590,7 +11590,7 @@ export default function OrganizerScreen({
                     <button
                       onClick={() => alert('Kui sisse lülitatud, siis lähestikku olevad markupid (< 4m vahe) saavad automaatselt erinevad kõrgused:\n\n• 1. markup: 20 cm\n• 2. markup: 140 cm\n• 3. markup: 280 cm\n• jne.\n\nSee aitab vältida markupite kattumist.')}
                       style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', color: '#9ca3af', marginLeft: 'auto' }}
-                      title="Info"
+                      title={t('organizer:ui.info')}
                       type="button"
                     >
                       <FiInfo size={14} />
@@ -12618,12 +12618,12 @@ export default function OrganizerScreen({
                   </span>
                 )}
                 {lightboxMeta.dimensions && (
-                  <span title="Mõõtmed">
+                  <span title={t('organizer:ui.dimensions')}>
                     {lightboxMeta.dimensions.width}x{lightboxMeta.dimensions.height}px
                   </span>
                 )}
                 {lightboxMeta.fileSize && (
-                  <span title="Faili suurus">
+                  <span title={t('organizer:ui.fileSize')}>
                     {lightboxMeta.fileSize < 1024 * 1024
                       ? `${Math.round(lightboxMeta.fileSize / 1024)} KB`
                       : `${(lightboxMeta.fileSize / (1024 * 1024)).toFixed(1)} MB`}
@@ -12680,7 +12680,7 @@ export default function OrganizerScreen({
                   gap: '4px',
                   fontSize: '12px'
                 }}
-                title="Laadi alla"
+                title={t('common:buttons.download')}
               >
                 <FiDownload size={12} />
                 Laadi alla
@@ -13232,7 +13232,7 @@ export default function OrganizerScreen({
                                       setManagementEditingGroupId(group.id);
                                       setManagementEditName(group.name);
                                     }}
-                                    title="Kliki nime muutmiseks"
+                                    title={t('organizer:ui.clickToEditName')}
                                   >
                                     {group.name}
                                   </span>
@@ -13290,7 +13290,7 @@ export default function OrganizerScreen({
                                       setManagementEditingDescGroupId(group.id);
                                       setManagementEditDesc(group.description || '');
                                     }}
-                                    title="Kliki kirjelduse muutmiseks"
+                                    title={t('organizer:ui.clickToEditDescription')}
                                   >
                                     {group.description || 'Lisa kirjeldus...'}
                                   </span>

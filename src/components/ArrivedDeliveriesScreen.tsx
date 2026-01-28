@@ -3589,7 +3589,7 @@ export default function ArrivedDeliveriesScreen({
     <div className="delivery-schedule arrived-deliveries">
       {/* Header with hamburger menu */}
       <PageHeader
-        title="Saabunud tarned"
+        title={t('arrivals.pageTitle')}
         onBack={() => {
           if (checkUnsavedChangesAndNavigate('back')) {
             onBack();
@@ -3617,7 +3617,7 @@ export default function ArrivedDeliveriesScreen({
         <button
           className="view-toggle-btn"
           onClick={exportProjectSummaryExcel}
-          title="Projekti kokkuvõte (Excel)"
+          title={t('excel.exportProjectSummary')}
         >
           <FiFileText />
         </button>
@@ -3626,7 +3626,7 @@ export default function ArrivedDeliveriesScreen({
           className="view-toggle-btn"
           onClick={loadAllData}
           disabled={loading}
-          title="Värskenda"
+          title={t('buttons.refresh')}
         >
           <FiRefreshCw className={loading ? 'spinning' : ''} />
         </button>
@@ -3664,7 +3664,7 @@ export default function ArrivedDeliveriesScreen({
               boxShadow: viewMode === 'by-date' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
             }}
           >
-            Kuupäeva järgi
+            {t('arrivals.viewByDate')}
           </button>
           <button
             onClick={() => setViewMode('all')}
@@ -3680,7 +3680,7 @@ export default function ArrivedDeliveriesScreen({
               boxShadow: viewMode === 'all' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
             }}
           >
-            Kõik veokid
+            {t('arrivals.allVehicles')}
           </button>
           <button
             onClick={() => setViewMode('items-list')}
@@ -3700,7 +3700,7 @@ export default function ArrivedDeliveriesScreen({
             }}
           >
             <FiList size={12} />
-            Kõik detailid
+            {t('arrivals.allItems')}
           </button>
           <button
             onClick={() => setViewMode('unassigned')}
@@ -3720,7 +3720,7 @@ export default function ArrivedDeliveriesScreen({
             }}
           >
             <FiAlertTriangle size={12} />
-            Määramata
+            {t('arrivals.unassigned')}
             {unassignedArrivals.length > 0 && (
               <span style={{
                 background: '#f59e0b',
@@ -3755,7 +3755,7 @@ export default function ArrivedDeliveriesScreen({
             }} size={14} />
             <input
               type="text"
-              placeholder="Otsi detaili, veoki koodi, tehast..."
+              placeholder={t('arrivals.searchPlaceholder')}
               value={globalSearchQuery}
               onChange={(e) => setGlobalSearchQuery(e.target.value)}
               style={{
@@ -3807,7 +3807,7 @@ export default function ArrivedDeliveriesScreen({
             }}
           >
             <FiPlus size={14} />
-            Lisa määramata
+            {t('arrivals.addUnassigned')}
           </button>
         )}
       </div>
@@ -3861,11 +3861,11 @@ export default function ArrivedDeliveriesScreen({
 
         <div className="playback-controls">
           {!isPlaybackActive ? (
-            <button className="play-btn" onClick={startPlayback} title="Käivita taasesitus">
+            <button className="play-btn" onClick={startPlayback} title={t('arrivals.startPlayback')}>
               <FiPlay />
             </button>
           ) : (
-            <button className="stop-btn" onClick={stopPlayback} title="Peata">
+            <button className="stop-btn" onClick={stopPlayback} title={t('arrivals.stopPlayback')}>
               <FiSquare />
             </button>
           )}
@@ -3875,16 +3875,16 @@ export default function ArrivedDeliveriesScreen({
         <button
           className="add-unplanned-btn"
           onClick={() => setShowUnplannedVehicleModal(true)}
-          title="Lisa planeerimata veok"
+          title={t('arrivals.addUnplannedVehicle')}
         >
-          <FiPlus /> Lisa veok
+          <FiPlus /> {t('arrivals.addVehicle')}
         </button>
 
         {/* Export all arrivals for date */}
         <button
           className="export-btn"
           onClick={exportAllArrivalsForDate}
-          title="Ekspordi päeva kokkuvõte"
+          title={t('arrivals.exportDaySummary')}
         >
           <FiDownload /> Excel
         </button>
@@ -3981,27 +3981,27 @@ export default function ArrivedDeliveriesScreen({
                   <div className="vehicle-status">
                     {arrivedVehicle ? (
                       <div className="status-counts">
-                        <span className="count-badge confirmed" title="Kinnitatud">
+                        <span className="count-badge confirmed" title={t('arrivals.confirmed')}>
                           <FiCheck size={10} /> {confirmedCount}
                         </span>
                         {missingCount > 0 && (
-                          <span className="count-badge missing" title="Puudu">
+                          <span className="count-badge missing" title={t('arrivals.missing')}>
                             <FiX size={10} /> {missingCount}
                           </span>
                         )}
                         {addedCount > 0 && (
-                          <span className="count-badge added" title="Lisatud">
+                          <span className="count-badge added" title={t('arrivals.added')}>
                             <FiPlus size={10} /> {addedCount}
                           </span>
                         )}
                         {pendingCount > 0 && (
-                          <span className="count-badge pending" title="Ootel">
+                          <span className="count-badge pending" title={t('arrivals.pending')}>
                             <FiClock size={10} /> {pendingCount}
                           </span>
                         )}
                       </div>
                     ) : (
-                      <span className="status-badge pending">Ootel</span>
+                      <span className="status-badge pending">{t('arrivals.pending')}</span>
                     )}
                   </div>
 
@@ -4015,7 +4015,7 @@ export default function ArrivedDeliveriesScreen({
                       <button
                         className="vehicle-menu-btn"
                         onClick={() => setVehicleMenuOpen(vehicleMenuOpen === vehicle.id ? null : vehicle.id)}
-                        title="Rohkem valikuid"
+                        title={t('arrivals.moreOptions')}
                       >
                         <FiMoreVertical size={16} />
                       </button>
@@ -4255,7 +4255,7 @@ export default function ArrivedDeliveriesScreen({
                                 type="text"
                                 value={arrivedVehicle.reg_number || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { reg_number: e.target.value })}
-                                placeholder="Nt. 123ABC"
+                                placeholder={t('arrivals.regNumberPlaceholder')}
                               />
                             </div>
                             <div className="detail-field">
@@ -4264,7 +4264,7 @@ export default function ArrivedDeliveriesScreen({
                                 type="text"
                                 value={arrivedVehicle.trailer_number || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { trailer_number: e.target.value })}
-                                placeholder="Nt. 456DEF"
+                                placeholder={t('arrivals.trailerPlaceholder')}
                               />
                             </div>
                             <div className="detail-field wide">
@@ -4273,7 +4273,7 @@ export default function ArrivedDeliveriesScreen({
                                 type="text"
                                 value={arrivedVehicle.unload_location || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { unload_location: e.target.value })}
-                                placeholder="Nt. Plats A, hoone 2 juures..."
+                                placeholder={t('arrivals.locationPlaceholder')}
                               />
                             </div>
                           </div>
@@ -4285,7 +4285,7 @@ export default function ArrivedDeliveriesScreen({
                                 type="text"
                                 value={arrivedVehicle.checked_by_workers || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { checked_by_workers: e.target.value })}
-                                placeholder="Nt. Jaan Tamm, Mari Mets..."
+                                placeholder={t('arrivals.controllersPlaceholder')}
                               />
                             </div>
                           </div>
@@ -4409,7 +4409,7 @@ export default function ArrivedDeliveriesScreen({
                                       };
                                       updateArrival(arrivedVehicle.id, { unload_resources: newResources });
                                     }}
-                                    placeholder="Nt. Jaan Tamm, Mari Mets..."
+                                    placeholder={t('arrivals.controllersPlaceholder')}
                                   />
                                 </div>
                               </div>
@@ -4423,7 +4423,7 @@ export default function ArrivedDeliveriesScreen({
                               className="notes-textarea"
                               value={arrivedVehicle.notes || ''}
                               onChange={(e) => updateArrival(arrivedVehicle.id, { notes: e.target.value })}
-                              placeholder="Lisa märkused tarne kohta..."
+                              placeholder={t('arrivals.addNotesPlaceholder')}
                               rows={2}
                               disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                             />
@@ -4655,7 +4655,7 @@ export default function ArrivedDeliveriesScreen({
                             <button
                               className="export-vehicle-btn"
                               onClick={() => exportDeliveryReport(arrivedVehicle.id)}
-                              title="Ekspordi selle veoki raport"
+                              title={t('arrivals.exportVehicleReport')}
                             >
                               <FiDownload /> Ekspordi raport
                             </button>
@@ -4668,7 +4668,7 @@ export default function ArrivedDeliveriesScreen({
                               <input
                                 type="text"
                                 className="item-search-input"
-                                placeholder="Otsi detaile..."
+                                placeholder={t('arrivals.searchItemsPlaceholder')}
                                 value={itemSearchTerms[vehicle.id] || ''}
                                 onChange={(e) => {
                                   const searchTerm = e.target.value;
@@ -4720,7 +4720,7 @@ export default function ArrivedDeliveriesScreen({
                                     setMessage(`${arrivedGuids.length} detaili märgistatud mudelis`);
                                   }
                                 }}
-                                title="Märgista kõik saabunud detailid mudelis"
+                                title={t('arrivals.markAllArrivedInModel')}
                               >{t('delivery:arrivalsExcel.items')} ({searchTerm ? `${filteredItems.length}/${vehicleItems.length}` : vehicleItems.length})</h3>
                               {!arrivedVehicle.is_confirmed && editingArrivalId === arrivedVehicle.id && (
                                 <div className="items-title-buttons">
@@ -4745,7 +4745,7 @@ export default function ArrivedDeliveriesScreen({
                                         setMessage(t('arrivals.selectItemsFromModel'));
                                       }
                                     }}
-                                    title="Vali detailid 3D mudelist"
+                                    title={t('arrivals.selectItemsButton')}
                                   >
                                     🎯 Mudelist
                                   </button>
@@ -4854,7 +4854,7 @@ export default function ArrivedDeliveriesScreen({
                                             setMessage(`${guids.length} detaili märgistatud mudelis`);
                                           }
                                         }}
-                                        title="Märgista mudelis"
+                                        title={t('arrivals.selectInModel')}
                                       >
                                         <FiTruck className="section-icon" size={12} />
                                         <span>Saabunud teisest veokist ({fromVehicle.length})</span>
@@ -4887,7 +4887,7 @@ export default function ArrivedDeliveriesScreen({
                                                     removeAddedItem(conf.id, item.id, conf.source_vehicle_id || '');
                                                   }}
                                                   disabled={saving}
-                                                  title="Eemalda detail"
+                                                  title={t('arrivals.removeItem')}
                                                 >
                                                   <FiTrash2 size={12} />
                                                 </button>
@@ -4913,7 +4913,7 @@ export default function ArrivedDeliveriesScreen({
                                             setMessage(`${guids.length} detaili märgistatud mudelis`);
                                           }
                                         }}
-                                        title="Märgista mudelis"
+                                        title={t('arrivals.selectInModel')}
                                       >
                                         <FiPlus className="section-icon" size={12} />
                                         <span>Saabunud ilma tarnegraafikuta ({fromModel.length})</span>
@@ -4942,7 +4942,7 @@ export default function ArrivedDeliveriesScreen({
                                                     removeModelAddedItem(conf.id, item.id);
                                                   }}
                                                   disabled={saving}
-                                                  title="Eemalda detail"
+                                                  title={t('arrivals.removeItem')}
                                                 >
                                                   <FiTrash2 size={12} />
                                                 </button>
@@ -4975,7 +4975,7 @@ export default function ArrivedDeliveriesScreen({
                                   setMessage(`${guids.length} detaili märgistatud mudelis`);
                                 }
                               }}
-                              title="Märgista mudelis"
+                              title={t('arrivals.selectInModel')}
                             >
                               <FiAlertTriangle className="warning-icon" size={12} />
                               <span>Tarnest eemaldatud ({removedItems.length})</span>
@@ -5015,7 +5015,7 @@ export default function ArrivedDeliveriesScreen({
                               className="share-btn pdf"
                               onClick={() => generatePdfReport(arrivedVehicle.id, vehicle.id)}
                               disabled={generatingPdf === arrivedVehicle.id}
-                              title="Laadi alla PDF raport"
+                              title={t('arrivals.downloadPdfReport')}
                             >
                               {generatingPdf === arrivedVehicle.id ? (
                                 <><FiLoader className="spinning" /> PDF...</>
@@ -5028,7 +5028,7 @@ export default function ArrivedDeliveriesScreen({
                               className="share-btn copy"
                               onClick={() => copyShareLink(arrivedVehicle.id, vehicle.id)}
                               disabled={generatingShareLink === arrivedVehicle.id}
-                              title="Kopeeri jagamislink"
+                              title={t('arrivals.copyShareLink')}
                             >
                               {generatingShareLink === arrivedVehicle.id ? (
                                 <><FiLoader className="spinning" /> ...</>
@@ -5041,7 +5041,7 @@ export default function ArrivedDeliveriesScreen({
                               className="share-btn open"
                               onClick={() => openShareLink(arrivedVehicle.id, vehicle.id)}
                               disabled={generatingShareLink === arrivedVehicle.id}
-                              title="Ava brauseris"
+                              title={t('actions.openInBrowser')}
                             >
                               <FiExternalLink /> Ava brauseris
                             </button>
@@ -5512,7 +5512,7 @@ export default function ArrivedDeliveriesScreen({
                 }} />
                 <input
                   type="text"
-                  placeholder="Otsi märgi või veoki järgi..."
+                  placeholder={t('arrivals.searchByMarkOrVehicle')}
                   value={itemsListSearchQuery}
                   onChange={(e) => setItemsListSearchQuery(e.target.value)}
                   style={{
@@ -5564,7 +5564,7 @@ export default function ArrivedDeliveriesScreen({
                   fontSize: '10px',
                   cursor: 'pointer'
                 }}
-                title="Näita ainult mudelis valitud detaile"
+                title={t('arrivals.showOnlySelectedInModel')}
               >
                 <FiTarget size={11} />
                 Mudelis valitud
@@ -6177,7 +6177,7 @@ export default function ArrivedDeliveriesScreen({
                               justifyContent: 'center',
                               flexShrink: 0
                             }}
-                            title="Muuda saabumise andmeid"
+                            title={t('arrivals.editArrivalData')}
                           >
                             <FiEdit2 size={10} color="#64748b" />
                           </button>
@@ -6194,7 +6194,7 @@ export default function ArrivedDeliveriesScreen({
                             borderRadius: '50%',
                             background: '#f59e0b',
                             marginRight: '2px'
-                          }} title="Muudatus salvestamata" />
+                          }} title={t('arrivals.changeSavedWarning')} />
                         )}
                         <button
                           onClick={(e) => {
@@ -6491,7 +6491,7 @@ export default function ArrivedDeliveriesScreen({
                         cursor: 'pointer',
                         padding: '4px'
                       }}
-                      title="Kustuta"
+                      title={t('buttons.delete')}
                     >
                       <FiTrash2 size={16} />
                     </button>
@@ -6537,7 +6537,7 @@ export default function ArrivedDeliveriesScreen({
                         type="text"
                         value={unassignedSearchQuery}
                         onChange={(e) => setUnassignedSearchQuery(e.target.value)}
-                        placeholder="Otsi assembly mark või toote järgi..."
+                        placeholder={t('placeholders.searchByAssemblyMark')}
                         autoFocus
                         style={{
                           width: '100%',
@@ -6692,7 +6692,7 @@ export default function ArrivedDeliveriesScreen({
                           cursor: 'pointer',
                           padding: '4px'
                         }}
-                        title="Tagasi"
+                        title={t('buttons.back')}
                       >
                         <FiArrowLeft size={16} />
                       </button>
@@ -6763,7 +6763,7 @@ export default function ArrivedDeliveriesScreen({
                     <textarea
                       value={unassignedFormData.notes}
                       onChange={(e) => setUnassignedFormData(prev => ({ ...prev, notes: e.target.value }))}
-                      placeholder="Lisa lisainfo vajadusel..."
+                      placeholder={t('arrivals.additionalInfoPlaceholder')}
                       rows={3}
                       style={{
                         width: '100%',
@@ -6954,7 +6954,7 @@ export default function ArrivedDeliveriesScreen({
                   <input
                     type="text"
                     className="item-search-input"
-                    placeholder="Otsi assembly mark või toote järgi..."
+                    placeholder={t('placeholders.searchByAssemblyMark')}
                     value={addItemSearchTerm}
                     onChange={(e) => {
                       setAddItemSearchTerm(e.target.value);
@@ -7177,7 +7177,7 @@ export default function ArrivedDeliveriesScreen({
                   type="text"
                   value={unplannedVehicleCode}
                   onChange={(e) => setUnplannedVehicleCode(e.target.value)}
-                  placeholder="Nt. V99, SEGAPUDU, ÜLLATUS..."
+                  placeholder={t('arrivals.unplannedVehicleCodePlaceholder')}
                   autoFocus
                 />
               </div>
@@ -7198,7 +7198,7 @@ export default function ArrivedDeliveriesScreen({
                 <textarea
                   value={unplannedNotes}
                   onChange={(e) => setUnplannedNotes(e.target.value)}
-                  placeholder="Nt. Tehas saatis lisa ilma eelneva teavituseta..."
+                  placeholder={t('arrivals.unplannedVehicleNotesPlaceholder')}
                   rows={3}
                 />
               </div>
@@ -7392,21 +7392,21 @@ export default function ArrivedDeliveriesScreen({
                 <button
                   className="lightbox-btn-sm"
                   onClick={() => window.open(photo.file_url, '_blank')}
-                  title="Ava uues aknas"
+                  title={t('arrivals.openInNewWindow')}
                 >
                   Ava uues aknas
                 </button>
                 <button
                   className="lightbox-btn-sm"
                   onClick={() => downloadPhoto(photo.file_url, downloadName)}
-                  title="Lae alla"
+                  title={t('arrivals.downloadPhoto')}
                 >
                   Lae alla
                 </button>
                 <button
                   className="lightbox-btn-sm close"
                   onClick={() => setLightboxPhoto(null)}
-                  title="Sulge (ESC)"
+                  title={t('arrivals.closeLightboxEsc')}
                 >
                   <FiX size={14} />
                 </button>
@@ -7519,7 +7519,7 @@ export default function ArrivedDeliveriesScreen({
                       type="text"
                       value={editVehicle.reg_number || ''}
                       onChange={(e) => updateArrival(editVehicle.id, { reg_number: e.target.value }, true)}
-                      placeholder="Nt. 123ABC"
+                      placeholder={t('arrivals.regNumberPlaceholder')}
                       style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px' }}
                     />
                   </div>
@@ -7532,7 +7532,7 @@ export default function ArrivedDeliveriesScreen({
                       type="text"
                       value={editVehicle.trailer_number || ''}
                       onChange={(e) => updateArrival(editVehicle.id, { trailer_number: e.target.value }, true)}
-                      placeholder="Nt. 456DEF"
+                      placeholder={t('arrivals.trailerPlaceholder')}
                       style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px' }}
                     />
                   </div>
@@ -7548,7 +7548,7 @@ export default function ArrivedDeliveriesScreen({
                     type="text"
                     value={editVehicle.unload_location || ''}
                     onChange={(e) => updateArrival(editVehicle.id, { unload_location: e.target.value }, true)}
-                    placeholder="Nt. Plats A, hoone 2 juures..."
+                    placeholder={t('arrivals.locationPlaceholder')}
                     style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px' }}
                   />
                 </div>
@@ -7562,7 +7562,7 @@ export default function ArrivedDeliveriesScreen({
                     type="text"
                     value={editVehicle.checked_by_workers || ''}
                     onChange={(e) => updateArrival(editVehicle.id, { checked_by_workers: e.target.value }, true)}
-                    placeholder="Nt. Jaan Tamm, Mari Mets..."
+                    placeholder={t('arrivals.controllersPlaceholder')}
                     style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px' }}
                   />
                 </div>

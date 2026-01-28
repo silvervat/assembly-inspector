@@ -409,6 +409,7 @@
     "photosOptional": "Fotod (valikuline):",
     "notesOptional": "Märkmed (valikuline):",
     "additionalInfoPlaceholder": "Lisainfo või märkmed...",
+    "resourceNamePlaceholder": "Nt: Kraana 1, Meeskond A",
     "changesApplyToAll": "Muudatused rakenduvad kõigile {{count}} detailile sel päeval",
     "other": "Muu",
     "confirmDeleteInstallation": "Kas oled kindel, et soovid selle paigalduse kustutada?",

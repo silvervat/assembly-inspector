@@ -409,6 +409,7 @@
     "photosOptional": "Photos (optional):",
     "notesOptional": "Notes (optional):",
     "additionalInfoPlaceholder": "Additional info or notes...",
+    "resourceNamePlaceholder": "e.g. Crane 1, Team A",
     "changesApplyToAll": "Changes apply to all {{count}} details on this day",
     "other": "Other",
     "confirmDeleteInstallation": "Are you sure you want to delete this installation?",
