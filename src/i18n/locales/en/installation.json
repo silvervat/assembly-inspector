@@ -106,7 +106,11 @@
     "settings": "Settings",
     "refresh": "Refresh",
     "selectInModel": "Select in Model",
-    "zoomTo": "Zoom To"
+    "zoomTo": "Zoom To",
+    "save": "Save",
+    "saving": "Saving...",
+    "createVersion": "Create Version",
+    "addComment": "Add Comment"
   },
   "messages": {
     "loading": "Loading...",

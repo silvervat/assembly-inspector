@@ -1,5 +1,16 @@
 {
   "title": "Inspection",
+  "modes": {
+    "paigaldatud": "Installed details inspection",
+    "poldid": "Bolts inspection",
+    "muu": "Other inspection",
+    "mittevastavus": "Non-conformance",
+    "varviparandus": "Paint repairs inspection",
+    "keevis": "Welds inspection",
+    "paigaldatud_detailid": "Installed details",
+    "eos2": "Send to EOS2 table",
+    "inspection_type": "Inspection"
+  },
   "status": {
     "pending": "Pending",
     "planned": "Planned",
@@ -22,7 +33,11 @@
     "addNotes": "Add notes to plan...",
     "deleteConfirm": "Delete {{count}} items from plan?",
     "deleteResultsConfirm": "Delete {{count}} inspection results?",
-    "selectAll": "Select all"
+    "selectAll": "Select all",
+    "errorLoadingTypes": "Error loading inspection types",
+    "noObjectsToSave": "No objects to save",
+    "allObjectsAlreadyInPlan": "All selected objects are already in plan",
+    "objectsAdded": "{{count}} objects added to plan!"
   },
   "config": {
     "title": "Inspection configuration",
@@ -147,7 +162,14 @@
     "checkpointUpdated": "Checkpoint updated",
     "errorSavingCheckpoint": "Error saving checkpoint",
     "checkpointDeleted": "Checkpoint deleted",
-    "errorDeletingCheckpoint": "Error deleting checkpoint"
+    "errorDeletingCheckpoint": "Error deleting checkpoint",
+    "errorLoadingData": "Error loading data"
+  },
+  "plans": {
+    "loading": "Loading inspection plans...",
+    "noPlans": "No inspection plans in this project yet",
+    "createHint": "Create an inspection plan from the administration menu",
+    "adminPanel": "Admin panel"
   },
   "responses": {
     "ok": "OK",

@@ -315,6 +315,42 @@
   "sendingToDatabase": "Sending to database...",
   "sentToDatabase": "Sent to database: {{count}} items",
   "sendToDatabaseError": "Failed to send to database",
+  "tables": {
+    "mark": "Mark",
+    "date": "Date",
+    "added": "Added",
+    "match": "Match",
+    "action": "Action",
+    "name": "Name",
+    "email": "Email",
+    "role": "Role",
+    "status": "Status",
+    "joined": "Joined",
+    "lastModified": "Last modified",
+    "castUnitMark": "Cast Unit Mark",
+    "productName": "Product",
+    "weight": "Weight",
+    "boltName": "Bolt Name",
+    "standard": "Standard",
+    "count": "Count",
+    "found": "Found",
+    "notFound": "Not found",
+    "total": "Total",
+    "nutName": "Nut Name",
+    "nutCount": "Nut Count",
+    "washerName": "Washer Name",
+    "washerCount": "Washer Count",
+    "washerType": "Washer Type"
+  },
+  "popupHtml": {
+    "nothingSelected": "Nothing selected",
+    "connected": "Connected"
+  },
+  "export": {
+    "plannedDelivery": "Planned delivery",
+    "actualArrival": "Actual arrival",
+    "deliveryStatus": "Delivery status"
+  },
   "coordinateSettings": {
     "title": "Coordinate System & Calibration",
     "loading": "Loading...",
