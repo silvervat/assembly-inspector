@@ -292,6 +292,9 @@
     "deleteGroup": "Kustuta"
   },
   "groupForm": {
+    "nameLabel": "Nimi",
+    "descriptionLabel": "Kirjeldus",
+    "sharingLabel": "Jagamine",
     "fieldName": "Välja nimi *",
     "fieldPlaceholder": "nt. Kommentaarid, Hind",
     "showInList": "Näita listis",
@@ -300,7 +303,20 @@
     "uniqueItemsDesc": "Sama detaili ei saa lisada mitu korda sellesse gruppi või alamgruppidesse.",
     "customFields": "Lisaväljad ({{count}})",
     "decimals": "Komakohad",
-    "allDecimals": "Kõik"
+    "allDecimals": "Kõik",
+    "permissionsLabel": "Õigused teistele kasutajatele",
+    "defaultPermissions": "Vaikimisi õigused kõigile projekti liikmetele:",
+    "canAddItems": "Saavad lisada detaile",
+    "canDeleteOwn": "Saavad kustutada enda lisatud detaile",
+    "canDeleteAll": "Saavad kustutada kõiki detaile",
+    "canEditGroup": "Saavad muuta grupi nime ja kirjeldust",
+    "canManageFields": "Saavad luua ja muuta lisaveerge",
+    "assemblySelectionRequired": "Assembly Selection nõutud",
+    "assemblySelectionDesc": "Kas sellesse gruppi ja alamgruppidesse lisamiseks peab Assembly Selection olema sees",
+    "noCustomFieldsYet": "Lisavälju pole veel lisatud",
+    "loadProjectMembers": "Laadi projekti liikmed",
+    "selectedUsersCount": "Valitud: {{count}} kasutajat",
+    "perUserPermissions": "Kasutajapõhised õigused:"
   },
   "fieldsManagement": {
     "title": "Halda välju: {{name}}",
