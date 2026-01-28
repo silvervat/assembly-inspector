@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from '../i18n';
 import {
   supabase, DeliveryVehicle, DeliveryItem, DeliveryFactory,
   ArrivedVehicle, ArrivalItemConfirmation, ArrivalPhoto,
@@ -100,7 +101,7 @@ const formatDateEstonian = (dateStr: string) => {
 // Format date for display
 const formatDateFull = (dateStr: string) => {
   const date = new Date(dateStr + 'T00:00:00');
-  const weekdays = ['P', 'E', 'T', 'K', 'N', 'R', 'L'];
+  const weekdays = i18n.t('common:time.weekdaysMin', { returnObjects: true }) as string[];
   const weekday = weekdays[date.getDay()];
   return `${weekday} ${date.toLocaleDateString('et-EE', { day: '2-digit', month: '2-digit' })}`;
 };
@@ -253,7 +254,7 @@ const ItemRow = memo(({
                 e.stopPropagation();
                 onToggleExpand(item.id);
               }}
-              title={`${itemPhotos.length} foto${itemPhotos.length > 1 ? 't' : ''}`}
+              title={t('common:arrivals.photo', { count: itemPhotos.length })}
             >
               <FiCamera size={12} />
               <span className="photo-count">{itemPhotos.length}</span>
@@ -318,7 +319,7 @@ const ItemRow = memo(({
               className="item-photo-btn"
               onClick={() => fileInputRef.current?.click()}
             >
-              <FiCamera size={12} /> Foto
+              <FiCamera size={12} /> {t('delivery:arrivedModal.photo')}
             </button>
             <input
               ref={fileInputRef}
@@ -1547,7 +1548,7 @@ export default function ArrivedDeliveriesScreen({
 
       await loadConfirmations();
       setSelectedItemsForConfirm(new Set());
-      setMessage(`${itemsToConfirm.length} detaili kinnitatud`);
+      setMessage(t('common:arrivals.itemsConfirmed', { count: itemsToConfirm.length }));
     } catch (e: any) {
       console.error('Error confirming all items:', e);
       setMessage(t('delivery:messages.genericError') + ': ' + e.message);
@@ -3131,7 +3132,7 @@ export default function ArrivedDeliveriesScreen({
       }
 
       // Database-based white coloring: Only color objects from trimble_model_objects white
-      setMessage('Värvin... Loen Supabasest...');
+      setMessage(t('common:arrivals.coloringReadingSupabase'));
 
       // Step 1: Fetch all GUIDs from database
       const PAGE_SIZE = 5000;
@@ -3160,7 +3161,7 @@ export default function ArrivedDeliveriesScreen({
       }
 
       // Step 2: Find objects in loaded models
-      setMessage('Värvin... Otsin mudelitest...');
+      setMessage(t('common:arrivals.coloringSearchingModels'));
       const dbFoundObjects = await findObjectsInLoadedModels(api, allGuids);
 
       // Step 3: Get all delivery items GUIDs (these will be colored, not white)
@@ -3274,7 +3275,7 @@ export default function ArrivedDeliveriesScreen({
         }
 
         const total = Object.values(statusCounts).reduce((a, b) => a + b, 0);
-        setMessage(`${total} detaili värvitud: ${statusCounts.confirmed} kohal, ${statusCounts.pending} ootel, ${statusCounts.missing} puudu, ${statusCounts.added} lisatud`);
+        setMessage(t('common:arrivals.itemsColoredByStatus', { total, confirmed: statusCounts.confirmed, pending: statusCounts.pending, missing: statusCounts.missing, added: statusCounts.added }));
         setColorMode(mode);
         return;
       }
@@ -3293,7 +3294,7 @@ export default function ArrivedDeliveriesScreen({
         .map(ci => ci.item.guid_ifc!);
 
       if (guids.length === 0) {
-        setMessage('Detailidel puuduvad GUID-id');
+        setMessage(t('common:arrivals.itemsMissingGuids'));
         setColorMode(mode);
         return;
       }
@@ -3301,7 +3302,7 @@ export default function ArrivedDeliveriesScreen({
       // Find objects in model
       const foundObjects = await findObjectsInLoadedModels(api, guids);
       if (foundObjects.size === 0) {
-        setMessage('Detaile ei leitud mudelist');
+        setMessage(t('common:arrivals.itemsNotFoundInModel'));
         setColorMode(mode);
         return;
       }
@@ -3322,7 +3323,7 @@ export default function ArrivedDeliveriesScreen({
           );
         }
 
-        setMessage(`${foundObjects.size} detaili värvitud roheliseks`);
+        setMessage(t('common:arrivals.itemsColoredGreen', { count: foundObjects.size }));
       } else if (mode === 'by-vehicle') {
         // Color by vehicle - each vehicle gets different color
         const vehicleMap = new Map<string, { guids: string[]; color: { r: number; g: number; b: number } }>();
@@ -3362,7 +3363,7 @@ export default function ArrivedDeliveriesScreen({
           }
         }
 
-        setMessage(`${foundObjects.size} detaili värvitud ${vehicleMap.size} veoki kaupa`);
+        setMessage(t('common:arrivals.itemsColoredByVehicle', { count: foundObjects.size, vehicleCount: vehicleMap.size }));
       }
 
       setColorMode(mode);
@@ -3520,7 +3521,7 @@ export default function ArrivedDeliveriesScreen({
         statusCounts[status] = foundObjects.size;
       }
 
-      setMessage(`Veoki värvitud: ${statusCounts.pending || 0} ootel, ${statusCounts.confirmed || 0} kohal, ${statusCounts.missing || 0} puudu`);
+      setMessage(t('common:arrivals.vehicleColoredByStatus', { pending: statusCounts.pending || 0, confirmed: statusCounts.confirmed || 0, missing: statusCounts.missing || 0 }));
 
     } catch (e) {
       console.error('Error coloring active vehicle:', e);
@@ -3844,7 +3845,7 @@ export default function ArrivedDeliveriesScreen({
               const vehicleCount = vehicles.filter(v => v.scheduled_date === date).length;
               return (
                 <option key={date} value={date}>
-                  {formatDateFull(date)} ({vehicleCount} veok{vehicleCount === 1 ? '' : 'it'})
+                  {formatDateFull(date)} ({t('common:arrivals.vehicleCount', { count: vehicleCount })})
                 </option>
               );
             })}
@@ -3886,7 +3887,7 @@ export default function ArrivedDeliveriesScreen({
           onClick={exportAllArrivalsForDate}
           title={t('arrivals.exportDaySummary')}
         >
-          <FiDownload /> Excel
+          <FiDownload /> {t('common:arrivals.excelExport')}
         </button>
       </div>
       )}
@@ -4438,7 +4439,7 @@ export default function ArrivedDeliveriesScreen({
                                 onClick={() => photoInputRef.current?.click()}
                                 disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                               >
-                                <FiUpload /> Lisa
+                                <FiUpload /> {t('common:buttons.add')}
                               </button>
                               <input
                                 ref={photoInputRef}
@@ -4539,7 +4540,7 @@ export default function ArrivedDeliveriesScreen({
                                 <div className="no-photos dropzone">
                                   <FiImage />
                                   <span>{t('arrivals.dragPasteOrClick')}</span>
-                                  <span className="paste-hint">Ctrl+V kleepimiseks</span>
+                                  <span className="paste-hint">{t('common:arrivals.ctrlVToPaste')}</span>
                                 </div>
                               )}
                             </div>
@@ -4548,13 +4549,13 @@ export default function ArrivedDeliveriesScreen({
                           {/* Delivery notes photos (saatelehed) */}
                           <div className="photos-section delivery-notes">
                             <div className="photos-header">
-                              <label><FiFileText /> Saatelehed</label>
+                              <label><FiFileText /> {t('common:arrivals.waybills')}</label>
                               <button
                                 className="upload-photo-btn"
                                 onClick={() => deliveryNotePhotoInputRef.current?.click()}
                                 disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                               >
-                                <FiUpload /> Lisa
+                                <FiUpload /> {t('common:buttons.add')}
                               </button>
                               <input
                                 ref={deliveryNotePhotoInputRef}
@@ -4644,7 +4645,7 @@ export default function ArrivedDeliveriesScreen({
                                 <div className="no-photos dropzone">
                                   <FiFileText />
                                   <span>{t('arrivals.dragPasteOrClick')}</span>
-                                  <span className="paste-hint">Ctrl+V kleepimiseks</span>
+                                  <span className="paste-hint">{t('common:arrivals.ctrlVToPaste')}</span>
                                 </div>
                               )}
                             </div>
@@ -4657,7 +4658,7 @@ export default function ArrivedDeliveriesScreen({
                               onClick={() => exportDeliveryReport(arrivedVehicle.id)}
                               title={t('arrivals.exportVehicleReport')}
                             >
-                              <FiDownload /> Ekspordi raport
+                              <FiDownload /> {t('common:arrivals.exportReportBtn')}
                             </button>
                           </div>
 
@@ -4717,7 +4718,7 @@ export default function ArrivedDeliveriesScreen({
                                     .filter(Boolean) as string[];
                                   if (arrivedGuids.length > 0) {
                                     selectObjectsByGuid(api, arrivedGuids);
-                                    setMessage(`${arrivedGuids.length} detaili märgistatud mudelis`);
+                                    setMessage(t('common:arrivals.itemsMarkedInModel', { count: arrivedGuids.length }));
                                   }
                                 }}
                                 title={t('arrivals.markAllArrivedInModel')}
@@ -4731,7 +4732,7 @@ export default function ArrivedDeliveriesScreen({
                                       setShowAddItemModal(true);
                                     }}
                                   >
-                                    <FiPlus /> Lisa
+                                    <FiPlus /> {t('common:buttons.add')}
                                   </button>
                                   <button
                                     className={`add-item-btn model ${modelSelectionMode ? 'active' : ''}`}
@@ -5009,7 +5010,7 @@ export default function ArrivedDeliveriesScreen({
 
                         {/* Share/Export section */}
                         <div className="share-export-section">
-                          <div className="share-export-title">Jaga / Eksport</div>
+                          <div className="share-export-title">{t('common:arrivals.shareExportTitle')}</div>
                           <div className="share-export-buttons">
                             <button
                               className="share-btn pdf"
@@ -5020,7 +5021,7 @@ export default function ArrivedDeliveriesScreen({
                               {generatingPdf === arrivedVehicle.id ? (
                                 <><FiLoader className="spinning" /> PDF...</>
                               ) : (
-                                <><FiFileText /> PDF raport</>
+                                <><FiFileText /> {t('common:arrivals.pdfReport')}</>
                               )}
                             </button>
 
@@ -5033,7 +5034,7 @@ export default function ArrivedDeliveriesScreen({
                               {generatingShareLink === arrivedVehicle.id ? (
                                 <><FiLoader className="spinning" /> ...</>
                               ) : (
-                                <><FiCopy /> Kopeeri link</>
+                                <><FiCopy /> {t('common:arrivals.copyLink')}</>
                               )}
                             </button>
 
@@ -5043,7 +5044,7 @@ export default function ArrivedDeliveriesScreen({
                               disabled={generatingShareLink === arrivedVehicle.id}
                               title={t('actions.openInBrowser')}
                             >
-                              <FiExternalLink /> Ava brauseris
+                              <FiExternalLink /> {t('common:arrivals.openInBrowser')}
                             </button>
                           </div>
                         </div>
@@ -6106,7 +6107,7 @@ export default function ArrivedDeliveriesScreen({
                             }
                           }
                         }}
-                        title={`${item.assembly_mark || '-'} - kliki et valida mudelis`}
+                        title={t('common:arrivals.clickToSelectInModel', { mark: item.assembly_mark || '-' })}
                       >
                         {(item.assembly_mark || '-').substring(0, 10)}
                       </div>
@@ -6138,7 +6139,7 @@ export default function ArrivedDeliveriesScreen({
                             }
                           }
                         }}
-                        title={vehicle ? `${vehicle.vehicle_code} - kliki et valida kõik veoki detailid` : ''}
+                        title={vehicle ? t('common:arrivals.clickToSelectAllVehicleItems', { code: vehicle.vehicle_code }) : ''}
                       >
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', flex: 1, minWidth: 0 }}>
                           <span style={{ fontSize: '10px', color: '#3b82f6', fontWeight: 500 }}>
@@ -6401,7 +6402,7 @@ export default function ArrivedDeliveriesScreen({
                 }}
               >
                 <FiPlus size={14} />
-                Lisa esimene määramata saabumine
+                {t('common:arrivals.addFirstUnassignedArrival')}
               </button>
             </div>
           ) : (
@@ -7169,7 +7170,7 @@ export default function ArrivedDeliveriesScreen({
             </div>
             <div className="modal-body">
               <p className="modal-description">
-                Lisa veok, mis polnud graafikus planeeritud. Tehas võis saata üllatusveoki.
+                {t('common:arrivals.addUnplannedVehicleTooltip')}
               </p>
               <div className="form-group">
                 <label>{t('arrivals.vehicleCode')}</label>
