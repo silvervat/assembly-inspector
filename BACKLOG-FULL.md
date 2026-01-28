@@ -9,7 +9,7 @@
 
 | Faas | Sisu | Staatus | Progress |
 |------|------|---------|----------|
-| 1 | Infrastruktuur | šŸ"„ Pooleli | 1/6 |
+| 1 | Infrastruktuur | āœ… Lƶpetatud | 6/6 |
 | 2 | AdminScreen tükeldamine | ⏳ Ootel | 0/12 |
 | 3 | State Management | ⏳ Ootel | 0/4 |
 | 4 | OrganizerScreen tükeldamine | ⏳ Ootel | 0/7 |
@@ -18,7 +18,7 @@
 | 7 | Error Handling & UX | ⏳ Ootel | 0/4 |
 | 8 | i18n (FI, RU) | ⏳ Ootel | 0/3 |
 
-**Kokku: 1/48 ülesannet lõpetatud**
+**Kokku: 6/48 ülesannet lõpetatud**
 
 ---
 
@@ -73,7 +73,8 @@ mkdir -p src/shared/components/{ui,feedback,layout}
 mkdir -p src/test
 ```
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -119,7 +120,8 @@ export const useUIStore = create<UIState>((set) => ({
 }));
 ```
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -154,7 +156,8 @@ export const useAppStore = create<AppState>()(
 );
 ```
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -195,7 +198,8 @@ import { QueryProvider } from './shared/providers/QueryProvider';
 </QueryProvider>
 ```
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -251,7 +255,8 @@ vi.mock('../supabase', () => ({
 }
 ```
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
