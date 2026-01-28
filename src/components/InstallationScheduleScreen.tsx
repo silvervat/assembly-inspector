@@ -1553,6 +1553,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     });
   };
 
+  // Callback ref to keep quantity dropdown visible (not hidden behind Trimble sidebar)
+  const adjustDropdownPosition = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.left < 60) {
+      el.style.left = `${60 - rect.left + (parseFloat(el.style.left) || 0)}px`;
+    }
+  }, []);
+
   // Get method config by key
   const getMethodConfig = (key: InstallMethodType): MethodConfig | undefined => {
     return INSTALL_METHODS.find(m => m.key === key);
@@ -6675,7 +6684,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     )}
                   </button>
                   {isHovered && isActive && (
-                    <div className="method-qty-dropdown">
+                    <div className="method-qty-dropdown" ref={adjustDropdownPosition}>
                       {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
                         <button
                           key={num}
@@ -6726,7 +6735,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     )}
                   </button>
                   {isHovered && isActive && (
-                    <div className="method-qty-dropdown">
+                    <div className="method-qty-dropdown" ref={adjustDropdownPosition}>
                       {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
                         <button
                           key={num}
@@ -6960,7 +6969,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
                         {/* Quantity selector dropdown */}
                         {isHovered && isActive && (
-                          <div className="method-qty-dropdown">
+                          <div className="method-qty-dropdown" ref={adjustDropdownPosition}>
                             {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
                               <button
                                 key={num}
@@ -7018,7 +7027,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
                         {/* Quantity selector dropdown */}
                         {isHovered && isActive && (
-                          <div className="method-qty-dropdown">
+                          <div className="method-qty-dropdown" ref={adjustDropdownPosition}>
                             {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
                               <button
                                 key={num}
