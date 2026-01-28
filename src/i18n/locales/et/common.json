@@ -842,15 +842,6 @@
     "noNonConformances": "Mittevastavusi pole",
     "activityHistory": "Tegevuste ajalugu"
   },
-  "arrivals": {
-    "confirmed": "Kinnitatud",
-    "missing": "Puudu"
-  },
-  "issues": {
-    "statusOpen": "Avatud",
-    "statusInProgress": "Töös",
-    "statusResolved": "Lahendatud"
-  },
   "spreadsheet": {
     "instructionEdit": "Topeltklikk/Enter - muuda",
     "instructionMulti": "Ctrl+klikk - mitu lahtrit",

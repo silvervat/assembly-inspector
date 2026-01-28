@@ -10,6 +10,7 @@ import etInspection from './locales/et/inspection.json';
 import etOrganizer from './locales/et/organizer.json';
 import etAdmin from './locales/et/admin.json';
 import etErrors from './locales/et/errors.json';
+import etTools from './locales/et/tools.json';
 
 // Import translations - EN
 import enCommon from './locales/en/common.json';
@@ -19,6 +20,7 @@ import enInspection from './locales/en/inspection.json';
 import enOrganizer from './locales/en/organizer.json';
 import enAdmin from './locales/en/admin.json';
 import enErrors from './locales/en/errors.json';
+import enTools from './locales/en/tools.json';
 
 // RU and FI will be added later
 // import ruCommon from './locales/ru/common.json';
@@ -34,6 +36,7 @@ export const resources = {
     organizer: etOrganizer,
     admin: etAdmin,
     errors: etErrors,
+    tools: etTools,
   },
   en: {
     common: enCommon,
@@ -43,6 +46,7 @@ export const resources = {
     organizer: enOrganizer,
     admin: enAdmin,
     errors: enErrors,
+    tools: enTools,
   },
   // ru: { common: ruCommon, ... },
   // fi: { common: fiCommon, ... },

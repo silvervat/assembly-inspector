@@ -901,7 +901,7 @@ export default function AdminScreen({
       <p>Kontrolli Trimble Connect mudelit reaalajas</p>
       <div id="status" class="status-indicator status-connected">
         <span class="pulse"></span>
-        <span>Ühendatud</span>
+        <span>${t('popupHtml.connected')}</span>
       </div>
     </div>
 
@@ -981,7 +981,7 @@ export default function AdminScreen({
 
       const guids = guidInput.value.trim();
       if (!guids && action !== 'reset') {
-        showResult('error', 'Sisesta vähemalt üks GUID!');
+        showResult('error', t('guid.enterAtLeastOne'));
         return;
       }
 
@@ -1031,7 +1031,7 @@ export default function AdminScreen({
       guidControllerWindowRef.current = popup;
       console.log('🎯 GUID Controller window opened');
     } else {
-      alert('Popup blocker võib blokeerida akna avamist. Luba popupid selle lehe jaoks.');
+      alert(t('popupBlocked'));
     }
   };
 
@@ -1058,7 +1058,7 @@ export default function AdminScreen({
             guidControllerWindowRef.current.postMessage({
               type: 'GUID_CONTROLLER_RESULT',
               status: 'error',
-              message: e.message || 'Viga toimingu tegemisel'
+              message: e.message || t('errors.operationError')
             }, '*');
           }
         }
@@ -1099,7 +1099,7 @@ export default function AdminScreen({
         </div>
         <div class="info">
           <div class="label">Detailid:</div>
-          <div id="list"><div class="empty">Midagi pole valitud</div></div>
+          <div id="list"><div class="empty">${t('popupHtml.nothingSelected')}</div></div>
         </div>
         <script>
           window.addEventListener('message', (event) => {
@@ -1107,7 +1107,7 @@ export default function AdminScreen({
               document.getElementById('count').textContent = event.data.count;
               const list = document.getElementById('list');
               if (event.data.items.length === 0) {
-                list.innerHTML = '<div class="empty">Midagi pole valitud</div>';
+                list.innerHTML = '<div class="empty">${t('popupHtml.nothingSelected')}</div>';
               } else {
                 list.innerHTML = event.data.items.map(item =>
                   '<div class="item">' +
@@ -1130,7 +1130,7 @@ export default function AdminScreen({
       selectionMonitorWindowRef.current = popup;
       console.log('🔍 Selection Monitor window opened');
     } else {
-      alert('Popup blocker võib blokeerida akna avamist. Luba popupid selle lehe jaoks.');
+      alert(t('popupBlocked'));
     }
   };
 
@@ -1293,7 +1293,7 @@ export default function AdminScreen({
 
     setGuidImportLoading(true);
     setGuidImportResults(null);
-    setMessage('Otsin objekte...');
+    setMessage(t('searchingObjects'));
 
     try {
       // Parse input - split by newlines, semicolons, or commas
@@ -1316,7 +1316,7 @@ export default function AdminScreen({
       const uniqueMsGuids = [...new Set(allMatches.map(g => g.toLowerCase()))];
 
       if (uniqueMsGuids.length === 0) {
-        setMessage('Ühtegi kehtivat GUID (MS) ei leitud');
+        setMessage(t('guid.noValidMsFound'));
         setGuidImportLoading(false);
         return;
       }
@@ -1334,7 +1334,7 @@ export default function AdminScreen({
       // Get all models
       const models = await api.viewer.getModels();
       if (!models || models.length === 0) {
-        setMessage('Mudeleid ei leitud');
+        setMessage(t('guid.modelsNotFound'));
         setGuidImportLoading(false);
         return;
       }
@@ -1408,7 +1408,7 @@ export default function AdminScreen({
           notFound,
           total: uniqueMsGuids.length
         });
-        setMessage('Ühtegi objekti ei leitud');
+        setMessage(t('viewer.noObjectsFound'));
       }
 
     } catch (error) {
@@ -14893,7 +14893,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     }
 
                     if (allObjects.length === 0) {
-                      throw new Error('Ühtegi objekti ei leitud!');
+                      throw new Error(t('viewer.noObjectsFound'));
                     }
 
                     // Sort by Cast Unit Mark
@@ -15438,9 +15438,9 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   <table className="assembly-table">
                     <thead>
                       <tr>
-                        <th>Cast Unit Mark</th>
-                        <th>Product Name</th>
-                        <th>Weight</th>
+                        <th>{t('tables.castUnitMark')}</th>
+                        <th>{t('tables.productName')}</th>
+                        <th>{t('tables.weight')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -15478,14 +15478,14 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   <table className="bolt-table">
                     <thead>
                       <tr>
-                        <th>Bolt Name</th>
-                        <th>Standard</th>
-                        <th>Count</th>
-                        <th>Nut Name</th>
-                        <th>Nut Count</th>
-                        <th>Washer Name</th>
-                        <th>Washer Count</th>
-                        <th>Washer Type</th>
+                        <th>{t('tables.boltName')}</th>
+                        <th>{t('tables.standard')}</th>
+                        <th>{t('tables.count')}</th>
+                        <th>{t('tables.nutName')}</th>
+                        <th>{t('tables.nutCount')}</th>
+                        <th>{t('tables.washerName')}</th>
+                        <th>{t('tables.washerCount')}</th>
+                        <th>{t('tables.washerType')}</th>
                       </tr>
                     </thead>
                     <tbody>

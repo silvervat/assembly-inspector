@@ -315,6 +315,42 @@
   "sendingToDatabase": "Saadan andmebaasi...",
   "sentToDatabase": "Saadetud andmebaasi: {{count}} detaili",
   "sendToDatabaseError": "Andmebaasi saatmine ebaõnnestus",
+  "tables": {
+    "mark": "Märk",
+    "date": "Kuupäev",
+    "added": "Lisatud",
+    "match": "Vaste",
+    "action": "Tegevus",
+    "name": "Nimi",
+    "email": "Email",
+    "role": "Roll",
+    "status": "Staatus",
+    "joined": "Liitunud",
+    "lastModified": "Viimati muudetud",
+    "castUnitMark": "Cast Unit Mark",
+    "productName": "Toode",
+    "weight": "Kaal",
+    "boltName": "Poldi nimi",
+    "standard": "Standard",
+    "count": "Arv",
+    "found": "Leitud",
+    "notFound": "Ei leitud",
+    "total": "Kokku",
+    "nutName": "Mutri nimi",
+    "nutCount": "Mutrite arv",
+    "washerName": "Seibe nimi",
+    "washerCount": "Seibide arv",
+    "washerType": "Seibe tüüp"
+  },
+  "popupHtml": {
+    "nothingSelected": "Midagi pole valitud",
+    "connected": "Ühendatud"
+  },
+  "export": {
+    "plannedDelivery": "Planeeritud tarne",
+    "actualArrival": "Tegelik saabumine",
+    "deliveryStatus": "Tarne staatus"
+  },
   "coordinateSettings": {
     "title": "Koordinaatsüsteem & Kalibreerimine",
     "loading": "Laadin...",

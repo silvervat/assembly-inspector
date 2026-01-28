@@ -24,17 +24,6 @@
     "reviewed": "Üle vaadatud",
     "pendingReview": "Ootel ülevaatust"
   },
-  "plan": {
-    "title": "Inspektsiooni kava",
-    "empty": "Kava on tühi",
-    "category": "Kategooria",
-    "selectCategory": "Vali esmalt inspektsiooni kategooria",
-    "noTypesInCategory": "Sellel kategoorial pole inspektsiooni tüüpe",
-    "addNotes": "Lisa märkmeid kavasse...",
-    "deleteConfirm": "Kas kustutada {{count}} elementi kavast?",
-    "deleteResultsConfirm": "Kas kustutada {{count}} inspektsiooni tulemust?",
-    "selectAll": "Vali kõik"
-  },
   "config": {
     "title": "Inspektsiooni seadistamine",
     "types": "Inspektsiooni tüübid",
@@ -168,6 +157,15 @@
     "adminPanel": "Admin paneel"
   },
   "plan": {
+    "title": "Inspektsiooni kava",
+    "empty": "Kava on tühi",
+    "category": "Kategooria",
+    "selectCategory": "Vali esmalt inspektsiooni kategooria",
+    "noTypesInCategory": "Sellel kategoorial pole inspektsiooni tüüpe",
+    "addNotes": "Lisa märkmeid kavasse...",
+    "deleteConfirm": "Kas kustutada {{count}} elementi kavast?",
+    "deleteResultsConfirm": "Kas kustutada {{count}} inspektsiooni tulemust?",
+    "selectAll": "Vali kõik",
     "errorLoadingTypes": "❌ Viga inspektsioonitüüpide laadimisel",
     "noObjectsToSave": "⚠️ Pole objekte salvestamiseks",
     "allObjectsAlreadyInPlan": "⚠️ Kõik valitud objektid on juba kavas",
