@@ -10,3 +10,4 @@ export { OrganizerBulkActionsBar } from './components/OrganizerBulkActionsBar';
 export { OrganizerGroupsList } from './components/OrganizerGroupsList';
 export { DeleteConfirmModal } from './components/DeleteConfirmModal';
 export { ImportModal, ExcelImportModal } from './components/ImportModal';
+export { GroupInfoModal } from './components/GroupInfoModal';

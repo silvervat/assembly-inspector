@@ -45,7 +45,8 @@ import {
   OrganizerGroupsList,
   DeleteConfirmModal,
   ImportModal,
-  ExcelImportModal
+  ExcelImportModal,
+  GroupInfoModal
 } from '../features/organizer';
 import {
   generateUUID,
@@ -12112,264 +12113,20 @@ export default function OrganizerScreen({
         </div>
       )}
 
+
       {/* Group Info Modal */}
-      {showGroupInfoModal && groupInfoGroupId && (() => {
-        const group = groups.find(g => g.id === groupInfoGroupId);
-        if (!group) return null;
-
-        const rootGroup = getRootParent(groupInfoGroupId) || group;
-        const customFields = rootGroup.custom_fields || [];
-        const photoFields = customFields.filter(f => f.type === 'photo');
-        const attachmentFields = customFields.filter(f => f.type === 'attachment');
-        const photos = groupInfoFiles.filter(f => f.type === 'photo');
-        const attachments = groupInfoFiles.filter(f => f.type === 'attachment');
-
-        // Permission helpers
-        const getPermissionLabel = (perm: boolean) => perm ? '✓' : '—';
-        const permLabels = {
-          can_add: t('organizer:groupInfo.canAdd'),
-          can_delete_own: t('organizer:groupInfo.canDeleteOwn'),
-          can_delete_all: t('organizer:groupInfo.canDeleteAll'),
-          can_edit_group: t('organizer:groupInfo.canEditGroup'),
-          can_manage_fields: t('organizer:groupInfo.canManageFields')
-        };
-
-        return (
-          <div className="org-modal-overlay" onClick={() => setShowGroupInfoModal(false)}>
-            <div
-              className="org-modal group-info-modal"
-              style={{ maxWidth: '700px', width: '95%', maxHeight: '90vh' }}
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="org-modal-header">
-                <h2><FiInfo size={16} /> {t('organizer:groupInfo.title', { name: group.name })}</h2>
-                <button onClick={() => setShowGroupInfoModal(false)}><FiX size={18} /></button>
-              </div>
-              <div className="org-modal-body" style={{ padding: '0', display: 'flex', flexDirection: 'column', gap: '0', maxHeight: 'calc(90vh - 120px)', overflowY: 'auto' }}>
-                {/* Basic Info Section */}
-                <div className="group-info-section">
-                  <h3><FiInfo size={14} /> {t('organizer:groupInfo.generalInfo')}</h3>
-                  <div className="group-info-grid">
-                    <div className="group-info-item">
-                      <span className="info-label">{t('organizer:groupInfo.creator')}</span>
-                      <span className="info-value">{group.created_by}</span>
-                    </div>
-                    <div className="group-info-item">
-                      <span className="info-label">{t('organizer:groupInfo.created')}</span>
-                      <span className="info-value">{new Date(group.created_at).toLocaleString('et-EE')}</span>
-                    </div>
-                    <div className="group-info-item">
-                      <span className="info-label">{t('organizer:groupInfo.lastModified')}</span>
-                      <span className="info-value">{new Date(group.updated_at).toLocaleString('et-EE')}</span>
-                    </div>
-                    {group.updated_by && (
-                      <div className="group-info-item">
-                        <span className="info-label">{t('organizer:groupInfo.modifier')}</span>
-                        <span className="info-value">{group.updated_by}</span>
-                      </div>
-                    )}
-                    {group.is_locked && (
-                      <>
-                        <div className="group-info-item">
-                          <span className="info-label">{t('organizer:groupInfo.lockedBy')}</span>
-                          <span className="info-value">{group.locked_by || t('organizer:unknown')}</span>
-                        </div>
-                        <div className="group-info-item">
-                          <span className="info-label">{t('organizer:groupInfo.lockedAt')}</span>
-                          <span className="info-value">{group.locked_at ? new Date(group.locked_at).toLocaleString('et-EE') : '-'}</span>
-                        </div>
-                      </>
-                    )}
-                    {group.description && (
-                      <div className="group-info-item full-width">
-                        <span className="info-label">{t('organizer:groupInfo.description')}</span>
-                        <span className="info-value">{group.description}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Permissions Section */}
-                <div className="group-info-section">
-                  <h3><FiLock size={14} /> {t('organizer:groupInfo.permissions')}</h3>
-                  <div className="group-info-permissions">
-                    <div className="permissions-mode">
-                      <span className="info-label">{t('organizer:groupInfo.sharingMode')}</span>
-                      <span className="info-value">
-                        {group.is_private ? t('organizer:groupInfo.private') :
-                         Object.keys(group.user_permissions || {}).length > 0 ? t('organizer:groupInfo.selectedUsers') : t('organizer:groupInfo.wholeProject')}
-                      </span>
-                    </div>
-                    {!group.is_private && (
-                      <div className="permissions-table">
-                        <div className="permissions-header">
-                          <span>{t('organizer:groupInfo.userPermission')}</span>
-                          {Object.keys(permLabels).map(key => (
-                            <span key={key} title={permLabels[key as keyof typeof permLabels]}>{permLabels[key as keyof typeof permLabels].split(' ')[0]}</span>
-                          ))}
-                        </div>
-                        {/* Default permissions */}
-                        <div className="permissions-row">
-                          <span className="perm-user">{t('organizer:groupInfo.defaultAll')}</span>
-                          <span>{getPermissionLabel(group.default_permissions?.can_add)}</span>
-                          <span>{getPermissionLabel(group.default_permissions?.can_delete_own)}</span>
-                          <span>{getPermissionLabel(group.default_permissions?.can_delete_all)}</span>
-                          <span>{getPermissionLabel(group.default_permissions?.can_edit_group)}</span>
-                          <span>{getPermissionLabel(group.default_permissions?.can_manage_fields)}</span>
-                        </div>
-                        {/* User-specific permissions */}
-                        {Object.entries(group.user_permissions || {}).map(([email, perms]) => (
-                          <div key={email} className="permissions-row">
-                            <span className="perm-user" title={email}>{email.split('@')[0]}</span>
-                            <span>{getPermissionLabel(perms.can_add)}</span>
-                            <span>{getPermissionLabel(perms.can_delete_own)}</span>
-                            <span>{getPermissionLabel(perms.can_delete_all)}</span>
-                            <span>{getPermissionLabel(perms.can_edit_group)}</span>
-                            <span>{getPermissionLabel(perms.can_manage_fields)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {group.is_private && (
-                      <div style={{ fontSize: '12px', color: '#6b7280', padding: '8px 0' }}>
-                        {t('organizer:groupInfo.privateOnly')}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Photos Gallery */}
-                {photoFields.length > 0 && (
-                  <div className="group-info-section">
-                    <h3><FiCamera size={14} /> {t('organizer:groupInfo.photos', { count: photos.length })}</h3>
-                    {photos.length > 0 ? (
-                      <div className="group-info-gallery">
-                        {photos.map((photo, idx) => (
-                          <div
-                            key={idx}
-                            className="gallery-item"
-                            onClick={() => {
-                              setGroupInfoLightboxPhotos(photos.map(p => p.url));
-                              setGroupInfoLightboxIndex(idx);
-                            }}
-                          >
-                            <img src={photo.url} alt={photo.itemMark} />
-                            <div className="gallery-item-info">
-                              <span className="item-mark">{photo.itemMark}</span>
-                              <span className="field-name">{photo.fieldName}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: '12px', color: '#6b7280', padding: '8px 0' }}>
-                        {t('organizer:groupInfo.noPhotos')}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Attachments */}
-                {attachmentFields.length > 0 && (
-                  <div className="group-info-section">
-                    <h3><FiPaperclip size={14} /> {t('organizer:groupInfo.attachments', { count: attachments.length })}</h3>
-                    {attachments.length > 0 ? (
-                      <div className="group-info-attachments">
-                        {attachments.map((att, idx) => (
-                          <a
-                            key={idx}
-                            href={att.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="attachment-item"
-                          >
-                            <FiPaperclip size={12} />
-                            <span className="att-mark">{att.itemMark}</span>
-                            <span className="att-field">{att.fieldName}</span>
-                          </a>
-                        ))}
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: '12px', color: '#6b7280', padding: '8px 0' }}>
-                        {t('organizer:groupInfo.noAttachments')}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Recent Activities */}
-                <div className="group-info-section">
-                  <h3><FiClock size={14} /> {t('organizer:groupInfo.recentActivities')}</h3>
-                  {groupInfoActivitiesLoading ? (
-                    <div style={{ padding: '16px', textAlign: 'center', color: '#6b7280' }}>{t('organizer:loading')}</div>
-                  ) : groupInfoActivities.length > 0 ? (
-                    <div className="group-info-activities">
-                      {groupInfoActivities.map((log) => {
-                        const actionLabels: Record<string, string> = {
-                          add_items: t('organizer:activityLog.actionAddedDetails'),
-                          remove_items: t('organizer:activityLog.actionRemovedDetails'),
-                          update_item: t('organizer:activityLog.actionUpdateItem'),
-                          create_group: t('organizer:activityLog.actionCreateGroup'),
-                          delete_group: t('organizer:activityLog.actionDeleteGroup'),
-                          update_group: t('organizer:activityLog.actionUpdateGroup'),
-                          add_photo: t('organizer:activityLog.actionAddPhoto'),
-                          remove_photo: t('organizer:activityLog.actionRemovePhoto'),
-                          add_attachment: t('organizer:activityLog.actionAddAttachment'),
-                          add_field: t('organizer:activityLog.actionAddField'),
-                          remove_field: t('organizer:activityLog.actionRemoveField')
-                        };
-                        const actionColors: Record<string, string> = {
-                          add_items: '#10b981',
-                          remove_items: '#ef4444',
-                          update_item: '#f59e0b',
-                          create_group: '#3b82f6',
-                          delete_group: '#dc2626',
-                          update_group: '#8b5cf6',
-                          add_photo: '#22c55e',
-                          remove_photo: '#f87171',
-                          add_attachment: '#14b8a6',
-                          add_field: '#6366f1',
-                          remove_field: '#f43f5e'
-                        };
-                        const userName = log.user_name || log.user_email.split('@')[0];
-                        const actionLabel = actionLabels[log.action_type] || log.action_type;
-                        const actionColor = actionColors[log.action_type] || '#6b7280';
-                        const date = new Date(log.created_at);
-
-                        return (
-                          <div key={log.id} className="activity-item">
-                            <span className="activity-dot" style={{ background: actionColor }} />
-                            <span className="activity-user" title={log.user_email}>{userName}</span>
-                            <span className="activity-action">{actionLabel}</span>
-                            {log.item_count > 1 && (
-                              <span className="activity-count" style={{ background: actionColor }}>
-                                {log.item_count}
-                              </span>
-                            )}
-                            {log.field_name && (
-                              <span className="activity-field">({log.field_name})</span>
-                            )}
-                            <span className="activity-time">
-                              {date.toLocaleDateString('et-EE')} {date.toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: '12px', color: '#6b7280', padding: '8px 0' }}>
-                      {t('organizer:groupInfo.noActivities')}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="org-modal-footer">
-                <button className="cancel" onClick={() => setShowGroupInfoModal(false)}>{t('organizer:close')}</button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      <GroupInfoModal
+        show={showGroupInfoModal}
+        groupInfoGroupId={groupInfoGroupId}
+        groups={groups}
+        groupInfoFiles={groupInfoFiles}
+        groupInfoActivities={groupInfoActivities}
+        groupInfoActivitiesLoading={groupInfoActivitiesLoading}
+        onClose={() => setShowGroupInfoModal(false)}
+        getRootParent={getRootParent}
+        setGroupInfoLightboxPhotos={setGroupInfoLightboxPhotos}
+        setGroupInfoLightboxIndex={setGroupInfoLightboxIndex}
+      />
 
       {/* Group Info Photo Lightbox */}
       {groupInfoLightboxPhotos.length > 0 && (
