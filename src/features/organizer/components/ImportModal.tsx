@@ -78,7 +78,7 @@ export function ImportModal({
             </label>
             <textarea
               className="org-import-textarea"
-              placeholder="Näiteks:&#10;3f2504e0-4f89-11d3-9a0c-0305e82c3301&#10;3f2504e0-4f89-11d3-9a0c-0305e82c3302&#10;&#10;või&#10;&#10;W-101&#10;W-102&#10;W-103"
+              placeholder={t('guidExamplePlaceholder')}
               value={importText}
               onChange={(e) => onImportTextChange(e.target.value)}
               rows={10}

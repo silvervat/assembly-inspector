@@ -9306,7 +9306,7 @@ export default function OrganizerScreen({
                                           }
                                         }, 200);
                                       }}
-                                      placeholder="Lisa silt..."
+                                      placeholder={t('organizer:ui.addTagPlaceholder')}
                                       autoFocus
                                     />
                                   </div>
@@ -9886,11 +9886,11 @@ export default function OrganizerScreen({
               )}
               <div className="org-field">
                 <label>Nimi *</label>
-                <input type="text" value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="Grupi nimi" autoFocus />
+                <input type="text" value={formName} onChange={(e) => setFormName(e.target.value)} placeholder={t('organizer:ui.groupNamePlaceholder')} autoFocus />
               </div>
               <div className="org-field">
                 <label>Kirjeldus</label>
-                <textarea value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder="Valikuline kirjeldus" rows={2} />
+                <textarea value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder={t('organizer:ui.optionalDescription')} rows={2} />
               </div>
               <div className="org-field">
                 <label>{t('organizer:color.selectColor')}</label>
@@ -10307,7 +10307,7 @@ export default function OrganizerScreen({
                           type="text"
                           value={propertySearchQuery}
                           onChange={(e) => setPropertySearchQuery(e.target.value)}
-                          placeholder="Otsi property't..."
+                          placeholder={t('organizer:ui.searchPropertyPlaceholder')}
                           style={{
                             width: '100%',
                             padding: '8px 10px',
@@ -10785,7 +10785,7 @@ export default function OrganizerScreen({
                     {field.type === 'tags' && (
                       <input
                         type="text"
-                        placeholder="märksõnad, komaga eraldatud"
+                        placeholder={t('organizer:keywordsPlaceholder')}
                         value={requiredFieldValues[field.id] || ''}
                         onChange={(e) => setRequiredFieldValues(prev => ({ ...prev, [field.id]: e.target.value }))}
                       />
@@ -11394,7 +11394,7 @@ export default function OrganizerScreen({
                 onDrop={(e) => handleContentDrop(e, lineKey)}
                 onDragOver={handleDragOver}
                 dangerouslySetInnerHTML={{ __html: htmlContent || '<span class="template-placeholder-text"></span>' }}
-                data-placeholder="Lohista siia välju või kirjuta tekst..."
+                data-placeholder={t('organizer:dragFieldsPlaceholder')}
               />
             </div>
           );
@@ -13262,7 +13262,7 @@ export default function OrganizerScreen({
                                       setManagementEditingDescGroupId(null);
                                     }}
                                     autoFocus
-                                    placeholder="Lisa kirjeldus..."
+                                    placeholder={t('organizer:ui.addDescriptionPlaceholder')}
                                     style={{
                                       width: '100%',
                                       padding: '1px 6px',

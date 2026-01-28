@@ -31,7 +31,7 @@ export function GuidImportPanel({ api }: GuidImportPanelProps) {
         className="guid-import-textarea"
         value={guidImportText}
         onChange={(e) => setGuidImportText(e.target.value)}
-        placeholder="Kleebi siia GUID (MS) koodid, nt:&#10;a70672f3-14be-4009-ac56-154776793a53&#10;b81783g4-25cf-5110-bd67-265887894b64&#10;..."
+        placeholder={t('guid.importPlaceholder')}
         style={{
           width: '100%',
           minHeight: '200px',

@@ -4002,7 +4002,7 @@ export default function AdminScreen({
                       searchBtn?.click();
                     }
                   }}
-                  placeholder="Sisesta mark (nt: S-101, B-22...)"
+                  placeholder={t('admin:viewer.enterMark')}
                   style={{
                     flex: 1,
                     padding: '8px 12px',
@@ -4279,7 +4279,7 @@ export default function AdminScreen({
                       searchBtn?.click();
                     }
                   }}
-                  placeholder="Sisesta mark (nt: S-101, B-22...)"
+                  placeholder={t('admin:viewer.enterMark')}
                   style={{
                     flex: 1,
                     padding: '8px 12px',
@@ -11924,7 +11924,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
             <textarea
               value={guidControllerInput}
               onChange={(e) => setGuidControllerInput(e.target.value)}
-              placeholder="Sisesta GUID(id)..."
+              placeholder={t('admin:viewer.enterGuids')}
               style={{
                 width: '100%',
                 minHeight: '50px',

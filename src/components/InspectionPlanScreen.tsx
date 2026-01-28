@@ -1775,7 +1775,7 @@ export default function InspectionPlanScreen({
                     <FiSearch size={14} className="search-icon" />
                     <input
                       type="text"
-                      placeholder="Otsi mark, GUID, nimi..."
+                      placeholder={t('inspection:planScreenUi.searchPlaceholder')}
                       value={searchText}
                       onChange={(e) => setSearchText(e.target.value)}
                       className="search-input"
@@ -2124,7 +2124,7 @@ export default function InspectionPlanScreen({
                                                               value={editingComment}
                                                               onChange={(e) => setEditingComment(e.target.value)}
                                                               rows={2}
-                                                              placeholder="Lisa kommentaar..."
+                                                              placeholder={t('inspection:planScreenUi.addCommentPlaceholder')}
                                                               autoFocus
                                                             />
                                                             <div className="comment-edit-actions">

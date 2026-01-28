@@ -210,7 +210,8 @@
     "addNotes": "Lisa märkused...",
     "additionalInfo": "Lisainfo või märkmed...",
     "exampleVehicleCode": "Nt. V99, SEGAPUDU, ÜLLATUS...",
-    "exampleLocation": "nt. Telg 2, laoala põhjapool, teise veoki kastis..."
+    "exampleLocation": "nt. Telg 2, laoala põhjapool, teise veoki kastis...",
+    "timeHHMM": "HH:MM"
   },
   "columns": {
     "whereElse": "Mitu korda / Kus veel"
@@ -1034,7 +1035,9 @@
     "basicInfo": "Põhiandmed",
     "liftingChartsTab": "Tõstegraafikud",
     "manufacturer": "Tootja *",
+    "manufacturerPlaceholder": "Liebherr, Terex, Manitowoc...",
     "model": "Mudel *",
+    "modelPlaceholder": "LTM 1100-5.2",
     "type": "Tüüp",
     "maxLoad": "Max koormus (t)",
     "maxHeight": "Max kõrgus (m)",

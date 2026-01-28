@@ -36,6 +36,7 @@
     "name": "Nimi",
     "keywords": "Märksõnad",
     "keywordsHint": "Eraldatud komadega",
+    "keywordsPlaceholder": "Nt: suur, punane, 50t (komadega eraldatud)",
     "noResourcesYet": "Seda tüüpi ressursse pole veel lisatud.",
     "usage": "Kasutus",
     "active": "Aktiivne",
@@ -187,6 +188,7 @@
     "findingReset": "Leidmine lähtestatud - saab uuesti skännida"
   },
   "guid": {
+    "importPlaceholder": "Kleebi siia GUID (MS) koodid, nt:\\na70672f3-14be-4009-ac56-154776793a53\\nb81783g4-25cf-5110-bd67-265887894b64\\n...",
     "enterAtLeastOne": "Sisesta vähemalt üks GUID!",
     "enterAtLeastOneMs": "Sisesta vähemalt üks GUID (MS)",
     "noValidMsFound": "Ühtegi kehtivat GUID (MS) ei leitud",
@@ -230,6 +232,8 @@
     "qrNotFoundInDb": "QR koodi ei leitud andmebaasist"
   },
   "positioner": {
+    "latPlaceholder": "Lat (59.123456)",
+    "lngPlaceholder": "Lng (24.123456)",
     "positionsLoadError": "Viga positsioonide laadimisel: {{error}}",
     "cameraApiNotSupported": "Kaamera API pole toetatud.",
     "pointCameraAtQr": "Suuna kaamera QR koodile...",
@@ -262,7 +266,13 @@
     "cameraSet": "Kaamera seatud: \"{{name}}\"",
     "cameraSetError": "Viga kaamera seadmisel: {{error}}",
     "confirmUpdateView": "Kas soovid uuendada \"{{name}}\" kaamera positsiooni praeguse vaatega?",
-    "updatedWithCurrentView": "Kaamera positsioon uuendatud praeguse vaatega"
+    "updatedWithCurrentView": "Kaamera positsioon uuendatud praeguse vaatega",
+    "namePlaceholder": "Nt: Peavaade, A-telg...",
+    "descriptionPlaceholder": "Valikuline kirjeldus..."
+  },
+  "users": {
+    "emailPlaceholder": "kasutaja@email.com",
+    "namePlaceholder": "Kasutaja nimi"
   },
   "properties": {
     "scanning": "Skanneerin valitud objektide propertiseid...",
@@ -283,6 +293,10 @@
     "selectDetailError": "Viga detaili valimisel: {{error}}",
     "missingGuidsCopied": "Puuduvad GUID-d kopeeritud!",
     "videoPlayError": "Video ei käivitu. Kontrolli kaamera õigusi."
+  },
+  "propertyMappings": {
+    "setPlaceholder": "nt. Tekla Assembly",
+    "namePlaceholder": "nt. Cast_unit_Mark"
   },
   "accessDenied": "Ligipääs keelatud",
   "copy": "Kopeeri",

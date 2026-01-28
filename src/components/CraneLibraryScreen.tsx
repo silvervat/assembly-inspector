@@ -619,7 +619,7 @@ function BasicInfoForm({
             style={inputStyle}
             value={formData.manufacturer || ''}
             onChange={(e) => onChange({ ...formData, manufacturer: e.target.value })}
-            placeholder="Liebherr, Terex, Manitowoc..."
+            placeholder={t('crane.manufacturerPlaceholder')}
           />
         </div>
 
@@ -630,7 +630,7 @@ function BasicInfoForm({
             style={inputStyle}
             value={formData.model || ''}
             onChange={(e) => onChange({ ...formData, model: e.target.value })}
-            placeholder="LTM 1100-5.2"
+            placeholder={t('crane.modelPlaceholder')}
           />
         </div>
 
@@ -787,7 +787,7 @@ function BasicInfoForm({
           style={{ ...inputStyle, minHeight: '50px', resize: 'vertical' }}
           value={formData.notes || ''}
           onChange={(e) => onChange({ ...formData, notes: e.target.value })}
-          placeholder="Lisainfo, eripärad, piirangud..."
+          placeholder={t('crane.additionalInfo')}
         />
       </div>
 

@@ -4214,7 +4214,7 @@ export default function ArrivedDeliveriesScreen({
                                 list={`arrival-times-${arrivedVehicle.id}`}
                                 value={arrivedVehicle.arrival_time || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { arrival_time: e.target.value })}
-                                placeholder="HH:MM"
+                                placeholder={t('common:placeholders.timeHHMM')}
                               />
                               <datalist id={`arrival-times-${arrivedVehicle.id}`}>
                                 {TIME_OPTIONS.map(t => <option key={t} value={t} />)}
@@ -4227,7 +4227,7 @@ export default function ArrivedDeliveriesScreen({
                                 list={`unload-start-times-${arrivedVehicle.id}`}
                                 value={arrivedVehicle.unload_start_time || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { unload_start_time: e.target.value })}
-                                placeholder="HH:MM"
+                                placeholder={t('common:placeholders.timeHHMM')}
                               />
                               <datalist id={`unload-start-times-${arrivedVehicle.id}`}>
                                 {TIME_OPTIONS.map(t => <option key={t} value={t} />)}
@@ -4240,7 +4240,7 @@ export default function ArrivedDeliveriesScreen({
                                 list={`unload-end-times-${arrivedVehicle.id}`}
                                 value={arrivedVehicle.unload_end_time || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { unload_end_time: e.target.value })}
-                                placeholder="HH:MM"
+                                placeholder={t('common:placeholders.timeHHMM')}
                               />
                               <datalist id={`unload-end-times-${arrivedVehicle.id}`}>
                                 {TIME_OPTIONS.map(t => <option key={t} value={t} />)}
@@ -6745,7 +6745,7 @@ export default function ArrivedDeliveriesScreen({
                       type="text"
                       value={unassignedFormData.location}
                       onChange={(e) => setUnassignedFormData(prev => ({ ...prev, location: e.target.value }))}
-                      placeholder="nt. Telg 2, laoala põhjapool, teise veoki kastis..."
+                      placeholder={t('common:placeholders.exampleLocation')}
                       autoFocus
                       style={{
                         width: '100%',
@@ -7461,7 +7461,7 @@ export default function ArrivedDeliveriesScreen({
                       list="items-list-edit-arrival-times"
                       value={editVehicle.arrival_time || ''}
                       onChange={(e) => updateArrival(editVehicle.id, { arrival_time: e.target.value }, true)}
-                      placeholder="HH:MM"
+                      placeholder={t('common:placeholders.timeHHMM')}
                       style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px' }}
                     />
                     <datalist id="items-list-edit-arrival-times">
@@ -7482,7 +7482,7 @@ export default function ArrivedDeliveriesScreen({
                       list="items-list-edit-unload-start"
                       value={editVehicle.unload_start_time || ''}
                       onChange={(e) => updateArrival(editVehicle.id, { unload_start_time: e.target.value }, true)}
-                      placeholder="HH:MM"
+                      placeholder={t('common:placeholders.timeHHMM')}
                       style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px' }}
                     />
                     <datalist id="items-list-edit-unload-start">
@@ -7499,7 +7499,7 @@ export default function ArrivedDeliveriesScreen({
                       list="items-list-edit-unload-end"
                       value={editVehicle.unload_end_time || ''}
                       onChange={(e) => updateArrival(editVehicle.id, { unload_end_time: e.target.value }, true)}
-                      placeholder="HH:MM"
+                      placeholder={t('common:placeholders.timeHHMM')}
                       style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px' }}
                     />
                     <datalist id="items-list-edit-unload-end">

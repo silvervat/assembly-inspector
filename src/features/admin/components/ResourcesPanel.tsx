@@ -279,7 +279,7 @@ export function ResourcesPanel({ projectId, userEmail }: ResourcesPanelProps) {
                 type="text"
                 value={resourceFormData.keywords}
                 onChange={(e) => setResourceFormData(prev => ({ ...prev, keywords: e.target.value }))}
-                placeholder="Nt: suur, punane, 50t (komadega eraldatud)"
+                placeholder={t('admin:resources.keywordsPlaceholder')}
                 style={{
                   width: '100%',
                   padding: '8px 12px',

@@ -76,7 +76,9 @@
     "type": "Veoki tüüp",
     "driver": "Autojuht",
     "phone": "Telefon",
-    "notes": "Märkused"
+    "notes": "Märkused",
+    "codePlaceholder": "nt. EBE-1",
+    "timePlaceholder": "00:00"
   },
   "factory": {
     "add": "Lisa tehas",

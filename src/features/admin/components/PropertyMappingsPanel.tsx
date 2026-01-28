@@ -128,7 +128,7 @@ export function PropertyMappingsPanel({ api, projectId, userEmail }: PropertyMap
                       color: 'var(--text-primary)',
                       fontSize: '13px'
                     }}
-                    placeholder="nt. Tekla Assembly"
+                    placeholder={t('propertyMappings.setPlaceholder')}
                   />
                   <datalist id={`${setKey}-options`}>
                     {[...new Set(availableProperties.map(p => p.setName))].map(setName => (
@@ -154,7 +154,7 @@ export function PropertyMappingsPanel({ api, projectId, userEmail }: PropertyMap
                       color: 'var(--text-primary)',
                       fontSize: '13px'
                     }}
-                    placeholder="nt. Cast_unit_Mark"
+                    placeholder={t('propertyMappings.namePlaceholder')}
                   />
                   <datalist id={`${propKey}-options`}>
                     {availableProperties

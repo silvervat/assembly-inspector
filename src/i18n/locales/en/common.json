@@ -210,7 +210,8 @@
     "addNotes": "Add notes...",
     "additionalInfo": "Additional info or notes...",
     "exampleVehicleCode": "e.g. V99, MIXED, SURPRISE...",
-    "exampleLocation": "e.g. Axis 2, north storage area, in second vehicle box..."
+    "exampleLocation": "e.g. Axis 2, north storage area, in second vehicle box...",
+    "timeHHMM": "HH:MM"
   },
   "columns": {
     "whereElse": "Count / Where else"
@@ -715,7 +716,9 @@
     "basicInfo": "Basic info",
     "liftingChartsTab": "Lifting charts",
     "manufacturer": "Manufacturer *",
+    "manufacturerPlaceholder": "Liebherr, Terex, Manitowoc...",
     "model": "Model *",
+    "modelPlaceholder": "LTM 1100-5.2",
     "type": "Type",
     "maxLoad": "Max load (t)",
     "maxHeight": "Max height (m)",

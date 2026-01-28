@@ -36,6 +36,7 @@
     "name": "Name",
     "keywords": "Keywords",
     "keywordsHint": "Separated by comma",
+    "keywordsPlaceholder": "e.g. large, red, 50t (separated by comma)",
     "noResourcesYet": "No resources of this type added yet.",
     "usage": "Usage",
     "active": "Active",
@@ -187,6 +188,7 @@
     "findingReset": "Finding reset - can scan again"
   },
   "guid": {
+    "importPlaceholder": "Paste GUID (MS) codes here, e.g.:\\na70672f3-14be-4009-ac56-154776793a53\\nb81783g4-25cf-5110-bd67-265887894b64\\n...",
     "enterAtLeastOne": "Enter at least one GUID!",
     "enterAtLeastOneMs": "Enter at least one GUID (MS)",
     "noValidMsFound": "No valid GUID (MS) found",
@@ -230,6 +232,8 @@
     "qrNotFoundInDb": "QR code not found in database"
   },
   "positioner": {
+    "latPlaceholder": "Lat (59.123456)",
+    "lngPlaceholder": "Lng (24.123456)",
     "positionsLoadError": "Error loading positions: {{error}}",
     "cameraApiNotSupported": "Camera API not supported.",
     "pointCameraAtQr": "Point camera at QR code...",
@@ -262,7 +266,13 @@
     "cameraSet": "Camera set: \"{{name}}\"",
     "cameraSetError": "Error setting camera: {{error}}",
     "confirmUpdateView": "Update \"{{name}}\" camera position with current view?",
-    "updatedWithCurrentView": "Camera position updated with current view"
+    "updatedWithCurrentView": "Camera position updated with current view",
+    "namePlaceholder": "e.g. Main view, A-axis...",
+    "descriptionPlaceholder": "Optional description..."
+  },
+  "users": {
+    "emailPlaceholder": "user@email.com",
+    "namePlaceholder": "User name"
   },
   "properties": {
     "scanning": "Scanning selected object properties...",
@@ -283,6 +293,10 @@
     "selectDetailError": "Error selecting detail: {{error}}",
     "missingGuidsCopied": "Missing GUIDs copied!",
     "videoPlayError": "Video not starting. Check camera permissions."
+  },
+  "propertyMappings": {
+    "setPlaceholder": "e.g. Tekla Assembly",
+    "namePlaceholder": "e.g. Cast_unit_Mark"
   },
   "accessDenied": "Access denied",
   "copy": "Copy",

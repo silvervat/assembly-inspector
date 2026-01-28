@@ -54,7 +54,7 @@ export function OrganizerSearchBar({
           <FiSearch size={14} />
           <input
             type="text"
-            placeholder="Otsi kõikidest gruppidest..."
+            placeholder={t('search.placeholder')}
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
           />

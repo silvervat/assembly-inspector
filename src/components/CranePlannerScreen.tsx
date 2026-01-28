@@ -1776,7 +1776,7 @@ export default function CranePlannerScreen({
                       style={inputStyle}
                       value={config.position_label}
                       onChange={e => setConfig(prev => ({ ...prev, position_label: e.target.value }))}
-                      placeholder="POS-1, KRAANA-A..."
+                      placeholder={t('common:crane.positionLabelPlaceholder')}
                     />
                   </div>
                   {/* Radius Ring Settings */}

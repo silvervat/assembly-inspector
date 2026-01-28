@@ -7769,7 +7769,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                   className="inline-input vehicle-code-input"
                                   autoFocus
                                   defaultValue={vehicle?.vehicle_code || ''}
-                                  placeholder="nt. EBE-1"
+                                  placeholder={t('delivery:vehicle.codePlaceholder')}
                                   onBlur={(e) => {
                                     const newCode = e.target.value.trim();
                                     if (newCode && newCode !== vehicle?.vehicle_code) {
@@ -7848,7 +7848,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     autoFocus
                                     list="time-options-list"
                                     defaultValue={vehicle?.unload_start_time?.slice(0, 5) || ''}
-                                    placeholder="00:00"
+                                    placeholder={t('delivery:vehicle.timePlaceholder')}
                                     onChange={(e) => {
                                       const val = e.target.value;
                                       if (TIME_OPTIONS.includes(val) || val === '') {
@@ -9194,7 +9194,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     className="time-input"
                     list="time-options-edit"
                     defaultValue={activeVehicle.unload_start_time?.slice(0, 5) || ''}
-                    placeholder="00:00"
+                    placeholder={t('delivery:vehicle.timePlaceholder')}
                     onBlur={async (e) => {
                       const val = e.target.value;
                       if (TIME_OPTIONS.includes(val) || val === '') {
@@ -9729,7 +9729,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                           className="time-input"
                           list="time-options-add"
                           value={addModalStartTime}
-                          placeholder="00:00"
+                          placeholder={t('delivery:vehicle.timePlaceholder')}
                           onChange={(e) => setAddModalStartTime(e.target.value)}
                         />
                         <datalist id="time-options-add">
@@ -10098,7 +10098,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       ...editingVehicle,
                       vehicle_code: e.target.value
                     })}
-                    placeholder="nt. EBE-1"
+                    placeholder={t('delivery:vehicle.codePlaceholder')}
                     style={{ fontWeight: 600 }}
                   />
                 </div>
@@ -10166,7 +10166,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     className="time-input"
                     list="time-options-vehicle"
                     value={vehicleStartTime}
-                    placeholder="00:00"
+                    placeholder={t('delivery:vehicle.timePlaceholder')}
                     onChange={(e) => setVehicleStartTime(e.target.value)}
                   />
                   <datalist id="time-options-vehicle">
