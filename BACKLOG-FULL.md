@@ -18,7 +18,7 @@
 | 7 | Error Handling & UX | ⏳ Ootel | 0/4 |
 | 8 | i18n (FI, RU) | ⏳ Ootel | 0/3 |
 
-**Kokku: 16/48 ülesannet lõpetatud**
+**Kokku: 17/48 ülesannet lõpetatud**
 
 ---
 
@@ -397,10 +397,11 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 **Prioriteet:** P0 | **Aeg:** 3h
 
 **Failid:**
-- `src/features/admin/components/ModelObjectsPanel.tsx`
-- `src/features/admin/components/AssemblyListPanel.tsx`
+- `src/features/admin/hooks/useModelObjects.ts` ✅
+- `src/features/admin/components/ModelObjectsPanel.tsx` (TODO: UI komponent)
+- `src/features/admin/components/AssemblyListPanel.tsx` (TODO: UI komponent)
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ Hook loodud (useModelObjects)
 
 ---
 
