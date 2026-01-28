@@ -12,7 +12,7 @@ interface UseOrganizerDragDropParams {
 }
 
 export function useOrganizerDragDrop({
-  projectId, groups, groupItems, setGroupItems, setGroups, t,
+  groups, setGroups,
 }: UseOrganizerDragDropParams) {
   const [draggedItems, setDraggedItems] = useState<OrganizerGroupItem[]>([]);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
@@ -59,7 +59,7 @@ export function useOrganizerDragDrop({
         .update({ parent_id: newParentId, updated_at: new Date().toISOString() })
         .eq('id', groupId);
       if (error) throw error;
-      setGroups(groups.map(g => g.id === groupId ? { ...g, parent_id: newParentId || undefined } : g));
+      setGroups(groups.map(g => g.id === groupId ? { ...g, parent_id: newParentId ?? null } as OrganizerGroup : g));
     } catch (e) {
       console.error('Error moving group:', e);
     }

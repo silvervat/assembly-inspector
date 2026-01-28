@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { supabase } from '../../../supabase';
 import { findObjectsInLoadedModels } from '../../../utils/navigationHelper';
-import { belgianLambert72ToWGS84, wgs84ToBelgianLambert72 } from '../../../utils/coordinateConverter';
+import { belgianLambert72ToWGS84, wgs84ToBelgianLambert72 } from '../../../utils/coordinateUtils';
 import type { DetailPosition } from '../types';
 import type { TrimbleExUser } from '../../../supabase';
 
@@ -21,16 +21,12 @@ export function usePositioner({ api, projectId, user, setMessage, t }: UsePositi
   const [pendingQrCode, setPendingQrCode] = useState<{ guid: string; assembly_mark: string | null } | null>(null);
   const [manualLat, setManualLat] = useState('');
   const [manualLng, setManualLng] = useState('');
-  const [debugLog, setDebugLog] = useState<string[]>([]);
+  const [debugLog] = useState<string[]>([]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scannerActiveRef = useRef(false);
-
-  const addDebugLog = useCallback((msg: string) => {
-    setDebugLog(prev => [...prev.slice(-50), `[${new Date().toLocaleTimeString()}] ${msg}`]);
-  }, []);
 
   const loadPositions = useCallback(async () => {
     if (!projectId) return;

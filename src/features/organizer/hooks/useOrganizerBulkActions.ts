@@ -10,7 +10,7 @@ interface UseOrganizerBulkActionsParams {
 }
 
 export function useOrganizerBulkActions({
-  projectId, groupItems, setGroupItems, t,
+  groupItems, setGroupItems, t,
 }: UseOrganizerBulkActionsParams) {
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [bulkFieldValues, setBulkFieldValues] = useState<Record<string, unknown>>({});

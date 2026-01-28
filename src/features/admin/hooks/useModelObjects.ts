@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '../../../supabase';
 
 interface ModelObjectRecord {
@@ -27,7 +27,7 @@ const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
 
 function extractPropertiesFromObject(
   props: any,
-  ifcGuid: string | null,
+  _ifcGuid: string | null,
   mappingSetNorm: string,
   mappingPropNorm: string,
   propertyMappings: PropertyMappings

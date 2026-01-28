@@ -21,7 +21,7 @@ interface OrganizerDataState {
   setSaving: (val: boolean) => void;
 }
 
-export const useOrganizerStore = create<OrganizerDataState>((set, get) => ({
+export const useOrganizerStore = create<OrganizerDataState>((set) => ({
   groups: [],
   groupItems: new Map(),
   groupTree: [],

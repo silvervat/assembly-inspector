@@ -94,7 +94,7 @@ export function useResources({ projectId, userEmail, setMessage, t }: UseResourc
     }
   }, [projectId]);
 
-  const updateInstallationResourceName = async (resourceType: string, oldName: string, newName: string): Promise<number> => {
+  const updateInstallationResourceName = async (_resourceType: string, oldName: string, newName: string): Promise<number> => {
     let totalUpdated = 0;
     const field = 'team_members';
 

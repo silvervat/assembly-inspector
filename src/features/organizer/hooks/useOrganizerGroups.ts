@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '../../../supabase';
-import type { OrganizerGroup, OrganizerGroupItem, OrganizerGroupTree, GroupColor, CustomFieldDefinition } from '../../../supabase';
+import type { OrganizerGroup, OrganizerGroupItem, OrganizerGroupTree, GroupColor } from '../../../supabase';
 
 interface UseOrganizerGroupsParams {
   projectId: string;

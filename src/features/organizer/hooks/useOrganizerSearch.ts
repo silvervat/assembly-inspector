@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import type { OrganizerGroup, OrganizerGroupItem, OrganizerGroupTree } from '../../../supabase';
 
 interface UseOrganizerSearchParams {
@@ -7,7 +7,7 @@ interface UseOrganizerSearchParams {
   groupTree: OrganizerGroupTree[];
 }
 
-export function useOrganizerSearch({ groups, groupItems, groupTree }: UseOrganizerSearchParams) {
+export function useOrganizerSearch({ groupItems, groupTree }: UseOrganizerSearchParams) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFilterGroup, setSearchFilterGroup] = useState<string | null>(null);
   const [searchFilterColumn, setSearchFilterColumn] = useState<string | null>(null);

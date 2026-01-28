@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
 import type { OrganizerGroup, OrganizerGroupItem, OrganizerGroupTree } from '../../../supabase';
-import { findObjectsInLoadedModels } from '../../../utils/navigationHelper';
 
 type ColorMode = 'all' | 'parents-only';
 
@@ -14,7 +13,7 @@ interface UseOrganizerColoringParams {
 }
 
 export function useOrganizerColoring({
-  api, projectId, groups, groupItems, groupTree, t,
+  api,
 }: UseOrganizerColoringParams) {
   const [colorByGroup, setColorByGroup] = useState(false);
   const [coloredSingleGroupId, setColoredSingleGroupId] = useState<string | null>(null);

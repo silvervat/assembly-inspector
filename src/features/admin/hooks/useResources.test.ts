@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useResources } from './useResources';
 
@@ -35,7 +35,7 @@ describe('useResources', () => {
   it('should set resource form data', () => {
     const { result } = renderHook(() => useResources(defaultParams));
     act(() => {
-      result.current.setResourceFormData({ name: 'Test Resource' });
+      result.current.setResourceFormData({ name: 'Test Resource', keywords: '' });
     });
     expect(result.current.resourceFormData.name).toBe('Test Resource');
   });
@@ -43,7 +43,7 @@ describe('useResources', () => {
   it('should reset resource form', () => {
     const { result } = renderHook(() => useResources(defaultParams));
     act(() => {
-      result.current.setResourceFormData({ name: 'Test' });
+      result.current.setResourceFormData({ name: 'Test', keywords: '' });
       result.current.resetResourceForm();
     });
     expect(result.current.resourceFormData.name).toBe('');
