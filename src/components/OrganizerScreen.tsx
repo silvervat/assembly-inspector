@@ -10233,7 +10233,7 @@ export default function OrganizerScreen({
                                   type="button"
                                   onClick={(e) => { e.stopPropagation(); setDisplayPropertyMenuIdx(displayPropertyMenuIdx === idx ? null : idx); }}
                                   style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: '0 2px' }}
-                                  title="Seaded"
+                                  title={t('common:navigation.settings')}
                                 >
                                   <FiMoreVertical size={12} />
                                 </button>

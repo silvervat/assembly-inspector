@@ -281,7 +281,7 @@ export function CameraPositionsPanel({ api, projectId, userEmail }: CameraPositi
                       color: 'white',
                       flexShrink: 0
                     }}
-                    title="Mine sellele vaatele"
+                    title={t('admin:camera.goToView')}
                   >
                     <FiVideo size={12} />
                   </button>
@@ -312,7 +312,7 @@ export function CameraPositionsPanel({ api, projectId, userEmail }: CameraPositi
                         padding: '4px',
                         cursor: 'pointer'
                       }}
-                      title="Uuenda praeguse vaatega"
+                      title={t('admin:camera.updateWithCurrentView')}
                     >
                       <FiCamera size={12} />
                     </button>

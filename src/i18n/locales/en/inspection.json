@@ -567,5 +567,26 @@
     "created": "Created",
     "actions": "Actions",
     "history": "History"
+  },
+  "planScreenUi": {
+    "pageTitle": "Inspection Plan",
+    "addToPlan": "Add to plan",
+    "planList": "Plan list",
+    "configureInspections": "Configure inspections",
+    "configure": "Configure",
+    "axisLocation": "Axis location",
+    "parentMark": "Parent assembly mark",
+    "viewInModel": "View in model",
+    "removeFromPlan": "Remove from plan",
+    "viewHistory": "View history",
+    "exportPdfReport": "Export PDF report",
+    "deleteInspectionResults": "Delete inspection results",
+    "deleteResult": "Delete result",
+    "editComment": "Edit comment",
+    "deletePhoto": "Delete photo",
+    "alreadyInPlan": "Already in plan",
+    "searchPlaceholder": "Search mark, GUID, name...",
+    "addCommentPlaceholder": "Add comment...",
+    "plansPageTitle": "Inspection Plans"
   }
 }

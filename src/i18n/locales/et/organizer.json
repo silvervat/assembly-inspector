@@ -648,6 +648,14 @@
     "groupNamePlaceholder": "Grupi nimi",
     "optionalDescription": "Valikuline kirjeldus",
     "searchPropertyPlaceholder": "Otsi property't...",
-    "addDescriptionPlaceholder": "Lisa kirjeldus..."
+    "addDescriptionPlaceholder": "Lisa kirjeldus...",
+    "colorMode": "Värvimise režiim",
+    "allGroupsColor": "Kõik grupid",
+    "parentsOnly": "Ainult peagrupid",
+    "filter": "Filtreeri",
+    "sort": "Sorteeri",
+    "coloringAndMarkups": "Värvimine ja markupid",
+    "resetColors": "Lähtesta värvid",
+    "colorByGroups": "Värvi gruppide kaupa"
   }
 }

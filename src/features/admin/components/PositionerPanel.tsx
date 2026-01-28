@@ -403,7 +403,7 @@ export function PositionerPanel({ api, projectId, user }: PositionerPanelProps) 
                         className="admin-tool-btn"
                         onClick={() => drawPositionCircle(pos)}
                         style={{ flex: '1', minWidth: '80px', background: '#22c55e', color: '#fff' }}
-                        title="Joonista 10m ring mudelile"
+                        title={t('admin:positioner.draw10mRing')}
                       >
                         <FiTarget size={12} />
                         <span>Joonista</span>

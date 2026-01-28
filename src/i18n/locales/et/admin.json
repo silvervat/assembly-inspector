@@ -479,7 +479,15 @@
         "fair": "Rahuldav",
         "poor": "Halb",
         "none": "Puudub"
-      }
+      },
+      "draw10mRing": "Joonista 10m ring mudelile"
+    },
+    "camera": {
+      "goToView": "Mine sellele vaatele",
+      "updateWithCurrentView": "Uuenda praeguse vaatega"
+    },
+    "resources": {
+      "importToManagement": "Impordi ressursside haldusse"
     }
   }
 }

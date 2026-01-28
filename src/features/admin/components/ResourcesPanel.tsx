@@ -495,7 +495,7 @@ export function ResourcesPanel({ projectId, userEmail }: ResourcesPanelProps) {
                               alignItems: 'center',
                               gap: '4px'
                             }}
-                            title="Impordi ressursside haldusse"
+                            title={t('admin:resources.importToManagement')}
                           >
                             <FiPlus size={12} />
                             Impordi

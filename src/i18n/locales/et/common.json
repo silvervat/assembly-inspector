@@ -1134,7 +1134,21 @@
     "craneDatabase": "Kraanade Andmebaas",
     "baseWidthField": "Aluse laius (m)",
     "baseLengthField": "Aluse pikkus (m)",
-    "cabPositionField": "Kabiini positsioon"
+    "cabPositionField": "Kabiini positsioon",
+    "edit": "Muuda",
+    "delete": "Kustuta",
+    "deleteCounterweightAndCharts": "Kustuta vastukaal ja graafikud",
+    "liftCapacity": "tõstevõime",
+    "radius": "raadius",
+    "active": "Aktiivne",
+    "upLeft": "Üles-Vasak",
+    "up": "Üles",
+    "upRight": "Üles-Parem",
+    "left": "Vasak",
+    "right": "Parem",
+    "downLeft": "Alla-Vasak",
+    "down": "Alla",
+    "downRight": "Alla-Parem"
   },
   "globalShortcuts": {
     "quickSearch": "Kiirotsing",

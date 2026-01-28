@@ -213,7 +213,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
 
   return (
     <div className="crane-library-screen" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PageHeader title="Kraanade Andmebaas" onBack={onBackToMenu} onNavigate={onNavigate} user={user} />
+      <PageHeader title={t('crane.title')} onBack={onBackToMenu} onNavigate={onNavigate} user={user} />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
         {/* Editor Form - Compact */}
@@ -450,14 +450,14 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
                                         <button
                                           onClick={() => startEditing(crane)}
                                           style={{ padding: '4px', border: 'none', borderRadius: '3px', backgroundColor: 'transparent', cursor: 'pointer', color: '#6b7280' }}
-                                          title="Muuda"
+                                          title={t('crane.edit')}
                                         >
                                           <FiEdit2 size={12} />
                                         </button>
                                         <button
                                           onClick={() => setDeleteConfirmId(crane.id)}
                                           style={{ padding: '4px', border: 'none', borderRadius: '3px', backgroundColor: 'transparent', cursor: 'pointer', color: '#dc2626' }}
-                                          title="Kustuta"
+                                          title={t('crane.delete')}
                                         >
                                           <FiTrash2 size={12} />
                                         </button>
@@ -1468,7 +1468,7 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDeleteCounterweight(cw.id); }}
                     style={{ padding: '4px', border: '1px solid #fecaca', borderRadius: '3px', backgroundColor: '#fef2f2', color: '#dc2626', cursor: 'pointer' }}
-                    title="Kustuta vastukaal ja graafikud"
+                    title={t('crane.deleteCounterweightAndCharts')}
                   >
                     <FiTrash2 size={12} />
                   </button>

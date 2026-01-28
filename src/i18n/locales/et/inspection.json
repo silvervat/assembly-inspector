@@ -567,5 +567,26 @@
     "created": "Loodud",
     "actions": "Tegevused",
     "history": "Ajalugu"
+  },
+  "planScreenUi": {
+    "pageTitle": "Inspektsiooni kava",
+    "addToPlan": "Lisa kavasse",
+    "planList": "Kava nimekiri",
+    "configureInspections": "Seadista inspektsioone",
+    "configure": "Seadista",
+    "axisLocation": "Telje asukoht",
+    "parentMark": "Ema detaili mark",
+    "viewInModel": "Vaata mudelis",
+    "removeFromPlan": "Kustuta kavast",
+    "viewHistory": "Vaata ajalugu",
+    "exportPdfReport": "Ekspordi PDF raport",
+    "deleteInspectionResults": "Kustuta inspektsiooni tulemused",
+    "deleteResult": "Kustuta tulemus",
+    "editComment": "Muuda kommentaari",
+    "deletePhoto": "Kustuta foto",
+    "alreadyInPlan": "Juba kavas",
+    "searchPlaceholder": "Otsi mark, GUID, nimi...",
+    "addCommentPlaceholder": "Lisa kommentaar...",
+    "plansPageTitle": "Kontrollplaanid"
   }
 }

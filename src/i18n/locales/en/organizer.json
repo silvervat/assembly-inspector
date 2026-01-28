@@ -648,6 +648,14 @@
     "groupNamePlaceholder": "Group name",
     "optionalDescription": "Optional description",
     "searchPropertyPlaceholder": "Search property...",
-    "addDescriptionPlaceholder": "Add description..."
+    "addDescriptionPlaceholder": "Add description...",
+    "colorMode": "Coloring mode",
+    "allGroupsColor": "All groups",
+    "parentsOnly": "Parent groups only",
+    "filter": "Filter",
+    "sort": "Sort",
+    "coloringAndMarkups": "Coloring and markups",
+    "resetColors": "Reset colors",
+    "colorByGroups": "Color by groups"
   }
 }

@@ -815,7 +815,21 @@
     "craneDatabase": "Crane Database",
     "baseWidthField": "Base width (m)",
     "baseLengthField": "Base length (m)",
-    "cabPositionField": "Cab position"
+    "cabPositionField": "Cab position",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteCounterweightAndCharts": "Delete counterweight and charts",
+    "liftCapacity": "lift capacity",
+    "radius": "radius",
+    "active": "Active",
+    "upLeft": "Up-Left",
+    "up": "Up",
+    "upRight": "Up-Right",
+    "left": "Left",
+    "right": "Right",
+    "downLeft": "Down-Left",
+    "down": "Down",
+    "downRight": "Down-Right"
   },
   "scheduleVersion": {
     "editVersion": "Edit version",

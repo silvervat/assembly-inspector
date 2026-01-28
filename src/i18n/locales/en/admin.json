@@ -479,7 +479,15 @@
         "fair": "Fair",
         "poor": "Poor",
         "none": "None"
-      }
+      },
+      "draw10mRing": "Draw 10m ring on model"
+    },
+    "camera": {
+      "goToView": "Go to this view",
+      "updateWithCurrentView": "Update with current view"
+    },
+    "resources": {
+      "importToManagement": "Import to resources management"
     }
   }
 }
