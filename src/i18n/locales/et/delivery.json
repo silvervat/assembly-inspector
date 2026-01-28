@@ -133,7 +133,17 @@
     "deleteAll": "Kustuta kõik",
     "yesDeleteAll": "Jah, kustuta kõik!",
     "addComment": "Lisa kommentaar",
-    "savingDb": "Salvestan andmebaasi..."
+    "savingDb": "Salvestan andmebaasi...",
+    "moveDate": "Tõsta kuupäeva",
+    "copyList": "Kopeeri nimekiri",
+    "removeSelectedFromModel": "Eemalda {{count}} mudelist valitud",
+    "registerArrival": "Registreeri saabun",
+    "markups": "Markupid",
+    "markupPosition": "Järjekord",
+    "markupPositionMark": "Järjekord + Mark",
+    "markupPositionMarkWeight": "Järjekord + Mark + Kaal",
+    "removeMarkups": "Eemalda markupid",
+    "addSelected": "Lisa {{count}} valitud"
   },
   "messages": {
     "loading": "Laadimine...",
