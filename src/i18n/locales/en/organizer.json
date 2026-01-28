@@ -313,6 +313,7 @@
     "canManageFields": "Can create and edit custom fields",
     "assemblySelectionRequired": "Assembly Selection required",
     "assemblySelectionDesc": "Assembly Selection must be on to add items to this group and subgroups",
+    "assemblySelectionDescSubgroup": "Assembly Selection must be on to add items to this subgroup",
     "noCustomFieldsYet": "No custom fields added yet",
     "loadProjectMembers": "Load project members",
     "selectedUsersCount": "Selected: {{count}} users",

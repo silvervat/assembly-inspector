@@ -313,6 +313,7 @@
     "canManageFields": "Saavad luua ja muuta lisaveerge",
     "assemblySelectionRequired": "Assembly Selection nõutud",
     "assemblySelectionDesc": "Kas sellesse gruppi ja alamgruppidesse lisamiseks peab Assembly Selection olema sees",
+    "assemblySelectionDescSubgroup": "Kas sellesse alamgruppi lisamiseks peab Assembly Selection olema sees",
     "noCustomFieldsYet": "Lisavälju pole veel lisatud",
     "loadProjectMembers": "Laadi projekti liikmed",
     "selectedUsersCount": "Valitud: {{count}} kasutajat",

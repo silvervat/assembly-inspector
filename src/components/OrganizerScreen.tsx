@@ -10156,11 +10156,11 @@ export default function OrganizerScreen({
               {/* Assembly Selection and Unique Items settings - available for ALL groups */}
               <div className="org-toggle-field">
                 <div className="org-toggle-label">
-                  <div className="title">Assembly Selection nõutud</div>
+                  <div className="title">{t('organizer:groupForm.assemblySelectionRequired')}</div>
                   <div className="description">
                     {formParentId
-                      ? 'Kas sellesse alamgruppi lisamiseks peab Assembly Selection olema sees'
-                      : 'Kas sellesse gruppi ja alamgruppidesse lisamiseks peab Assembly Selection olema sees'
+                      ? t('organizer:groupForm.assemblySelectionDescSubgroup')
+                      : t('organizer:groupForm.assemblySelectionDesc')
                     }
                   </div>
                 </div>
@@ -11575,7 +11575,7 @@ export default function OrganizerScreen({
 
                   {/* Auto-stagger heights */}
                   <div className="markup-height-row" style={{ marginTop: '8px' }}>
-                    <label>Auto kõrgused:</label>
+                    <label>{t('organizer:markupModal.autoHeights')}</label>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
                       <input
                         type="checkbox"
@@ -11584,7 +11584,7 @@ export default function OrganizerScreen({
                         style={{ width: '16px', height: '16px', cursor: 'pointer' }}
                       />
                       <span style={{ fontSize: '12px', color: markupSettings.autoStaggerHeight ? '#0891b2' : '#6b7280', fontWeight: markupSettings.autoStaggerHeight ? 500 : 400 }}>
-                        {markupSettings.autoStaggerHeight ? 'Sees' : 'Väljas'}
+                        {markupSettings.autoStaggerHeight ? t('organizer:markupModal.on') : t('organizer:markupModal.off')}
                       </span>
                     </label>
                     <button

@@ -6457,14 +6457,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 }}
               >
                 <FiPlus size={14} />
-                <span>Loo uus versioon</span>
+                <span>{t('ui.createNewVersion')}</span>
               </button>
             </div>
           )}
         </div>
 
         <span className="version-info">
-          {scheduleItems.length} detaili
+          {scheduleItems.length} {t('ui.detaili')}
         </span>
       </div>
 
@@ -6596,13 +6596,13 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       {/* Calendar Statistics */}
       <div className="calendar-stats">
-        <span>Kokku: <strong>{scheduleItems.length}</strong> detaili</span>
+        <span>{t('ui.total')}: <strong>{scheduleItems.length}</strong> {t('ui.detaili')}</span>
         <span className="stat-divider">|</span>
-        <span>Päevi: <strong>{Object.keys(itemsByDate).length}</strong></span>
+        <span>{t('ui.days')}: <strong>{Object.keys(itemsByDate).length}</strong></span>
         {Object.keys(itemsByDate).length > 0 && (
           <>
             <span className="stat-divider">|</span>
-            <span>Keskm: <strong>{Math.round(scheduleItems.length / Object.keys(itemsByDate).length)}</strong> tk/päev</span>
+            <span>{t('ui.average')}: <strong>{Math.round(scheduleItems.length / Object.keys(itemsByDate).length)}</strong> {t('ui.pcsPerDay')}</span>
           </>
         )}
         <div className="color-buttons">
@@ -6628,11 +6628,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       {selectedItemIds.size > 0 && !isPlaying && !hasUnscheduledSelection && (
         <div className="multi-select-bar">
           <div className="multi-select-header">
-            <span className="multi-select-count">{selectedItemIds.size} valitud</span>
+            <span className="multi-select-count">{t('ui.selectedCount', { count: selectedItemIds.size })}</span>
             <div className="multi-select-actions">
               <button className="apply-batch-btn" onClick={applyBatchMethodsToSelected} title={t('ui.applyResources')}>
                 <FiCheck size={12} />
-                Rakenda
+                {t('common:buttons.apply')}
               </button>
               <button
                 className="edit-selected-btn"
@@ -6797,14 +6797,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           <div className="selection-info">
             {/* First row: selection count and status */}
             <div className="selection-info-row">
-              <span>Valitud mudelis: <strong>{selectedObjects.length}</strong>{weightStr && <span className="selection-weight"> ({weightStr})</span>}</span>
+              <span>{t('ui.selectedInModel')} <strong>{selectedObjects.length}</strong>{weightStr && <span className="selection-weight"> ({weightStr})</span>}</span>
               {(allScheduled || someScheduled) && (
                 <div className="scheduled-dropdown-wrapper">
                   <span
                     className={`${allScheduled ? 'already-scheduled-info' : 'partially-scheduled-info'} clickable`}
                     onClick={() => setShowScheduledDropdown(!showScheduledDropdown)}
                   >
-                    {allScheduled ? '✓' : '⚠'} {scheduledInfo.length} juba planeeritud
+                    {allScheduled ? '✓' : '⚠'} {scheduledInfo.length} {t('ui.alreadyScheduled')}
                   </span>
                   {showScheduledDropdown && (
                     <div className="scheduled-dropdown">
@@ -6816,7 +6816,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                             setShowScheduledDropdown(false);
                           }}
                         >
-                          Värvi punaseks
+                          {t('ui.colorRed')}
                         </button>
                         <button
                           className="btn-small btn-secondary"
@@ -6842,11 +6842,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
                             await api.viewer.setSelection({ modelObjectIds }, 'set');
                             setSelectedObjects(remainingObjects);
-                            setMessage(`${scheduledInfo.length} detaili eemaldatud valikust`);
+                            setMessage(t('ui.removedFromSelection', { count: scheduledInfo.length }));
                             setShowScheduledDropdown(false);
                           }}
                         >
-                          Eemalda valikust
+                          {t('ui.removeFromSelection')}
                         </button>
                         <button
                           className="btn-small btn-primary"
@@ -6869,7 +6869,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                             }
                           }}
                         >
-                          Muuda
+                          {t('common:buttons.edit')}
                         </button>
                       </div>
                       <div className="scheduled-dropdown-list">
@@ -7062,16 +7062,16 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 disabled={saving}
               >
                 <FiPlus size={14} />
-                Lisa {selectedObjects.length - scheduledInfo.length} detaili {fmtDateFull(selectedDate)}
+                {t('ui.addDetailsToDate', { count: selectedObjects.length - scheduledInfo.length, date: fmtDateFull(selectedDate) })}
                 {scheduledInfo.length > 0 && (
-                  <span className="already-scheduled-count"> | {scheduledInfo.length} juba planeeritud</span>
+                  <span className="already-scheduled-count"> | {scheduledInfo.length} {t('ui.alreadyScheduled')}</span>
                 )}
               </button>
             )}
             {!allScheduled && !selectedDate && (
               <span className="select-date-hint">
                 <FiCalendar size={12} />
-                Vali kuupäev lisamiseks
+                {t('ui.selectDateToAdd')}
               </span>
             )}
           </div>
@@ -7161,23 +7161,23 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         <div className="modal-overlay" onClick={() => { setShowVersionModal(false); setShowDeleteConfirm(false); setDeleteConfirmInput(''); }}>
           <div className="settings-modal version-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>{editingVersion ? 'Muuda versiooni' : 'Loo uus versioon'}</h3>
+              <h3>{editingVersion ? t('ui.editVersion') : t('ui.createNewVersion')}</h3>
               <button onClick={() => { setShowVersionModal(false); setShowDeleteConfirm(false); setDeleteConfirmInput(''); }}><FiX size={18} /></button>
             </div>
             <div className="modal-body">
               {!showDeleteConfirm ? (
                 <>
                   <div className="form-group">
-                    <label>Versiooni nimi</label>
+                    <label>{t('ui.versionName')}</label>
                     <input
                       type="text"
                       value={newVersionName}
                       onChange={e => setNewVersionName(e.target.value)}
-                      placeholder={`Paigaldusgraafik ${formatVersionDate(new Date())}`}
+                      placeholder={`${t('title')} ${formatVersionDate(new Date())}`}
                     />
                   </div>
                   <div className="form-group">
-                    <label>Kirjeldus (valikuline)</label>
+                    <label>{t('common:ui.descriptionOptional')}</label>
                     <textarea
                       value={newVersionDescription}
                       onChange={e => setNewVersionDescription(e.target.value)}
@@ -7187,7 +7187,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   </div>
                   {!editingVersion && scheduleItems.length > 0 && (
                     <div className="form-group">
-                      <label>Detailid</label>
+                      <label>{t('ui.detaili')}</label>
                       <div className="version-copy-options">
                         <label className="version-copy-option">
                           <input
@@ -7196,7 +7196,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                             checked={copyFromCurrent}
                             onChange={() => setCopyFromCurrent(true)}
                           />
-                          <span>Kopeeri praegusest versioonist ({scheduleItems.length} detaili)</span>
+                          <span>{t('ui.copyFromCurrentVersion', { count: scheduleItems.length })}</span>
                         </label>
                         <label className="version-copy-option">
                           <input
@@ -7205,7 +7205,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                             checked={!copyFromCurrent}
                             onChange={() => setCopyFromCurrent(false)}
                           />
-                          <span>Loo tühi versioon</span>
+                          <span>{t('ui.createEmptyVersion')}</span>
                         </label>
                       </div>
                     </div>
@@ -7215,11 +7215,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 <div className="delete-confirm-section">
                   <div className="delete-warning">
                     <FiAlertTriangle size={24} />
-                    <p>Oled kustutamas versiooni <strong>"{editingVersion?.name}"</strong></p>
-                    <p>See kustutab ka kõik selle versiooni detailid ({scheduleItems.length} tk). Seda tegevust ei saa tagasi võtta!</p>
+                    <p>{t('ui.deletingVersionConfirm')} <strong>"{editingVersion?.name}"</strong></p>
+                    <p>{t('ui.deletingVersionWarning', { count: scheduleItems.length })}</p>
                   </div>
                   <div className="form-group">
-                    <label>Kinnitamiseks tipi versiooni nimi:</label>
+                    <label>{t('ui.typeVersionNameToConfirm')}</label>
                     <input
                       type="text"
                       value={deleteConfirmInput}
@@ -7279,7 +7279,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       {showResourcesStats && (
         <div className="resources-stats-overlay">
           <div className="resources-stats-header">
-            <h3>Ressursside statistika</h3>
+            <h3>{t('ui.resourceStatistics')}</h3>
             <button className="close-btn" onClick={() => setShowResourcesStats(false)}>
               <FiX size={16} />
             </button>
@@ -7289,7 +7289,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
               // Calculate stats same as export
               const sortedItems = getAllItemsSorted();
               if (sortedItems.length === 0) {
-                return <div className="stats-empty">Graafik on tühi</div>;
+                return <div className="stats-empty">{t('ui.scheduleEmpty')}</div>;
               }
 
               // Calculate method stats per date
@@ -7510,8 +7510,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onChange={() => setImportMode('overwrite')}
                   />
                   <div>
-                    <strong>Kirjuta olemasolevad üle</strong>
-                    <span>Uuendab graafikus olevate elementide kuupäevi ja ressursse</span>
+                    <strong>{t('ui.overwriteExisting')}</strong>
+                    <span>{t('ui.overwriteExistingDesc')}</span>
                   </div>
                 </label>
                 <label className="import-mode-option">
@@ -7522,8 +7522,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onChange={() => setImportMode('replace')}
                   />
                   <div>
-                    <strong>Kustuta kõik ja asenda</strong>
-                    <span>Kustutab kõik olemasolevad kirjed ja impordib uued</span>
+                    <strong>{t('ui.deleteAllAndReplace')}</strong>
+                    <span>{t('ui.deleteAllAndReplaceDesc')}</span>
                   </div>
                 </label>
               </div>
@@ -7580,7 +7580,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
           <div className="settings-modal compact" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Mängimise seaded</h3>
+              <h3>{t('ui.playbackSettingsTitle')}</h3>
               <button onClick={() => setShowSettingsModal(false)}><FiX size={18} /></button>
             </div>
             <div className="modal-body">
@@ -7591,8 +7591,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   onChange={e => setPlaybackSettings(prev => ({ ...prev, colorAllWhiteAtStart: e.target.checked }))}
                 />
                 <div className="setting-text">
-                  <span>Värvi valgeks</span>
-                  <small>Kõik detailid valgeks enne mängimist</small>
+                  <span>{t('ui.playbackColorWhite')}</span>
+                  <small>{t('ui.playbackColorWhiteDesc')}</small>
                 </div>
               </label>
 
@@ -7604,8 +7604,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   onChange={e => setPlaybackSettings(prev => ({ ...prev, colorPreviousDayBlack: e.target.checked }))}
                 />
                 <div className="setting-text">
-                  <span>Eelmine päev mustaks</span>
-                  <small>Uue päeva alguses</small>
+                  <span>{t('ui.playbackPreviousDayBlack')}</span>
+                  <small>{t('ui.playbackPreviousDayBlackDesc')}</small>
                 </div>
               </label>
 
@@ -7620,8 +7620,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   }))}
                 />
                 <div className="setting-text">
-                  <span>Iga päev erinev värv</span>
-                  <small>Tühistab eelmise päeva mustaks</small>
+                  <span>{t('ui.playbackEachDayDifferent')}</span>
+                  <small>{t('ui.playbackEachDayDifferentDesc')}</small>
                 </div>
               </label>
 
@@ -7634,8 +7634,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   onChange={e => setPlaybackSettings(prev => ({ ...prev, progressiveReveal: e.target.checked }))}
                 />
                 <div className="setting-text">
-                  <span>Järk-järguline ehitus</span>
-                  <small>Peida detailid, kuva järjest graafiku järgi</small>
+                  <span>{t('ui.playbackProgressiveReveal')}</span>
+                  <small>{t('ui.playbackProgressiveRevealDesc')}</small>
                 </div>
               </label>
 
@@ -7651,8 +7651,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   }))}
                 />
                 <div className="setting-text">
-                  <span>Päevade kaupa</span>
-                  <small>Mängi päev korraga, mitte detail haaval</small>
+                  <span>{t('ui.playbackDayByDay')}</span>
+                  <small>{t('ui.playbackDayByDayDesc')}</small>
                 </div>
               </label>
 
@@ -7663,8 +7663,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   onChange={e => setPlaybackSettings(prev => ({ ...prev, disableZoom: e.target.checked }))}
                 />
                 <div className="setting-text">
-                  <span>Ilma zoomita</span>
-                  <small>Ära zoomi detailide juurde, ainult märgi ja värvi</small>
+                  <span>{t('ui.playbackNoZoom')}</span>
+                  <small>{t('ui.playbackNoZoomDesc')}</small>
                 </div>
               </label>
 
@@ -7682,14 +7682,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   }))}
                 />
                 <div className="setting-text">
-                  <span>Päeva ülevaade</span>
-                  <small>Päeva lõpus näita kõiki detaile korraga</small>
+                  <span>{t('ui.playbackDayOverview')}</span>
+                  <small>{t('ui.playbackDayOverviewDesc')}</small>
                 </div>
               </label>
 
               {playbackSettings.showDayOverview && (
                 <div className="setting-duration">
-                  <span>Ülevaate kestus:</span>
+                  <span>{t('ui.overviewDuration')}</span>
                   <select
                     value={playbackSettings.dayOverviewDuration}
                     onChange={e => setPlaybackSettings(prev => ({ ...prev, dayOverviewDuration: Number(e.target.value) }))}
@@ -7781,11 +7781,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     checked={activeFilters.has('no_method')}
                     onChange={() => toggleFilter('no_method')}
                   />
-                  <span>Ressursid määramata</span>
+                  <span>{t('ui.resourcesUnassigned')}</span>
                 </label>
               </div>
               <div className="filter-section">
-                <div className="filter-section-title">Masinad</div>
+                <div className="filter-section-title">{t('ui.machinesSection')}</div>
                 <label className={`filter-option ${activeFilters.has('crane_1') ? 'active' : ''}`}>
                   <input
                     type="checkbox"
@@ -7944,19 +7944,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         }}
       >
         {loading ? (
-          <div className="loading">Laen...</div>
+          <div className="loading">{t('ui.loading')}</div>
         ) : Object.keys(itemsByDate).length === 0 ? (
           <div className="empty-state">
             <FiCalendar size={48} />
             {searchQuery ? (
               <>
-                <p>Otsingu tulemused puuduvad</p>
-                <p className="hint">Proovi teistsugust otsingut</p>
+                <p>{t('ui.noSearchResults')}</p>
+                <p className="hint">{t('ui.tryDifferentSearch')}</p>
               </>
             ) : (
               <>
-                <p>Graafik on tühi</p>
-                <p className="hint">Vali mudelilt detailid ja kliki kalendris kuupäevale</p>
+                <p>{t('ui.scheduleEmpty')}</p>
+                <p className="hint">{t('ui.scheduleEmptyHint')}</p>
               </>
             )}
           </div>
@@ -8393,7 +8393,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                   disabled={idx === 0}
                                 >
                                   <FiArrowUp size={12} />
-                                  <span>Liiguta üles</span>
+                                  <span>{t('ui.moveUp')}</span>
                                 </button>
                                 <button
                                   className={`item-menu-option ${idx === items.length - 1 ? 'disabled' : ''}`}
@@ -8406,7 +8406,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                   disabled={idx === items.length - 1}
                                 >
                                   <FiArrowDown size={12} />
-                                  <span>Liiguta alla</span>
+                                  <span>{t('ui.moveDown')}</span>
                                 </button>
                                 <button
                                   className="item-menu-option"
@@ -8416,7 +8416,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                   }}
                                 >
                                   <FiCalendar size={12} />
-                                  <span>Muuda kuupäeva</span>
+                                  <span>{t('ui.changeDate')}</span>
                                 </button>
                                 <button
                                   className="item-menu-option delete"
@@ -8426,7 +8426,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                   }}
                                 >
                                   <FiTrash2 size={12} />
-                                  <span>Kustuta</span>
+                                  <span>{t('common:buttons.delete')}</span>
                                 </button>
                               </div>
                             )}
@@ -8435,7 +8435,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                             {datePickerItemId === item.id && (
                               <div className="date-picker-dropdown" onClick={(e) => e.stopPropagation()}>
                                 <div className="date-picker-header">
-                                  {selectedItemIds.size > 1 ? `Liiguta ${selectedItemIds.size} detaili` : 'Vali uus kuupäev'}
+                                  {selectedItemIds.size > 1 ? t('ui.moveSelectedItems', { count: selectedItemIds.size }) : t('ui.selectNewDate')}
                                 </div>
                                 <div className="date-picker-list">
                                   {getDatePickerDates().map(d => (
@@ -8633,13 +8633,13 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         <div className="modal-overlay" onClick={() => setShowScheduledEditModal(false)}>
           <div className="scheduled-edit-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Muuda {scheduledEditItems.length} detaili</h3>
+              <h3>{t('ui.editDetailsCount', { count: scheduledEditItems.length })}</h3>
               <button onClick={() => setShowScheduledEditModal(false)}><FiX size={18} /></button>
             </div>
             <div className="modal-body">
               {/* Date picker */}
               <div className="edit-section">
-                <label>Kuupäev:</label>
+                <label>{t('ui.date')}:</label>
                 <input
                   type="date"
                   value={scheduledEditDate}
@@ -8650,7 +8650,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
               {/* Resources */}
               <div className="edit-section">
-                <label>Ressursid:</label>
+                <label>{t('ui.resources')}:</label>
                 <div className="resource-grid">
                   {INSTALL_METHODS.map(method => (
                     <div key={method.key} className="resource-item">
@@ -8802,13 +8802,13 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         <div className="modal-overlay" onClick={() => setEditDayModalDate(null)}>
           <div className="comment-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Muuda päeva: {fmtDateShort(editDayModalDate)} ({editDayModalItemCount} detaili)</h3>
+              <h3>{t('ui.editDayTitle', { date: fmtDateShort(editDayModalDate), count: editDayModalItemCount })}</h3>
               <button onClick={() => setEditDayModalDate(null)}><FiX size={18} /></button>
             </div>
             <div className="comment-modal-body">
               <div className="edit-day-form">
                 <div className="form-group">
-                  <label>Uus kuupäev (valikuline):</label>
+                  <label>{t('ui.newDateOptional')}</label>
                   <input
                     type="date"
                     value={editDayNewDate}
@@ -8817,28 +8817,28 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   />
                 </div>
                 <div className="form-group">
-                  <label>Ressurss (valikuline):</label>
+                  <label>{t('ui.resourceOptional')}</label>
                   <input
                     type="text"
                     value={editDayResource}
                     onChange={e => setEditDayResource(e.target.value)}
-                    placeholder={t('installation:ui.resourceNamePlaceholder')}
+                    placeholder={t('ui.resourceNamePlaceholder')}
                     className="form-input"
                   />
                 </div>
                 <div className="form-group">
-                  <label>Märkmed (valikuline):</label>
+                  <label>{t('ui.notesOptional')}</label>
                   <textarea
                     value={editDayNotes}
                     onChange={e => setEditDayNotes(e.target.value)}
-                    placeholder={t('installation:ui.additionalInfoPlaceholder')}
+                    placeholder={t('ui.additionalInfoPlaceholder')}
                     rows={3}
                     className="form-input"
                   />
                 </div>
                 <div className="edit-day-info">
                   <FiAlertCircle size={14} />
-                  <span>Muudatused rakenduvad kõigile {editDayModalItemCount} detailile sel päeval</span>
+                  <span>{t('ui.changesApplyToAllOnDay', { count: editDayModalItemCount })}</span>
                 </div>
                 <div className="modal-actions">
                   <button
@@ -8846,7 +8846,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     onClick={() => setEditDayModalDate(null)}
                     disabled={savingEditDay}
                   >
-                    Tühista
+                    {t('common:buttons.cancel')}
                   </button>
                   <button
                     className="save-btn"
@@ -8882,7 +8882,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
               {/* Existing comments */}
               <div className="comments-list">
                 {getCommentsFor(commentModalTarget.type, commentModalTarget.id).length === 0 ? (
-                  <div className="no-comments">Kommentaare pole</div>
+                  <div className="no-comments">{t('ui.noComments')}</div>
                 ) : (
                   getCommentsFor(commentModalTarget.type, commentModalTarget.id).map(comment => {
                     const isAdmin = checkIsAdmin(user);
