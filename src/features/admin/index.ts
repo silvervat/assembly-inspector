@@ -9,6 +9,8 @@ export { GuidImportPanel } from './components/GuidImportPanel';
 export { PropertyMappingsPanel } from './components/PropertyMappingsPanel';
 export { ModelObjectsPanel } from './components/ModelObjectsPanel';
 export { AssemblyListPanel } from './components/AssemblyListPanel';
+export { default as FontTesterPanel } from './components/FontTesterPanel';
+export { default as DeliveryScheduleAdminPanel } from './components/DeliveryScheduleAdminPanel';
 export { useUserStore } from './stores/useUserStore';
 export { useQrCodes } from './hooks/useQrCodes';
 export { useResources } from './hooks/useResources';
