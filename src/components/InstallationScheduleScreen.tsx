@@ -7081,17 +7081,17 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       {/* Playback Controls */}
       <div className="playback-controls">
         {!isPlaying ? (
-          <button className="play-btn" onClick={startPlayback} disabled={scheduleItems.length === 0} title="Esita">
+          <button className="play-btn" onClick={startPlayback} disabled={scheduleItems.length === 0} title={t('installation:ui.playTitle')}>
             <FiPlay size={16} />
           </button>
         ) : (
           <>
             {isPaused ? (
-              <button className="play-btn" onClick={resumePlayback} title="Jätka">
+              <button className="play-btn" onClick={resumePlayback} title={t('installation:ui.resumeTitle')}>
                 <FiPlay size={16} />
               </button>
             ) : (
-              <button className="pause-btn" onClick={pausePlayback} title="Paus">
+              <button className="pause-btn" onClick={pausePlayback} title={t('installation:ui.pauseTitle')}>
                 <FiPause size={16} />
               </button>
             )}
@@ -7104,7 +7104,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         <button
           className="settings-btn"
           onClick={() => setShowSettingsModal(true)}
-          title="Mängimise seaded"
+          title={t('installation:ui.playbackSettingsTitle')}
         >
           <FiSettings size={16} />
         </button>
@@ -7125,7 +7125,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           className="export-btn"
           onClick={() => setShowExportModal(true)}
           disabled={scheduleItems.length === 0}
-          title="Ekspordi Excel"
+          title={t('installation:ui.exportExcelTitle')}
         >
           <FiDownload size={16} />
         </button>
@@ -7181,7 +7181,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     <textarea
                       value={newVersionDescription}
                       onChange={e => setNewVersionDescription(e.target.value)}
-                      placeholder="Lisa kirjeldus..."
+                      placeholder={t('organizer:ui.addDescriptionPlaceholder')}
                       rows={3}
                     />
                   </div>
@@ -7721,7 +7721,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         <FiSearch size={14} className="search-icon" />
         <input
           type="text"
-          placeholder="Otsi (Mark, GUID...)"
+          placeholder={t('common:menu.searchPlaceholder')}
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="search-input"
@@ -7747,7 +7747,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           <button
             className={`filter-btn ${activeFilters.size > 0 || isWeightFilterActive ? 'active' : ''}`}
             onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-            title="Filtreeri ressursside järgi"
+            title={t('installation:ui.filterByResources')}
           >
             <FiFilter size={14} />
             {(activeFilters.size > 0 || isWeightFilterActive) && (
@@ -8010,10 +8010,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         setContextMenuMonth(new Date(y, m - 1, 1));
                         setDateContextMenu({ x: e.clientX, y: e.clientY, sourceDate: date });
                       }}
-                      title="Paremklõps: muuda kuupäeva"
+                      title={t('installation:ui.rightClickChangeDate')}
                     >{fmtDateShort(date)}</span>
                     {isDateLocked(date) && (
-                      <span className="lock-indicator" title="Lukustatud">
+                      <span className="lock-indicator" title={t('installation:ui.lockedIndicator')}>
                         <FiLock size={10} />
                         Lukus
                       </span>
@@ -8037,7 +8037,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         <button
                           className="date-screenshot-btn"
                           onClick={(e) => { e.stopPropagation(); screenshotDate(date); }}
-                          title="Tee pilt kõigist päeva detailidest"
+                          title={t('installation:ui.screenshotAllDayDetails')}
                         >
                           <FiCamera size={12} />
                         </button>
@@ -8053,7 +8053,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     <button
                       className="date-comment-btn"
                       onClick={(e) => { e.stopPropagation(); openCommentModal('date', date); }}
-                      title="Päeva kommentaarid"
+                      title={t('installation:ui.dayCommentsTitle')}
                     >
                       <FiMessageSquare size={13} />
                       {getCommentCount('date', date) > 0 && (
@@ -8069,7 +8069,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         setDateMenuOpenUpward(spaceBelow < 250);
                         setDateMenuId(dateMenuId === date ? null : date);
                       }}
-                      title="Rohkem valikuid"
+                      title={t('arrivals.moreOptions')}
                     >
                       <FiMoreVertical size={14} />
                     </button>
@@ -8200,7 +8200,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                 <button
                                   className="date-menu-option"
                                   disabled={true}
-                                  title="Kuu on lukustatud"
+                                  title={t('installation:ui.monthIsLocked')}
                                 >
                                   <FiLock size={12} style={{ marginRight: '6px' }} />
                                   Päev lukustatud (kuu lukus)
@@ -8356,7 +8356,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                 e.stopPropagation();
                                 openCommentModal('item', item.id);
                               }}
-                              title="Kommentaarid"
+                              title={t('installation:ui.commentsTitle')}
                             >
                               <FiMessageSquare size={13} />
                               {getCommentCount('item', item.id) > 0 && (
@@ -8374,7 +8374,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                 setItemMenuId(itemMenuId === item.id ? null : item.id);
                                 setDatePickerItemId(null);
                               }}
-                              title="Menüü"
+                              title={t('installation:ui.menuTitle')}
                             >
                               <FiMoreVertical size={14} />
                             </button>
@@ -8822,7 +8822,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     type="text"
                     value={editDayResource}
                     onChange={e => setEditDayResource(e.target.value)}
-                    placeholder="Nt: Kraana 1, Meeskond A"
+                    placeholder={t('installation:ui.resourceNamePlaceholder')}
                     className="form-input"
                   />
                 </div>
@@ -8831,7 +8831,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   <textarea
                     value={editDayNotes}
                     onChange={e => setEditDayNotes(e.target.value)}
-                    placeholder="Lisainfo või märkmed..."
+                    placeholder={t('installation:ui.additionalInfoPlaceholder')}
                     rows={3}
                     className="form-input"
                   />
@@ -8931,7 +8931,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 <textarea
                   value={newCommentText}
                   onChange={e => setNewCommentText(e.target.value)}
-                  placeholder="Lisa kommentaar..."
+                  placeholder={t('common:issues.addComment')}
                   rows={3}
                   className="comment-textarea"
                 />
