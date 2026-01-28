@@ -4398,7 +4398,7 @@ export default function ArrivedDeliveriesScreen({
                             {((arrivedVehicle.unload_resources as any)?.workforce || 0) > 0 && (
                               <div className="resource-names-section">
                                 <div className="resource-name-field workforce-field">
-                                  <label>Tööjõud:</label>
+                                  <label>{t('arrivals.workforceLabel')}</label>
                                   <input
                                     type="text"
                                     value={(arrivedVehicle.unload_resources as any)?.workforce_workers || ''}
@@ -4432,7 +4432,7 @@ export default function ArrivedDeliveriesScreen({
                           {/* Photos - general (not linked to items) */}
                           <div className="photos-section">
                             <div className="photos-header">
-                              <label><FiCamera /> Koorma fotod</label>
+                              <label><FiCamera /> {t('arrivals.loadPhotosLabel')}</label>
                               <button
                                 className="upload-photo-btn"
                                 onClick={() => photoInputRef.current?.click()}
@@ -4538,7 +4538,7 @@ export default function ArrivedDeliveriesScreen({
                               {getGeneralPhotosForArrival(arrivedVehicle.id).length === 0 && (
                                 <div className="no-photos dropzone">
                                   <FiImage />
-                                  <span>Lohista, kleebi või klõpsa</span>
+                                  <span>{t('arrivals.dragPasteOrClick')}</span>
                                   <span className="paste-hint">Ctrl+V kleepimiseks</span>
                                 </div>
                               )}
@@ -4643,7 +4643,7 @@ export default function ArrivedDeliveriesScreen({
                               {getDeliveryNotePhotos(arrivedVehicle.id).length === 0 && (
                                 <div className="no-photos dropzone">
                                   <FiFileText />
-                                  <span>Lohista, kleebi või klõpsa</span>
+                                  <span>{t('arrivals.dragPasteOrClick')}</span>
                                   <span className="paste-hint">Ctrl+V kleepimiseks</span>
                                 </div>
                               )}
@@ -4851,13 +4851,13 @@ export default function ArrivedDeliveriesScreen({
                                             .filter(Boolean) as string[];
                                           if (guids.length > 0) {
                                             selectObjectsByGuid(api, guids);
-                                            setMessage(`${guids.length} detaili märgistatud mudelis`);
+                                            setMessage(t('arrivals.itemsMarkedCount', { count: guids.length }));
                                           }
                                         }}
                                         title={t('arrivals.selectInModel')}
                                       >
                                         <FiTruck className="section-icon" size={12} />
-                                        <span>Saabunud teisest veokist ({fromVehicle.length})</span>
+                                        <span>{t('arrivals.arrivedFromOtherVehicle', { count: fromVehicle.length })}</span>
                                       </div>
                                       <div className="items-list compact">
                                         {fromVehicle.map((conf, idx) => {
@@ -4910,13 +4910,13 @@ export default function ArrivedDeliveriesScreen({
                                             .filter(Boolean) as string[];
                                           if (guids.length > 0) {
                                             selectObjectsByGuid(api, guids);
-                                            setMessage(`${guids.length} detaili märgistatud mudelis`);
+                                            setMessage(t('arrivals.itemsMarkedCount', { count: guids.length }));
                                           }
                                         }}
                                         title={t('arrivals.selectInModel')}
                                       >
                                         <FiPlus className="section-icon" size={12} />
-                                        <span>Saabunud ilma tarnegraafikuta ({fromModel.length})</span>
+                                        <span>{t('arrivals.arrivedWithoutSchedule', { count: fromModel.length })}</span>
                                       </div>
                                       <div className="items-list compact">
                                         {fromModel.map((conf, idx) => {
@@ -4972,13 +4972,13 @@ export default function ArrivedDeliveriesScreen({
                                   .filter(Boolean) as string[];
                                 if (guids.length > 0) {
                                   selectObjectsByGuid(api, guids);
-                                  setMessage(`${guids.length} detaili märgistatud mudelis`);
+                                  setMessage(t('arrivals.itemsMarkedCount', { count: guids.length }));
                                 }
                               }}
                               title={t('arrivals.selectInModel')}
                             >
                               <FiAlertTriangle className="warning-icon" size={12} />
-                              <span>Tarnest eemaldatud ({removedItems.length})</span>
+                              <span>{t('arrivals.removedFromDelivery', { count: removedItems.length })}</span>
                               <span className="section-hint">Saabusid teise veokiga</span>
                             </div>
                             <div className="items-list compact">
@@ -6231,7 +6231,7 @@ export default function ArrivedDeliveriesScreen({
                             transition: 'all 0.15s',
                             opacity: !itemsListEditMode ? 0.5 : 1
                           }}
-                          title={itemsListEditMode ? "Kinnita saabunuks" : "Aktiveeri muutmise režiim"}
+                          title={itemsListEditMode ? t('arrivals.confirmArrivalTitle') : t('arrivals.activateEditModeTitle')}
                         >
                           ✓
                         </button>
@@ -6270,7 +6270,7 @@ export default function ArrivedDeliveriesScreen({
                             transition: 'all 0.15s',
                             opacity: !itemsListEditMode ? 0.5 : 1
                           }}
-                          title={itemsListEditMode ? "Märgi puuduvaks" : "Aktiveeri muutmise režiim"}
+                          title={itemsListEditMode ? t('arrivals.markMissingTitle') : t('arrivals.activateEditModeTitle')}
                         >
                           ✗
                         </button>
@@ -6383,7 +6383,7 @@ export default function ArrivedDeliveriesScreen({
           {unassignedArrivals.length === 0 ? (
             <div className="no-vehicles" style={{ padding: '40px 20px' }}>
               <FiAlertTriangle size={48} style={{ color: '#fcd34d' }} />
-              <p>Määramata saabumisi pole</p>
+              <p>{t('arrivals.noUnassignedArrivals')}</p>
               <button
                 onClick={() => setShowUnassignedModal(true)}
                 style={{
@@ -6455,7 +6455,7 @@ export default function ArrivedDeliveriesScreen({
                           gap: '4px'
                         }}>
                           <FiTruck size={12} />
-                          <span>Planeeritud veok: <strong>{arrival.vehicle_code}</strong></span>
+                          <span dangerouslySetInnerHTML={{ __html: t('arrivals.plannedVehicle', { code: arrival.vehicle_code }) }} />
                         </div>
                       )}
                       {arrival.location && (
@@ -6513,7 +6513,7 @@ export default function ArrivedDeliveriesScreen({
         }}>
           <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
             <div className="modal-header">
-              <h2>Lisa leitud detail</h2>
+              <h2>{t('arrivals.addFoundDetail')}</h2>
               <button className="close-btn" onClick={() => {
                 setShowUnassignedModal(false);
                 setUnassignedSearchQuery('');
@@ -6583,7 +6583,7 @@ export default function ArrivedDeliveriesScreen({
                         return (
                           <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>
                             <FiSearch size={24} style={{ marginBottom: '8px', opacity: 0.5 }} />
-                            <p style={{ margin: 0, fontSize: '13px' }}>Sisesta otsingutermin, et leida detail</p>
+                            <p style={{ margin: 0, fontSize: '13px' }}>{t('arrivals.enterSearchTerm')}</p>
                             <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#94a3b8' }}>{pendingItems.length} detaili ootab</p>
                           </div>
                         );
@@ -6721,7 +6721,7 @@ export default function ArrivedDeliveriesScreen({
                               border: '1px solid #e2e8f0'
                             }}>
                               <FiTruck size={12} />
-                              <span style={{ fontWeight: 500 }}>Planeeritud veokis: {vehicle.vehicle_code}</span>
+                              <span style={{ fontWeight: 500 }}>{t('arrivals.plannedInVehicle', { code: vehicle.vehicle_code })}</span>
                               {factory && <span>({factory.factory_name})</span>}
                               {vehicle.scheduled_date && (
                                 <>
@@ -6940,7 +6940,7 @@ export default function ArrivedDeliveriesScreen({
         <div className="modal-overlay" onClick={() => { setShowAddItemModal(false); setAddItemSearchTerm(''); }}>
           <div className="modal add-item-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Lisa detail teisest veokist</h2>
+              <h2>{t('arrivals.addDetailFromOtherVehicle')}</h2>
               <button className="close-btn" onClick={() => { setShowAddItemModal(false); setAddItemSearchTerm(''); }}>
                 <FiX />
               </button>
@@ -6948,7 +6948,7 @@ export default function ArrivedDeliveriesScreen({
             <div className="modal-body">
               {/* Search across all vehicles */}
               <div className="form-group">
-                <label>Otsi detaile kõikidest veokitest</label>
+                <label>{t('arrivals.searchAllVehicles')}</label>
                 <div className="search-input-wrapper" style={{ marginBottom: 8 }}>
                   <FiSearch className="search-icon" />
                   <input
@@ -6979,7 +6979,7 @@ export default function ArrivedDeliveriesScreen({
               {/* Optional vehicle filter */}
               {!addItemSearchTerm.trim() && (
                 <div className="form-group">
-                  <label>Või vali konkreetne veok</label>
+                  <label>{t('arrivals.orSelectVehicle')}</label>
                   <select
                     value={addItemSourceVehicleId}
                     onChange={(e) => {
@@ -6987,7 +6987,7 @@ export default function ArrivedDeliveriesScreen({
                       setSelectedItemsToAdd(new Set());
                     }}
                   >
-                    <option value="">Kõik veokid...</option>
+                    <option value="">{t('arrivals.allVehiclesOption')}</option>
                     {vehicles
                       .filter(v => {
                         const arrival = arrivedVehicles.find(av => av.id === activeArrivalId);
@@ -7162,7 +7162,7 @@ export default function ArrivedDeliveriesScreen({
         <div className="modal-overlay" onClick={() => setShowUnplannedVehicleModal(false)}>
           <div className="modal unplanned-vehicle-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Lisa planeerimata veok</h2>
+              <h2>{t('arrivals.addUnplannedVehicle')}</h2>
               <button className="close-btn" onClick={() => setShowUnplannedVehicleModal(false)}>
                 <FiX />
               </button>
@@ -7172,7 +7172,7 @@ export default function ArrivedDeliveriesScreen({
                 Lisa veok, mis polnud graafikus planeeritud. Tehas võis saata üllatusveoki.
               </p>
               <div className="form-group">
-                <label>Veoki kood *</label>
+                <label>{t('arrivals.vehicleCode')}</label>
                 <input
                   type="text"
                   value={unplannedVehicleCode}
@@ -7182,19 +7182,19 @@ export default function ArrivedDeliveriesScreen({
                 />
               </div>
               <div className="form-group">
-                <label>Tehas (valikuline)</label>
+                <label>{t('arrivals.factoryOptional')}</label>
                 <select
                   value={unplannedFactoryId}
                   onChange={(e) => setUnplannedFactoryId(e.target.value)}
                 >
-                  <option value="">Teadmata tehas</option>
+                  <option value="">{t('arrivals.unknownFactory')}</option>
                   {factories.map(f => (
                     <option key={f.id} value={f.id}>{f.factory_name}</option>
                   ))}
                 </select>
               </div>
               <div className="form-group">
-                <label>Märkused</label>
+                <label>{t('arrivals.notesLabel')}</label>
                 <textarea
                   value={unplannedNotes}
                   onChange={(e) => setUnplannedNotes(e.target.value)}
@@ -7224,7 +7224,7 @@ export default function ArrivedDeliveriesScreen({
         <div className="modal-overlay" onClick={() => { setShowModelSelectionModal(false); setModelNewItems([]); }}>
           <div className="modal model-selection-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Lisa valitud detailid</h2>
+              <h2>{t('arrivals.addSelectedItems')}</h2>
               <button className="close-btn" onClick={() => { setShowModelSelectionModal(false); setModelNewItems([]); }}>
                 <FiX />
               </button>
@@ -7298,7 +7298,7 @@ export default function ArrivedDeliveriesScreen({
               }) && (
                 <div className="warning-message">
                   <FiAlertTriangle />
-                  <span>Mõned detailid olid planeeritud teise veokisse. Lisamisel märgitakse need selle veokiga saabunuks ja algse veoki juurde lisatakse märge.</span>
+                  <span>{t('arrivals.someItemsPlannedDifferentVehicle')}</span>
                 </div>
               )}
             </div>
@@ -7638,7 +7638,7 @@ export default function ArrivedDeliveriesScreen({
         <div className="modal-overlay" onClick={() => setShowUnsavedChangesModal(false)}>
           <div className="modal confirm-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Salvestamata muudatused</h2>
+              <h2>{t('arrivals.unsavedChangesTitle')}</h2>
               <button className="close-btn" onClick={() => setShowUnsavedChangesModal(false)}>
                 <FiX />
               </button>

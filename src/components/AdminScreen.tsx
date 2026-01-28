@@ -2025,17 +2025,17 @@ export default function AdminScreen({
             {orphanedLoading ? (
               <div style={{ textAlign: 'center', padding: '20px' }}>
                 <FiRefreshCw className="spin" size={24} />
-                <p>Laadin...</p>
+                <p>{t('database.loading')}</p>
               </div>
             ) : orphanedItems.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '20px', color: '#059669' }}>
                 <FiCheck size={32} />
-                <p>Orvusid ei leitud! ✓</p>
+                <p>{t('database.noOrphansFound')}</p>
               </div>
             ) : (
               <>
                 <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 500 }}>Leitud: {orphanedItems.length} detaili</span>
+                  <span style={{ fontWeight: 500 }}>{t('database.foundCount', { count: orphanedItems.length })}</span>
                   <button
                     className="admin-tool-btn"
                     onClick={deleteOrphanedItems}
@@ -2049,9 +2049,9 @@ export default function AdminScreen({
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: '#f3f4f6', position: 'sticky', top: 0 }}>
-                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Märk</th>
-                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Kuupäev</th>
-                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Lisatud</th>
+                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>{t('database.columnMark')}</th>
+                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>{t('database.columnDate')}</th>
+                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>{t('database.columnAdded')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2074,7 +2074,7 @@ export default function AdminScreen({
               disabled={orphanedLoading}
             >
               <FiRefreshCw size={14} className={orphanedLoading ? 'spin' : ''} />
-              <span>Värskenda</span>
+              <span>{t('database.refresh')}</span>
             </button>
           </div>
         </div>
@@ -3984,9 +3984,8 @@ export default function AdminScreen({
 
             {/* CAST UNIT MARK SEARCH section */}
             <div className="function-section">
-              <h4>🔍 Cast Unit Mark otsing</h4>
-              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
-                Otsi andmebaasist detaile Cast Unit Mark järgi. <strong>NB:</strong> Kasuta enne "Saada andmebaasi" funktsiooni!
+              <h4>🔍 {t('viewer.castUnitMarkSearch')}</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }} dangerouslySetInnerHTML={{ __html: t('viewer.castUnitMarkSearchDesc') }}>
               </p>
 
               {/* Search input */}
@@ -4034,9 +4033,9 @@ export default function AdminScreen({
                           .eq('trimble_project_id', projectId)
                           .not('assembly_mark', 'is', null);
 
-                        if (error) throw new Error(`DB viga: ${error.message}`);
+                        if (error) throw new Error(t('viewer.dbError', { message: error.message }));
                         if (!data || data.length === 0) {
-                          throw new Error(`Andmebaasis pole objekte projektile ${projectId}. Kasuta enne "Saada andmebaasi"!`);
+                          throw new Error(t('viewer.noObjectsInDb', { projectId }));
                         }
                         marks = (data || [])
                           .filter(r => r.assembly_mark && r.guid_ifc)
@@ -4189,7 +4188,7 @@ export default function AdminScreen({
                       <tr style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
                         <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Mark</th>
                         <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', width: '60px' }}>Match</th>
-                        <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', width: '80px' }}>Tegevus</th>
+                        <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', width: '80px' }}>{t('viewer.columnAction')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4262,9 +4261,8 @@ export default function AdminScreen({
 
             {/* CAST UNIT MARK SEARCH FROM MODEL section */}
             <div className="function-section">
-              <h4>🔎 Cast Unit Mark otsing (MUDELIST)</h4>
-              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
-                Otsi otse mudeli propertidest. <strong>Aeglasem</strong>, aga ei vaja andmebaasi!
+              <h4>🔎 {t('viewer.castUnitMarkSearchModel')}</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }} dangerouslySetInnerHTML={{ __html: t('viewer.castUnitMarkSearchModelDesc') }}>
               </p>
 
               {/* Search input */}
@@ -4736,7 +4734,7 @@ export default function AdminScreen({
                       <tr style={{ background: '#fef3c7', position: 'sticky', top: 0 }}>
                         <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #fbbf24' }}>Mark</th>
                         <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #fbbf24', width: '60px' }}>Match</th>
-                        <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #fbbf24', width: '80px' }}>Tegevus</th>
+                        <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #fbbf24', width: '80px' }}>{t('viewer.columnAction')}</th>
                       </tr>
                     </thead>
                     <tbody>

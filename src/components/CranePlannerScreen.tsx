@@ -2482,7 +2482,7 @@ export default function CranePlannerScreen({
             boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
           }}>
             <FiLoader size={20} className="spin" />
-            <span style={{ fontSize: '14px', fontWeight: 500 }}>Uuendan...</span>
+            <span style={{ fontSize: '14px', fontWeight: 500 }}>{t('common:crane.updating')}</span>
           </div>
         )}
       </div>
