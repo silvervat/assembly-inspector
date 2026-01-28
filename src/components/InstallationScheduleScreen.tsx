@@ -1556,10 +1556,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Callback ref to keep quantity dropdown visible (not hidden behind Trimble sidebar)
   const adjustDropdownPosition = useCallback((el: HTMLDivElement | null) => {
     if (!el) return;
-    const rect = el.getBoundingClientRect();
-    if (rect.left < 60) {
-      el.style.left = `${60 - rect.left + (parseFloat(el.style.left) || 0)}px`;
-    }
+    requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      if (rect.left < 60) {
+        el.style.left = `${60 - rect.left}px`;
+      }
+    });
   }, []);
 
   // Get method config by key
