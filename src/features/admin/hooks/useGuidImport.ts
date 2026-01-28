@@ -100,7 +100,7 @@ export function useGuidImport({ api, setMessage, t }: UseGuidImportParams) {
 
   return {
     guidImportText, setGuidImportText,
-    guidImportLoading, guidImportResults,
+    guidImportLoading, guidImportResults, setGuidImportResults,
     processGuidImport,
   };
 }
