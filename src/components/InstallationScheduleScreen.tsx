@@ -1553,8 +1553,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     });
   };
 
-  // No-op ref kept for compatibility - dropdown positioning handled by CSS
-  const adjustDropdownPosition = useCallback((_el: HTMLDivElement | null) => {}, []);
+  // Adjust dropdown position so it never overflows left or right edge of viewport
+  const adjustDropdownPosition = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      const viewportWidth = document.documentElement.clientWidth;
+      if (rect.right > viewportWidth) {
+        // Overflows right → align to icon's right edge instead
+        el.style.left = 'auto';
+        el.style.right = '0px';
+      }
+    });
+  }, []);
 
   // Get method config by key
   const getMethodConfig = (key: InstallMethodType): MethodConfig | undefined => {
