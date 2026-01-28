@@ -7,6 +7,8 @@ export { PositionerPanel } from './components/PositionerPanel';
 export { DataExportPanel } from './components/DataExportPanel';
 export { GuidImportPanel } from './components/GuidImportPanel';
 export { PropertyMappingsPanel } from './components/PropertyMappingsPanel';
+export { ModelObjectsPanel } from './components/ModelObjectsPanel';
+export { AssemblyListPanel } from './components/AssemblyListPanel';
 export { useUserStore } from './stores/useUserStore';
 export { useQrCodes } from './hooks/useQrCodes';
 export { useResources } from './hooks/useResources';
