@@ -101,6 +101,8 @@
     "removeItem": "Remove",
     "moveItem": "Move",
     "colorByDate": "Color by Date",
+    "turnOffColoring": "Turn off coloring",
+    "colorByDays": "Color by days",
     "exportExcel": "Export Excel",
     "importExcel": "Import Excel",
     "settings": "Settings",

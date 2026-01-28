@@ -6610,7 +6610,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             className={`color-by-date-btn${playbackSettings.colorEachDayDifferent ? ' active' : ''}`}
             onClick={toggleColorByDate}
             disabled={scheduleItems.length === 0}
-            title={playbackSettings.colorEachDayDifferent ? "Lülita värvimine välja" : "Värvi päevade kaupa"}
+            title={playbackSettings.colorEachDayDifferent ? t('actions.turnOffColoring') : t('actions.colorByDays')}
           >
             <FiDroplet size={14} />
           </button>

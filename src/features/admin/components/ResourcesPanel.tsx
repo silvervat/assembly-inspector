@@ -279,7 +279,7 @@ export function ResourcesPanel({ projectId, userEmail }: ResourcesPanelProps) {
                 type="text"
                 value={resourceFormData.keywords}
                 onChange={(e) => setResourceFormData(prev => ({ ...prev, keywords: e.target.value }))}
-                placeholder="Nt: suur, punane, 50t (komadega eraldatud)"
+                placeholder={t('admin:resources.keywordsPlaceholder')}
                 style={{
                   width: '100%',
                   padding: '8px 12px',
@@ -495,7 +495,7 @@ export function ResourcesPanel({ projectId, userEmail }: ResourcesPanelProps) {
                               alignItems: 'center',
                               gap: '4px'
                             }}
-                            title="Impordi ressursside haldusse"
+                            title={t('admin:resources.importToManagement')}
                           >
                             <FiPlus size={12} />
                             Impordi

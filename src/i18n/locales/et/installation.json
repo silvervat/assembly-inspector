@@ -101,6 +101,8 @@
     "removeItem": "Eemalda",
     "moveItem": "Liiguta",
     "colorByDate": "Värvi kuupäeva järgi",
+    "turnOffColoring": "Lülita värvimine välja",
+    "colorByDays": "Värvi päevade kaupa",
     "exportExcel": "Ekspordi Excel",
     "importExcel": "Impordi Excel",
     "settings": "Seaded",

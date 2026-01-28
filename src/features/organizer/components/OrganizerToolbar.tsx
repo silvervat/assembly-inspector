@@ -55,7 +55,7 @@ export function OrganizerToolbar({
           <button
             className="org-color-mode-btn"
             onClick={(e) => { e.stopPropagation(); onToggleColorModeMenu(!showColorModeMenu); }}
-            title="Värvimise režiim"
+            title={t('organizer:ui.colorMode')}
           >
             <FiChevronDown size={12} />
           </button>

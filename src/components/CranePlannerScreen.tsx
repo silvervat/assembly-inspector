@@ -1298,7 +1298,7 @@ export default function CranePlannerScreen({
   if (cranesLoading || projectCranesLoading) {
     return (
       <div className="crane-planner-screen">
-        <PageHeader title="Kraanade Planeerimine" onBack={onBackToMenu} user={user} onNavigate={onNavigate} />
+        <PageHeader title={t('crane.plannerTitle')} onBack={onBackToMenu} user={user} onNavigate={onNavigate} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
           <FiLoader className="animate-spin" size={24} style={{ marginRight: '8px' }} />
           <span>{t('buttons.loading')}</span>
@@ -1325,7 +1325,7 @@ export default function CranePlannerScreen({
 
   return (
     <div className="crane-planner-screen" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PageHeader title="Kraanade Planeerimine" onBack={onBackToMenu} user={user} onNavigate={onNavigate} />
+      <PageHeader title={t('crane.plannerTitle')} onBack={onBackToMenu} user={user} onNavigate={onNavigate} />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
         {/* No crane models warning */}
@@ -1582,19 +1582,19 @@ export default function CranePlannerScreen({
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
                         {/* Top row: screen up-left, up, up-right (view-relative) */}
-                        <button onClick={() => moveCrane(-moveStep, moveStep, 0)} style={btnStyle} title="Üles-Vasak">↖</button>
-                        <button onClick={() => moveCrane(0, moveStep, 0)} style={btnStyle} title="Üles"><FiArrowUp /></button>
-                        <button onClick={() => moveCrane(moveStep, moveStep, 0)} style={btnStyle} title="Üles-Parem">↗</button>
+                        <button onClick={() => moveCrane(-moveStep, moveStep, 0)} style={btnStyle} title={t('crane.upLeft')}>↖</button>
+                        <button onClick={() => moveCrane(0, moveStep, 0)} style={btnStyle} title={t('crane.up')}><FiArrowUp /></button>
+                        <button onClick={() => moveCrane(moveStep, moveStep, 0)} style={btnStyle} title={t('crane.upRight')}>↗</button>
                         {/* Middle row: screen left, center, right */}
-                        <button onClick={() => moveCrane(-moveStep, 0, 0)} style={btnStyle} title="Vasak"><FiArrowLeft /></button>
+                        <button onClick={() => moveCrane(-moveStep, 0, 0)} style={btnStyle} title={t('crane.left')}><FiArrowLeft /></button>
                         <div style={{ textAlign: 'center', fontSize: '10px', color: '#6b7280', padding: '2px' }}>
                           X:{config.position_x.toFixed(1)}<br />Y:{config.position_y.toFixed(1)}
                         </div>
-                        <button onClick={() => moveCrane(moveStep, 0, 0)} style={btnStyle} title="Parem"><FiArrowRight /></button>
+                        <button onClick={() => moveCrane(moveStep, 0, 0)} style={btnStyle} title={t('crane.right')}><FiArrowRight /></button>
                         {/* Bottom row: screen down-left, down, down-right */}
-                        <button onClick={() => moveCrane(-moveStep, -moveStep, 0)} style={btnStyle} title="Alla-Vasak">↙</button>
-                        <button onClick={() => moveCrane(0, -moveStep, 0)} style={btnStyle} title="Alla"><FiArrowDown /></button>
-                        <button onClick={() => moveCrane(moveStep, -moveStep, 0)} style={btnStyle} title="Alla-Parem">↘</button>
+                        <button onClick={() => moveCrane(-moveStep, -moveStep, 0)} style={btnStyle} title={t('crane.downLeft')}>↙</button>
+                        <button onClick={() => moveCrane(0, -moveStep, 0)} style={btnStyle} title={t('crane.down')}><FiArrowDown /></button>
+                        <button onClick={() => moveCrane(moveStep, -moveStep, 0)} style={btnStyle} title={t('crane.downRight')}>↘</button>
                       </div>
                     </div>
                     {/* Rotation */}
@@ -1776,7 +1776,7 @@ export default function CranePlannerScreen({
                       style={inputStyle}
                       value={config.position_label}
                       onChange={e => setConfig(prev => ({ ...prev, position_label: e.target.value }))}
-                      placeholder="POS-1, KRAANA-A..."
+                      placeholder={t('common:crane.positionLabelPlaceholder')}
                     />
                   </div>
                   {/* Radius Ring Settings */}
@@ -2482,7 +2482,7 @@ export default function CranePlannerScreen({
             boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
           }}>
             <FiLoader size={20} className="spin" />
-            <span style={{ fontSize: '14px', fontWeight: 500 }}>Uuendan...</span>
+            <span style={{ fontSize: '14px', fontWeight: 500 }}>{t('common:crane.updating')}</span>
           </div>
         )}
       </div>

@@ -36,6 +36,7 @@
     "name": "Nimi",
     "keywords": "Märksõnad",
     "keywordsHint": "Eraldatud komadega",
+    "keywordsPlaceholder": "Nt: suur, punane, 50t (komadega eraldatud)",
     "noResourcesYet": "Seda tüüpi ressursse pole veel lisatud.",
     "usage": "Kasutus",
     "active": "Aktiivne",
@@ -79,6 +80,13 @@
     "selectThisDetail": "Vali see detail mudelis",
     "enterMark": "Sisesta mark (nt: S-101, B-22...)",
     "enterGuids": "Sisesta GUID(id)...",
+    "castUnitMarkSearch": "Cast Unit Mark otsing",
+    "castUnitMarkSearchDesc": "Otsi andmebaasist detaile Cast Unit Mark järgi. <strong>NB:</strong> Kasuta enne \"Saada andmebaasi\" funktsiooni!",
+    "castUnitMarkSearchModel": "Cast Unit Mark otsing (MUDELIST)",
+    "castUnitMarkSearchModelDesc": "Otsi otse mudeli propertidest. <strong>Aeglasem</strong>, aga ei vaja andmebaasi!",
+    "columnAction": "Tegevus",
+    "dbError": "DB viga: {{message}}",
+    "noObjectsInDb": "Andmebaasis pole objekte projektile {{projectId}}. Kasuta enne \"Saada andmebaasi\"!",
     "guidsPlaceholder": "Sisesta GUID(id)...\\n\\nNäited:\\n3cUkl00wxCuAr0f8gkqJbz (IFC GUID)\\n3f2504e0-4f89-11d3-9a0c-0305e82c3301 (MS GUID)"
   },
   "database": {
@@ -92,6 +100,13 @@
     "orphanedDeleted": "{{count}} orvuks jäänud detaili kustutatud",
     "deleteAll": "Kustuta kõik",
     "noOrphanedItems": "Orvuks jäänud detaile pole",
+    "loading": "Laadin...",
+    "noOrphansFound": "Orvusid ei leitud! ✓",
+    "foundCount": "Leitud: {{count}} detaili",
+    "columnMark": "Märk",
+    "columnDate": "Kuupäev",
+    "columnAdded": "Lisatud",
+    "refresh": "Värskenda",
     "exportSuccess": "Eksport õnnestus: {{fileName}}",
     "allData": "Kõik andmed",
     "deletingRecords": "Kustutan kirjeid...",
@@ -124,6 +139,33 @@
     "confirmDeleteUser": "Kas oled kindel, et soovid selle kasutaja kustutada?",
     "usersLoadError": "Viga kasutajate laadimisel: {{error}}",
     "teamMembersAdded": "{{count}} meeskonna liiget lisatud"
+  },
+  "calibration": {
+    "buildingCalibration": "Hoone kalibreerimine",
+    "buildingCalibrationDesc": "Määra hoone suund valides 2 punkti pika profiili teljel. Seejärel arvutatakse mõõtmed õigesti ka nurga all oleva hoone jaoks.",
+    "instructions": "Juhend:",
+    "step1": "Vajuta \"Alusta kalibreerimist\"",
+    "step2": "Vali mudelist punkt 1 (pika profiili ühes otsas)",
+    "step3": "Vali punkt 2 (sama profiili teises otsas)",
+    "step4": "Hoone pöördenurk arvutatakse automaatselt",
+    "startCalibration": "Alusta kalibreerimist",
+    "selectingPoint1": "Vali punkt 1...",
+    "selectingPoint2": "Vali punkt 2...",
+    "rotationDegrees": "Pöördenurk: {{degrees}}°",
+    "notCalibrated": "Pole kalibreeritud",
+    "cancelCalibration": "Tühista",
+    "calibrationData": "Kalibreeringu andmed:",
+    "point1Coords": "Punkt 1: X={{x}}m, Y={{y}}m, Z={{z}}m",
+    "point2Coords": "Punkt 2: X={{x}}m, Y={{y}}m, Z={{z}}m",
+    "buildingRotationAngle": "Hoone pöördenurk:",
+    "calibrationActive": "Kalibreerimine aktiivne! Mõõtmisfunktsioonid kasutavad nüüd seda nurka."
+  },
+  "boundingBox": {
+    "rotatedObjectMeasurement": "Pööratud objektide mõõtmine:",
+    "tip1": "Bounding box on alati telgedega joondatud (axis-aligned)",
+    "tip2": "Pööratud objekti tegelik pikkus ≈ diagonaal × cos(nurk)",
+    "tip3": "45° pööratud objektil: tegelik pikkus ≈ diagonaal × 0.707",
+    "tip4": "Kasuta \"Alamdetailide mõõdud\" täpsemaks arvutuseks"
   },
   "settings": {
     "title": "Seaded",
@@ -187,6 +229,7 @@
     "findingReset": "Leidmine lähtestatud - saab uuesti skännida"
   },
   "guid": {
+    "importPlaceholder": "Kleebi siia GUID (MS) koodid, nt:\\na70672f3-14be-4009-ac56-154776793a53\\nb81783g4-25cf-5110-bd67-265887894b64\\n...",
     "enterAtLeastOne": "Sisesta vähemalt üks GUID!",
     "enterAtLeastOneMs": "Sisesta vähemalt üks GUID (MS)",
     "noValidMsFound": "Ühtegi kehtivat GUID (MS) ei leitud",
@@ -230,6 +273,8 @@
     "qrNotFoundInDb": "QR koodi ei leitud andmebaasist"
   },
   "positioner": {
+    "latPlaceholder": "Lat (59.123456)",
+    "lngPlaceholder": "Lng (24.123456)",
     "positionsLoadError": "Viga positsioonide laadimisel: {{error}}",
     "cameraApiNotSupported": "Kaamera API pole toetatud.",
     "pointCameraAtQr": "Suuna kaamera QR koodile...",
@@ -262,7 +307,13 @@
     "cameraSet": "Kaamera seatud: \"{{name}}\"",
     "cameraSetError": "Viga kaamera seadmisel: {{error}}",
     "confirmUpdateView": "Kas soovid uuendada \"{{name}}\" kaamera positsiooni praeguse vaatega?",
-    "updatedWithCurrentView": "Kaamera positsioon uuendatud praeguse vaatega"
+    "updatedWithCurrentView": "Kaamera positsioon uuendatud praeguse vaatega",
+    "namePlaceholder": "Nt: Peavaade, A-telg...",
+    "descriptionPlaceholder": "Valikuline kirjeldus..."
+  },
+  "users": {
+    "emailPlaceholder": "kasutaja@email.com",
+    "namePlaceholder": "Kasutaja nimi"
   },
   "properties": {
     "scanning": "Skanneerin valitud objektide propertiseid...",
@@ -283,6 +334,10 @@
     "selectDetailError": "Viga detaili valimisel: {{error}}",
     "missingGuidsCopied": "Puuduvad GUID-d kopeeritud!",
     "videoPlayError": "Video ei käivitu. Kontrolli kaamera õigusi."
+  },
+  "propertyMappings": {
+    "setPlaceholder": "nt. Tekla Assembly",
+    "namePlaceholder": "nt. Cast_unit_Mark"
   },
   "accessDenied": "Ligipääs keelatud",
   "copy": "Kopeeri",
@@ -479,7 +534,15 @@
         "fair": "Rahuldav",
         "poor": "Halb",
         "none": "Puudub"
-      }
+      },
+      "draw10mRing": "Joonista 10m ring mudelile"
+    },
+    "camera": {
+      "goToView": "Mine sellele vaatele",
+      "updateWithCurrentView": "Uuenda praeguse vaatega"
+    },
+    "resources": {
+      "importToManagement": "Impordi ressursside haldusse"
     }
   }
 }

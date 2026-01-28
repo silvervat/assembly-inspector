@@ -212,7 +212,7 @@ export function UserPermissionsPanel({ projectId, api }: UserPermissionsPanelPro
                       backgroundColor: editingUser ? '#f3f4f6' : 'white',
                       fontSize: '13px'
                     }}
-                    placeholder="kasutaja@email.com"
+                    placeholder={t('users.emailPlaceholder')}
                   />
                 </div>
                 <div>
@@ -229,7 +229,7 @@ export function UserPermissionsPanel({ projectId, api }: UserPermissionsPanelPro
                       backgroundColor: 'white',
                       fontSize: '13px'
                     }}
-                    placeholder="Kasutaja nimi"
+                    placeholder={t('users.namePlaceholder')}
                   />
                 </div>
               </div>

@@ -108,7 +108,7 @@ export function CameraPositionsPanel({ api, projectId, userEmail }: CameraPositi
                 type="text"
                 value={cameraFormData.name}
                 onChange={(e) => setCameraFormData(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Nt: Peavaade, A-telg..."
+                placeholder={t('camera.namePlaceholder')}
                 style={{
                   width: '100%',
                   padding: '6px 10px',
@@ -126,7 +126,7 @@ export function CameraPositionsPanel({ api, projectId, userEmail }: CameraPositi
               <textarea
                 value={cameraFormData.description}
                 onChange={(e) => setCameraFormData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Valikuline kirjeldus..."
+                placeholder={t('camera.descriptionPlaceholder')}
                 rows={2}
                 style={{
                   width: '100%',
@@ -281,7 +281,7 @@ export function CameraPositionsPanel({ api, projectId, userEmail }: CameraPositi
                       color: 'white',
                       flexShrink: 0
                     }}
-                    title="Mine sellele vaatele"
+                    title={t('admin:camera.goToView')}
                   >
                     <FiVideo size={12} />
                   </button>
@@ -312,7 +312,7 @@ export function CameraPositionsPanel({ api, projectId, userEmail }: CameraPositi
                         padding: '4px',
                         cursor: 'pointer'
                       }}
-                      title="Uuenda praeguse vaatega"
+                      title={t('admin:camera.updateWithCurrentView')}
                     >
                       <FiCamera size={12} />
                     </button>

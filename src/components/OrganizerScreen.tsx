@@ -9306,7 +9306,7 @@ export default function OrganizerScreen({
                                           }
                                         }, 200);
                                       }}
-                                      placeholder="Lisa silt..."
+                                      placeholder={t('organizer:ui.addTagPlaceholder')}
                                       autoFocus
                                     />
                                   </div>
@@ -9824,8 +9824,8 @@ export default function OrganizerScreen({
       {/* Selection bar */}
       {selectedObjects.length > 0 && selectedGroupIds.size === 0 && (
         <div className="org-selection-bar">
-          <span>Valitud mudelist: {selectedObjects.length} detaili</span>
-          <span className="hint">Vali grupp, kuhu lisada</span>
+          <span>{t('organizer:ui.selectedFromModel', { count: selectedObjects.length })}</span>
+          <span className="hint">{t('organizer:ui.selectGroupToAdd')}</span>
         </div>
       )}
 
@@ -9845,21 +9845,21 @@ export default function OrganizerScreen({
           <div className="org-modal" onClick={e => e.stopPropagation()}>
             <div className="org-modal-header">
               {editingGroup ? (
-                <h2>Muuda gruppi</h2>
+                <h2>{t('organizer:ui.editGroup')}</h2>
               ) : (
                 <div className="org-modal-tabs">
                   <button
                     className={`org-modal-tab ${!formParentId ? 'active' : ''}`}
                     onClick={() => setFormParentId(null)}
                   >
-                    Uus grupp
+                    {t('organizer:ui.newGroup')}
                   </button>
                   {groups.length > 0 && (
                     <button
                       className={`org-modal-tab ${formParentId ? 'active' : ''}`}
                       onClick={() => setFormParentId(groups[0]?.id || null)}
                     >
-                      Uus alamgrupp
+                      {t('organizer:ui.newSubgroup')}
                     </button>
                   )}
                 </div>
@@ -9886,11 +9886,11 @@ export default function OrganizerScreen({
               )}
               <div className="org-field">
                 <label>Nimi *</label>
-                <input type="text" value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="Grupi nimi" autoFocus />
+                <input type="text" value={formName} onChange={(e) => setFormName(e.target.value)} placeholder={t('organizer:ui.groupNamePlaceholder')} autoFocus />
               </div>
               <div className="org-field">
                 <label>Kirjeldus</label>
-                <textarea value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder="Valikuline kirjeldus" rows={2} />
+                <textarea value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder={t('organizer:ui.optionalDescription')} rows={2} />
               </div>
               <div className="org-field">
                 <label>{t('organizer:color.selectColor')}</label>
@@ -9918,7 +9918,7 @@ export default function OrganizerScreen({
                       />
                       <span className="option-icon">🌐</span>
                       <span className="option-text">
-                        <strong>Kogu projekt</strong>
+                        <strong>{t('organizer:ui.entireProject')}</strong>
                         <small>{t('organizer:groupInfo.wholeProject')}</small>
                       </span>
                     </label>
@@ -9931,8 +9931,8 @@ export default function OrganizerScreen({
                       />
                       <span className="option-icon">👥</span>
                       <span className="option-text">
-                        <strong>Valitud kasutajad</strong>
-                        <small>Ainult valitud liikmed näevad</small>
+                        <strong>{t('organizer:groupInfo.selectedUsers')}</strong>
+                        <small>{t('organizer:ui.onlySelectedMembersSee')}</small>
                       </span>
                     </label>
                     <label className={`org-sharing-option ${formSharingMode === 'private' ? 'selected' : ''}`}>
@@ -9944,8 +9944,8 @@ export default function OrganizerScreen({
                       />
                       <span className="option-icon">🔒</span>
                       <span className="option-text">
-                        <strong>Privaatne</strong>
-                        <small>Ainult mina näen</small>
+                        <strong>{t('organizer:groupInfo.private')}</strong>
+                        <small>{t('organizer:ui.onlyISee')}</small>
                       </span>
                     </label>
                   </div>
@@ -9954,7 +9954,7 @@ export default function OrganizerScreen({
                   {formSharingMode === 'shared' && (
                     <div className="org-user-selection">
                       {teamMembersLoading ? (
-                        <div className="org-loading-users">Laadin kasutajaid...</div>
+                        <div className="org-loading-users">{t('organizer:ui.loadingUsers')}</div>
                       ) : teamMembers.length === 0 ? (
                         <div className="org-no-users">
                           <button className="org-load-users-btn" onClick={loadTeamMembers}>
@@ -10233,7 +10233,7 @@ export default function OrganizerScreen({
                                   type="button"
                                   onClick={(e) => { e.stopPropagation(); setDisplayPropertyMenuIdx(displayPropertyMenuIdx === idx ? null : idx); }}
                                   style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: '0 2px' }}
-                                  title="Seaded"
+                                  title={t('common:navigation.settings')}
                                 >
                                   <FiMoreVertical size={12} />
                                 </button>
@@ -10307,7 +10307,7 @@ export default function OrganizerScreen({
                           type="text"
                           value={propertySearchQuery}
                           onChange={(e) => setPropertySearchQuery(e.target.value)}
-                          placeholder="Otsi property't..."
+                          placeholder={t('organizer:ui.searchPropertyPlaceholder')}
                           style={{
                             width: '100%',
                             padding: '8px 10px',
@@ -10785,7 +10785,7 @@ export default function OrganizerScreen({
                     {field.type === 'tags' && (
                       <input
                         type="text"
-                        placeholder="märksõnad, komaga eraldatud"
+                        placeholder={t('organizer:keywordsPlaceholder')}
                         value={requiredFieldValues[field.id] || ''}
                         onChange={(e) => setRequiredFieldValues(prev => ({ ...prev, [field.id]: e.target.value }))}
                       />
@@ -11021,7 +11021,7 @@ export default function OrganizerScreen({
                 </div>
               ))}
               {effectiveCustomFields.length === 0 && (
-                <p className="org-empty-hint">Sellel grupil pole lisavälju. Lisa esmalt väli grupi menüüst.</p>
+                <p className="org-empty-hint">{t('organizer:ui.noCustomFieldsHint')}</p>
               )}
               {bulkUploadProgress && (
                 <div style={{ marginTop: '12px', padding: '12px', background: '#f0fdf4', borderRadius: '6px' }}>
@@ -11394,7 +11394,7 @@ export default function OrganizerScreen({
                 onDrop={(e) => handleContentDrop(e, lineKey)}
                 onDragOver={handleDragOver}
                 dangerouslySetInnerHTML={{ __html: htmlContent || '<span class="template-placeholder-text"></span>' }}
-                data-placeholder="Lohista siia välju või kirjuta tekst..."
+                data-placeholder={t('organizer:dragFieldsPlaceholder')}
               />
             </div>
           );
@@ -11404,7 +11404,7 @@ export default function OrganizerScreen({
           <div className="org-modal-overlay" onClick={() => { setShowMarkupModal(false); setMarkupGroupId(null); }}>
             <div className="org-modal markup-modal" onClick={e => e.stopPropagation()}>
               <div className="org-modal-header">
-                <h2>Lisa markupid</h2>
+                <h2>{t('organizer:menu.addMarkups')}</h2>
                 <button onClick={() => { setShowMarkupModal(false); setMarkupGroupId(null); }}><FiX size={18} /></button>
               </div>
 
@@ -11429,7 +11429,7 @@ export default function OrganizerScreen({
                       checked={markupSettings.onlySelectedInModel}
                       onChange={(e) => setMarkupSettings(prev => ({ ...prev, onlySelectedInModel: e.target.checked }))}
                     />
-                    <span>Ainult valitud</span>
+                    <span>{t('organizer:ui.onlySelected')}</span>
                     {selectedObjects.length > 0 && <span className="option-count">{selectedObjects.length}</span>}
                   </label>
 
@@ -11450,7 +11450,7 @@ export default function OrganizerScreen({
                       checked={markupSettings.useGroupColors}
                       onChange={(e) => setMarkupSettings(prev => ({ ...prev, useGroupColors: e.target.checked }))}
                     />
-                    <span>Grupi värv</span>
+                    <span>{t('organizer:ui.groupColor')}</span>
                   </label>
 
                   {/* Custom color picker when not using group colors */}
@@ -11493,8 +11493,8 @@ export default function OrganizerScreen({
                 {/* Template builder */}
                 <div className="markup-builder">
                   <div className="markup-builder-header">
-                    <span>Koosta markup</span>
-                    <span className="markup-hint">Lohista välju või kliki, et lisada</span>
+                    <span>{t('organizer:ui.composeMarkup')}</span>
+                    <span className="markup-hint">{t('organizer:ui.dragFieldsOrClick')}</span>
                   </div>
 
                   {/* Available fields as draggable chips */}
@@ -11646,19 +11646,19 @@ export default function OrganizerScreen({
         <div className="org-modal-overlay" onClick={() => { setShowLinkExpiryModal(false); setPendingLinkData(null); }}>
           <div className="org-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 360 }}>
             <div className="org-modal-header">
-              <h2>Lingi kehtivus</h2>
+              <h2>{t('organizer:linkExpiry.title')}</h2>
               <button onClick={() => { setShowLinkExpiryModal(false); setPendingLinkData(null); }}><FiX size={18} /></button>
             </div>
             <div className="org-modal-body">
               <p style={{ marginBottom: 12, fontSize: 13, color: '#666' }}>
-                Vali, kui kaua link kehtib. Pärast aegumist link enam ei tööta.
+                {t('organizer:linkExpiry.description')}
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {[
-                  { days: 1, label: '1 päev' },
-                  { days: 5, label: '5 päeva' },
-                  { days: 14, label: '14 päeva (soovituslik)' },
-                  { days: 30, label: '30 päeva' }
+                  { days: 1, label: t('organizer:linkExpiry.day1') },
+                  { days: 5, label: t('organizer:linkExpiry.days5') },
+                  { days: 14, label: t('organizer:linkExpiry.days14') },
+                  { days: 30, label: t('organizer:linkExpiry.days30') }
                 ].map(opt => (
                   <label
                     key={opt.days}
@@ -12245,8 +12245,8 @@ export default function OrganizerScreen({
               {/* Groups Management Section */}
               <div className="settings-section" style={{ marginTop: '12px', borderTop: '1px solid var(--modus-border)', paddingTop: '12px' }}>
                 <div style={{ marginBottom: '8px' }}>
-                  <span className="settings-title">Gruppide haldus</span>
-                  <span className="settings-desc">Lisa, muuda ja kustuta gruppe</span>
+                  <span className="settings-title">{t('organizer:settingsModal.groupManagement')}</span>
+                  <span className="settings-desc">{t('organizer:settingsModal.groupManagementDesc')}</span>
                 </div>
                 <button
                   onClick={() => {
@@ -12269,15 +12269,15 @@ export default function OrganizerScreen({
                     fontWeight: 500
                   }}
                 >
-                  <FiList size={14} /> Halda gruppe
+                  <FiList size={14} /> {t('organizer:settingsModal.manageGroups')}
                 </button>
               </div>
 
               {/* Export/Import Groups Section */}
               <div className="settings-section" style={{ marginTop: '12px', borderTop: '1px solid var(--modus-border)', paddingTop: '12px' }}>
                 <div style={{ marginBottom: '8px' }}>
-                  <span className="settings-title">Eksport / Import</span>
-                  <span className="settings-desc">Ekspordi või impordi kõik grupid</span>
+                  <span className="settings-title">{t('organizer:settingsModal.exportImport')}</span>
+                  <span className="settings-desc">{t('organizer:settingsModal.exportImportDesc')}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '6px' }}>
                   <button
@@ -12408,18 +12408,17 @@ export default function OrganizerScreen({
                     marginBottom: '16px'
                   }}>
                     <div style={{ fontWeight: 500, color: '#1e40af', marginBottom: '8px' }}>
-                      Eksporditakse:
+                      {t('organizer:exportImportModal.exporting')}
                     </div>
                     <ul style={{ margin: 0, paddingLeft: '20px', color: '#374151', fontSize: '13px' }}>
-                      <li>{groups.length} gruppi</li>
-                      <li>{Array.from(groupItems.values()).reduce((sum, items) => sum + items.length, 0)} elementi</li>
-                      <li>Grupi seaded (värvid, väljad, õigused)</li>
-                      <li>Grupi hierarhia (alamgrupid)</li>
+                      <li>{t('organizer:exportImportModal.groupsCount', { count: groups.length })}</li>
+                      <li>{t('organizer:exportImportModal.itemsCount', { count: Array.from(groupItems.values()).reduce((sum, items) => sum + items.length, 0) })}</li>
+                      <li>{t('organizer:exportImportModal.groupSettings')}</li>
+                      <li>{t('organizer:exportImportModal.groupHierarchy')}</li>
                     </ul>
                   </div>
                   <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '0' }}>
-                    Eksporditav Excel fail sisaldab "Grupid" ja "Elemendid" lehti.
-                    Seda faili saab kasutada gruppide taastamiseks või teise projekti importimiseks.
+                    {t('organizer:exportImportModal.exportDescription')}
                   </p>
                 </div>
               )}
@@ -12818,7 +12817,7 @@ export default function OrganizerScreen({
                 alignItems: 'center'
               }}
             >
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Lisa fotosid</h3>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>{t('organizer:ui.addPhotos')}</h3>
               <button
                 onClick={closePhotoPicker}
                 style={{
@@ -13025,7 +13024,7 @@ export default function OrganizerScreen({
         }}>
           <div className="org-modal" style={{ maxWidth: '600px', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
             <div className="org-modal-header">
-              <h2><FiList size={16} /> Gruppide haldus</h2>
+              <h2><FiList size={16} /> {t('organizer:settingsModal.groupManagement')}</h2>
               <button onClick={() => {
                 setShowGroupsManagementModal(false);
                 setManagementEditingGroupId(null);
@@ -13066,8 +13065,8 @@ export default function OrganizerScreen({
               <div style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
                 {groups.length === 0 ? (
                   <div style={{ padding: '32px 16px', textAlign: 'center', color: '#6b7280' }}>
-                    <p style={{ marginBottom: '8px' }}>Gruppe pole veel loodud</p>
-                    <p style={{ fontSize: '12px' }}>Kliki "Lisa uus grupp" et alustada</p>
+                    <p style={{ marginBottom: '8px' }}>{t('organizer:group.noGroupsYet')}</p>
+                    <p style={{ fontSize: '12px' }}>{t('organizer:group.clickAddNewGroup')}</p>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -13262,7 +13261,7 @@ export default function OrganizerScreen({
                                       setManagementEditingDescGroupId(null);
                                     }}
                                     autoFocus
-                                    placeholder="Lisa kirjeldus..."
+                                    placeholder={t('organizer:ui.addDescriptionPlaceholder')}
                                     style={{
                                       width: '100%',
                                       padding: '1px 6px',

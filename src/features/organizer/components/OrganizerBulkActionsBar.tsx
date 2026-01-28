@@ -1,4 +1,5 @@
 import { FiEdit2, FiDroplet, FiTag, FiTrash2, FiX, FiChevronDown } from 'react-icons/fi';
+import { useTranslation } from 'react-i18next';
 
 interface OrganizerBulkActionsBarProps {
   selectedCount: number;
@@ -27,6 +28,8 @@ export function OrganizerBulkActionsBar({
   onCancel,
   onDelete
 }: OrganizerBulkActionsBarProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="org-bulk-actions">
       <span className="bulk-count">{selectedCount} valitud</span>
@@ -39,7 +42,7 @@ export function OrganizerBulkActionsBar({
           <button
             onClick={() => onToggleColorMarkMenu(!showColorMarkMenu)}
             style={{ display: 'flex', alignItems: 'center', gap: '2px', padding: '4px 8px' }}
-            title="Värvimine ja markupid"
+            title={t('organizer:ui.coloringAndMarkups')}
           >
             <FiDroplet size={14} /> <FiChevronDown size={10} />
           </button>

@@ -192,7 +192,7 @@ export default function InspectionPlansScreen({
   return (
     <div className="screen">
       <PageHeader
-        title="Kontrollplaanid"
+        title={t('inspection:planScreenUi.plansPageTitle')}
         onBack={onBack}
         user={user}
         projectId={projectId}

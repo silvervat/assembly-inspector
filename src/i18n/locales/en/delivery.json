@@ -76,7 +76,9 @@
     "type": "Vehicle Type",
     "driver": "Driver",
     "phone": "Phone",
-    "notes": "Notes"
+    "notes": "Notes",
+    "codePlaceholder": "e.g. EBE-1",
+    "timePlaceholder": "00:00"
   },
   "factory": {
     "add": "Add Factory",

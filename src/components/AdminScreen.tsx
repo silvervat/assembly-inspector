@@ -2025,17 +2025,17 @@ export default function AdminScreen({
             {orphanedLoading ? (
               <div style={{ textAlign: 'center', padding: '20px' }}>
                 <FiRefreshCw className="spin" size={24} />
-                <p>Laadin...</p>
+                <p>{t('database.loading')}</p>
               </div>
             ) : orphanedItems.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '20px', color: '#059669' }}>
                 <FiCheck size={32} />
-                <p>Orvusid ei leitud! ✓</p>
+                <p>{t('database.noOrphansFound')}</p>
               </div>
             ) : (
               <>
                 <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 500 }}>Leitud: {orphanedItems.length} detaili</span>
+                  <span style={{ fontWeight: 500 }}>{t('database.foundCount', { count: orphanedItems.length })}</span>
                   <button
                     className="admin-tool-btn"
                     onClick={deleteOrphanedItems}
@@ -2049,9 +2049,9 @@ export default function AdminScreen({
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: '#f3f4f6', position: 'sticky', top: 0 }}>
-                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Märk</th>
-                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Kuupäev</th>
-                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Lisatud</th>
+                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>{t('database.columnMark')}</th>
+                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>{t('database.columnDate')}</th>
+                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>{t('database.columnAdded')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2074,7 +2074,7 @@ export default function AdminScreen({
               disabled={orphanedLoading}
             >
               <FiRefreshCw size={14} className={orphanedLoading ? 'spin' : ''} />
-              <span>Värskenda</span>
+              <span>{t('database.refresh')}</span>
             </button>
           </div>
         </div>
@@ -3984,9 +3984,8 @@ export default function AdminScreen({
 
             {/* CAST UNIT MARK SEARCH section */}
             <div className="function-section">
-              <h4>🔍 Cast Unit Mark otsing</h4>
-              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
-                Otsi andmebaasist detaile Cast Unit Mark järgi. <strong>NB:</strong> Kasuta enne "Saada andmebaasi" funktsiooni!
+              <h4>🔍 {t('viewer.castUnitMarkSearch')}</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }} dangerouslySetInnerHTML={{ __html: t('viewer.castUnitMarkSearchDesc') }}>
               </p>
 
               {/* Search input */}
@@ -4002,7 +4001,7 @@ export default function AdminScreen({
                       searchBtn?.click();
                     }
                   }}
-                  placeholder="Sisesta mark (nt: S-101, B-22...)"
+                  placeholder={t('admin:viewer.enterMark')}
                   style={{
                     flex: 1,
                     padding: '8px 12px',
@@ -4034,9 +4033,9 @@ export default function AdminScreen({
                           .eq('trimble_project_id', projectId)
                           .not('assembly_mark', 'is', null);
 
-                        if (error) throw new Error(`DB viga: ${error.message}`);
+                        if (error) throw new Error(t('viewer.dbError', { message: error.message }));
                         if (!data || data.length === 0) {
-                          throw new Error(`Andmebaasis pole objekte projektile ${projectId}. Kasuta enne "Saada andmebaasi"!`);
+                          throw new Error(t('viewer.noObjectsInDb', { projectId }));
                         }
                         marks = (data || [])
                           .filter(r => r.assembly_mark && r.guid_ifc)
@@ -4189,7 +4188,7 @@ export default function AdminScreen({
                       <tr style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
                         <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Mark</th>
                         <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', width: '60px' }}>Match</th>
-                        <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', width: '80px' }}>Tegevus</th>
+                        <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', width: '80px' }}>{t('viewer.columnAction')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4262,9 +4261,8 @@ export default function AdminScreen({
 
             {/* CAST UNIT MARK SEARCH FROM MODEL section */}
             <div className="function-section">
-              <h4>🔎 Cast Unit Mark otsing (MUDELIST)</h4>
-              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
-                Otsi otse mudeli propertidest. <strong>Aeglasem</strong>, aga ei vaja andmebaasi!
+              <h4>🔎 {t('viewer.castUnitMarkSearchModel')}</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }} dangerouslySetInnerHTML={{ __html: t('viewer.castUnitMarkSearchModelDesc') }}>
               </p>
 
               {/* Search input */}
@@ -4279,7 +4277,7 @@ export default function AdminScreen({
                       searchBtn?.click();
                     }
                   }}
-                  placeholder="Sisesta mark (nt: S-101, B-22...)"
+                  placeholder={t('admin:viewer.enterMark')}
                   style={{
                     flex: 1,
                     padding: '8px 12px',
@@ -4736,7 +4734,7 @@ export default function AdminScreen({
                       <tr style={{ background: '#fef3c7', position: 'sticky', top: 0 }}>
                         <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #fbbf24' }}>Mark</th>
                         <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #fbbf24', width: '60px' }}>Match</th>
-                        <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #fbbf24', width: '80px' }}>Tegevus</th>
+                        <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #fbbf24', width: '80px' }}>{t('viewer.columnAction')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4974,17 +4972,17 @@ export default function AdminScreen({
 
             {/* CALIBRATION section - Building orientation */}
             <div className="function-section" style={{ background: calibrationMode !== 'off' ? '#fef3c7' : undefined, border: calibrationMode !== 'off' ? '2px solid #f59e0b' : undefined }}>
-              <h4>🧭 Hoone kalibreerimine</h4>
+              <h4>🧭 {t('calibration.buildingCalibration')}</h4>
               <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
-                Määra hoone suund valides 2 punkti pika profiili teljel. Seejärel arvutatakse mõõtmed õigesti ka nurga all oleva hoone jaoks.
+                {t('calibration.buildingCalibrationDesc')}
               </p>
               <div style={{ marginBottom: '12px', padding: '8px', background: '#f0f9ff', borderRadius: '6px', fontSize: '11px' }}>
-                <strong>Juhend:</strong>
+                <strong>{t('calibration.instructions')}</strong>
                 <ol style={{ margin: '4px 0 0 16px', padding: 0 }}>
-                  <li>Vajuta "Alusta kalibreerimist"</li>
-                  <li>Vali mudelist punkt 1 (pika profiili ühes otsas)</li>
-                  <li>Vali punkt 2 (sama profiili teises otsas)</li>
-                  <li>Hoone pöördenurk arvutatakse automaatselt</li>
+                  <li>{t('calibration.step1')}</li>
+                  <li>{t('calibration.step2')}</li>
+                  <li>{t('calibration.step3')}</li>
+                  <li>{t('calibration.step4')}</li>
                 </ol>
               </div>
 
@@ -5004,7 +5002,7 @@ export default function AdminScreen({
                       fontSize: '12px'
                     }}
                   >
-                    🎯 Alusta kalibreerimist
+                    🎯 {t('calibration.startCalibration')}
                   </button>
                 ) : (
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -5017,7 +5015,7 @@ export default function AdminScreen({
                       fontWeight: 600,
                       animation: 'pulse 2s infinite'
                     }}>
-                      {calibrationMode === 'pickingPoint1' ? '⏳ Vali punkt 1...' : '⏳ Vali punkt 2...'}
+                      {calibrationMode === 'pickingPoint1' ? `⏳ ${t('calibration.selectingPoint1')}` : `⏳ ${t('calibration.selectingPoint2')}`}
                     </span>
                     <button
                       onClick={onCancelCalibration}
@@ -5031,7 +5029,7 @@ export default function AdminScreen({
                         fontSize: '11px'
                       }}
                     >
-                      ❌ Tühista
+                      ❌ {t('calibration.cancelCalibration')}
                     </button>
                   </div>
                 )}
@@ -5040,27 +5038,27 @@ export default function AdminScreen({
               {/* Display picked points and calculated angle */}
               {(calibrationPoint1 || calibrationPoint2) && (
                 <div style={{ padding: '8px', background: '#ecfdf5', borderRadius: '6px', fontSize: '11px', marginBottom: '12px' }}>
-                  <strong>Kalibreeringu andmed:</strong>
+                  <strong>{t('calibration.calibrationData')}</strong>
                   {calibrationPoint1 && (
                     <div style={{ marginTop: '4px' }}>
-                      📍 Punkt 1: X={calibrationPoint1.x.toFixed(3)}m, Y={calibrationPoint1.y.toFixed(3)}m, Z={calibrationPoint1.z.toFixed(3)}m
+                      📍 {t('calibration.point1Coords', { x: calibrationPoint1.x.toFixed(3), y: calibrationPoint1.y.toFixed(3), z: calibrationPoint1.z.toFixed(3) })}
                     </div>
                   )}
                   {calibrationPoint2 && (
                     <div style={{ marginTop: '4px' }}>
-                      📍 Punkt 2: X={calibrationPoint2.x.toFixed(3)}m, Y={calibrationPoint2.y.toFixed(3)}m, Z={calibrationPoint2.z.toFixed(3)}m
+                      📍 {t('calibration.point2Coords', { x: calibrationPoint2.x.toFixed(3), y: calibrationPoint2.y.toFixed(3), z: calibrationPoint2.z.toFixed(3) })}
                     </div>
                   )}
                   {calibrationPoint1 && calibrationPoint2 && (
                     <>
                       <div style={{ marginTop: '8px', padding: '6px', background: '#d1fae5', borderRadius: '4px' }}>
-                        🧭 <strong>Hoone pöördenurk:</strong> {(Math.atan2(
+                        🧭 <strong>{t('calibration.buildingRotationAngle')}</strong> {(Math.atan2(
                           calibrationPoint2.y - calibrationPoint1.y,
                           calibrationPoint2.x - calibrationPoint1.x
                         ) * 180 / Math.PI).toFixed(2)}°
                       </div>
                       <div style={{ marginTop: '4px', color: '#059669' }}>
-                        ✅ Kalibreerimine aktiivne! Mõõtmisfunktsioonid kasutavad nüüd seda nurka.
+                        ✅ {t('calibration.calibrationActive')}
                       </div>
                     </>
                   )}
@@ -8113,12 +8111,12 @@ export default function AdminScreen({
                 />
               </div>
               <div style={{ marginTop: '12px', padding: '10px', background: '#fefce8', borderRadius: '6px', fontSize: '11px', color: '#854d0e' }}>
-                <strong>⚠️ Pööratud objektide mõõtmine:</strong>
+                <strong>⚠️ {t('boundingBox.rotatedObjectMeasurement')}</strong>
                 <ul style={{ marginTop: '4px', paddingLeft: '16px' }}>
-                  <li>Bounding box on alati telgedega joondatud (axis-aligned)</li>
-                  <li>Pööratud objekti tegelik pikkus ≈ diagonaal × cos(nurk)</li>
-                  <li>45° pööratud objektil: tegelik pikkus ≈ diagonaal × 0.707</li>
-                  <li>Kasuta "Alamdetailide mõõdud" täpsemaks arvutuseks</li>
+                  <li>{t('boundingBox.tip1')}</li>
+                  <li>{t('boundingBox.tip2')}</li>
+                  <li>{t('boundingBox.tip3')}</li>
+                  <li>{t('boundingBox.tip4')}</li>
                 </ul>
               </div>
             </div>
@@ -11924,7 +11922,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
             <textarea
               value={guidControllerInput}
               onChange={(e) => setGuidControllerInput(e.target.value)}
-              placeholder="Sisesta GUID(id)..."
+              placeholder={t('admin:viewer.enterGuids')}
               style={{
                 width: '100%',
                 minHeight: '50px',

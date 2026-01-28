@@ -36,6 +36,7 @@
     "name": "Name",
     "keywords": "Keywords",
     "keywordsHint": "Separated by comma",
+    "keywordsPlaceholder": "e.g. large, red, 50t (separated by comma)",
     "noResourcesYet": "No resources of this type added yet.",
     "usage": "Usage",
     "active": "Active",
@@ -79,6 +80,13 @@
     "selectThisDetail": "Select this detail in model",
     "enterMark": "Enter mark (e.g. S-101, B-22...)",
     "enterGuids": "Enter GUID(s)...",
+    "castUnitMarkSearch": "Cast Unit Mark search",
+    "castUnitMarkSearchDesc": "Search details from database by Cast Unit Mark. <strong>Note:</strong> Use \"Send to database\" function first!",
+    "castUnitMarkSearchModel": "Cast Unit Mark search (FROM MODEL)",
+    "castUnitMarkSearchModelDesc": "Search directly from model properties. <strong>Slower</strong>, but doesn't require database!",
+    "columnAction": "Action",
+    "dbError": "DB error: {{message}}",
+    "noObjectsInDb": "No objects in database for project {{projectId}}. Use \"Send to database\" first!",
     "guidsPlaceholder": "Enter GUID(s)...\\n\\nExamples:\\n3cUkl00wxCuAr0f8gkqJbz (IFC GUID)\\n3f2504e0-4f89-11d3-9a0c-0305e82c3301 (MS GUID)"
   },
   "database": {
@@ -92,6 +100,13 @@
     "orphanedDeleted": "{{count}} orphaned items deleted",
     "deleteAll": "Delete all",
     "noOrphanedItems": "No orphaned items",
+    "loading": "Loading...",
+    "noOrphansFound": "No orphans found! ✓",
+    "foundCount": "Found: {{count}} items",
+    "columnMark": "Mark",
+    "columnDate": "Date",
+    "columnAdded": "Added",
+    "refresh": "Refresh",
     "exportSuccess": "Export successful: {{fileName}}",
     "allData": "All data",
     "deletingRecords": "Deleting records...",
@@ -124,6 +139,33 @@
     "confirmDeleteUser": "Are you sure you want to delete this user?",
     "usersLoadError": "Error loading users: {{error}}",
     "teamMembersAdded": "{{count}} team members added"
+  },
+  "calibration": {
+    "buildingCalibration": "Building calibration",
+    "buildingCalibrationDesc": "Set building direction by selecting 2 points on a long profile axis. Dimensions will then be calculated correctly for rotated buildings.",
+    "instructions": "Instructions:",
+    "step1": "Click \"Start calibration\"",
+    "step2": "Select point 1 from model (at one end of a long profile)",
+    "step3": "Select point 2 (at the other end of the same profile)",
+    "step4": "Building rotation angle is calculated automatically",
+    "startCalibration": "Start calibration",
+    "selectingPoint1": "Select point 1...",
+    "selectingPoint2": "Select point 2...",
+    "rotationDegrees": "Rotation: {{degrees}}°",
+    "notCalibrated": "Not calibrated",
+    "cancelCalibration": "Cancel",
+    "calibrationData": "Calibration data:",
+    "point1Coords": "Point 1: X={{x}}m, Y={{y}}m, Z={{z}}m",
+    "point2Coords": "Point 2: X={{x}}m, Y={{y}}m, Z={{z}}m",
+    "buildingRotationAngle": "Building rotation angle:",
+    "calibrationActive": "Calibration active! Measurement functions now use this angle."
+  },
+  "boundingBox": {
+    "rotatedObjectMeasurement": "Rotated objects measurement:",
+    "tip1": "Bounding box is always axis-aligned",
+    "tip2": "Actual length of rotated object ≈ diagonal × cos(angle)",
+    "tip3": "45° rotated object: actual length ≈ diagonal × 0.707",
+    "tip4": "Use \"Sub-component dimensions\" for more accurate calculation"
   },
   "settings": {
     "title": "Settings",
@@ -187,6 +229,7 @@
     "findingReset": "Finding reset - can scan again"
   },
   "guid": {
+    "importPlaceholder": "Paste GUID (MS) codes here, e.g.:\\na70672f3-14be-4009-ac56-154776793a53\\nb81783g4-25cf-5110-bd67-265887894b64\\n...",
     "enterAtLeastOne": "Enter at least one GUID!",
     "enterAtLeastOneMs": "Enter at least one GUID (MS)",
     "noValidMsFound": "No valid GUID (MS) found",
@@ -230,6 +273,8 @@
     "qrNotFoundInDb": "QR code not found in database"
   },
   "positioner": {
+    "latPlaceholder": "Lat (59.123456)",
+    "lngPlaceholder": "Lng (24.123456)",
     "positionsLoadError": "Error loading positions: {{error}}",
     "cameraApiNotSupported": "Camera API not supported.",
     "pointCameraAtQr": "Point camera at QR code...",
@@ -262,7 +307,13 @@
     "cameraSet": "Camera set: \"{{name}}\"",
     "cameraSetError": "Error setting camera: {{error}}",
     "confirmUpdateView": "Update \"{{name}}\" camera position with current view?",
-    "updatedWithCurrentView": "Camera position updated with current view"
+    "updatedWithCurrentView": "Camera position updated with current view",
+    "namePlaceholder": "e.g. Main view, A-axis...",
+    "descriptionPlaceholder": "Optional description..."
+  },
+  "users": {
+    "emailPlaceholder": "user@email.com",
+    "namePlaceholder": "User name"
   },
   "properties": {
     "scanning": "Scanning selected object properties...",
@@ -283,6 +334,10 @@
     "selectDetailError": "Error selecting detail: {{error}}",
     "missingGuidsCopied": "Missing GUIDs copied!",
     "videoPlayError": "Video not starting. Check camera permissions."
+  },
+  "propertyMappings": {
+    "setPlaceholder": "e.g. Tekla Assembly",
+    "namePlaceholder": "e.g. Cast_unit_Mark"
   },
   "accessDenied": "Access denied",
   "copy": "Copy",
@@ -479,7 +534,15 @@
         "fair": "Fair",
         "poor": "Poor",
         "none": "None"
-      }
+      },
+      "draw10mRing": "Draw 10m ring on model"
+    },
+    "camera": {
+      "goToView": "Go to this view",
+      "updateWithCurrentView": "Update with current view"
+    },
+    "resources": {
+      "importToManagement": "Import to resources management"
     }
   }
 }

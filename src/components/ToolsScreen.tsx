@@ -3494,7 +3494,7 @@ export default function ToolsScreen({
                       color: '#9ca3af',
                       marginLeft: 'auto'
                     }}
-                    title="Info"
+                    title={t('organizer:ui.info')}
                   >
                     <FiInfo size={14} />
                   </button>
@@ -3533,7 +3533,7 @@ export default function ToolsScreen({
                       color: '#9ca3af',
                       marginLeft: 'auto'
                     }}
-                    title="Info"
+                    title={t('organizer:ui.info')}
                   >
                     <FiInfo size={14} />
                   </button>
@@ -3568,7 +3568,7 @@ export default function ToolsScreen({
                       color: '#9ca3af',
                       marginLeft: 'auto'
                     }}
-                    title="Info"
+                    title={t('organizer:ui.info')}
                   >
                     <FiInfo size={14} />
                   </button>
@@ -3990,7 +3990,7 @@ export default function ToolsScreen({
                   <button
                     onClick={() => alert(t('tools:tooltips.autoHeightInfo'))}
                     style={{ background: 'none', border: 'none', padding: '2px', cursor: 'pointer', color: '#9ca3af' }}
-                    title="Info"
+                    title={t('organizer:ui.info')}
                     type="button"
                   >
                     <FiInfo size={14} />

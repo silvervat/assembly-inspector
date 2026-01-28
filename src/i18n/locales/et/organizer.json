@@ -27,7 +27,9 @@
     "colorLocked": "Grupi värvi ei saa muuta - grupp on lukustatud",
     "allItemsAlreadyInGroup": "Kõik valitud detailid on juba selles grupis",
     "noPermissionDelete": "Sul pole õigust detaile kustutada",
-    "noPermissionDeleteOthers": "Sul pole õigust teiste lisatud detaile kustutada ({{count}} detaili)"
+    "noPermissionDeleteOthers": "Sul pole õigust teiste lisatud detaile kustutada ({{count}} detaili)",
+    "noGroupsYet": "Gruppe pole veel loodud",
+    "clickAddNewGroup": "Kliki \"Lisa uus grupp\" et alustada"
   },
   "field": {
     "new": "Lisa väli",
@@ -648,6 +650,25 @@
     "groupNamePlaceholder": "Grupi nimi",
     "optionalDescription": "Valikuline kirjeldus",
     "searchPropertyPlaceholder": "Otsi property't...",
-    "addDescriptionPlaceholder": "Lisa kirjeldus..."
+    "addDescriptionPlaceholder": "Lisa kirjeldus...",
+    "colorMode": "Värvimise režiim",
+    "allGroupsColor": "Kõik grupid",
+    "parentsOnly": "Ainult peagrupid",
+    "filter": "Filtreeri",
+    "sort": "Sorteeri",
+    "coloringAndMarkups": "Värvimine ja markupid",
+    "resetColors": "Lähtesta värvid",
+    "colorByGroups": "Värvi gruppide kaupa",
+    "selectedFromModel": "Valitud mudelist: {{count}} detaili",
+    "selectGroupToAdd": "Vali grupp, kuhu lisada",
+    "editGroup": "Muuda gruppi",
+    "newGroup": "Uus grupp",
+    "newSubgroup": "Uus alamgrupp",
+    "loadingUsers": "Laadin kasutajaid...",
+    "entireProject": "Kogu projekt",
+    "composeMarkup": "Koosta markup",
+    "onlySelected": "Ainult valitud",
+    "addPhotos": "Lisa fotosid",
+    "noCustomFieldsHint": "Sellel grupil pole lisavälju. Lisa esmalt väli grupi menüüst."
   }
 }

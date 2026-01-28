@@ -54,7 +54,7 @@ export function OrganizerSearchBar({
           <FiSearch size={14} />
           <input
             type="text"
-            placeholder="Otsi kõikidest gruppidest..."
+            placeholder={t('search.placeholder')}
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
           />
@@ -71,7 +71,7 @@ export function OrganizerSearchBar({
               onCloseMenus();
               onToggleFilterMenu(!showFilterMenu);
             }}
-            title="Filtreeri"
+            title={t('organizer:ui.filter')}
           >
             <i className="modus-icons" style={{ fontSize: '18px' }}>filter</i>
           </button>
@@ -129,7 +129,7 @@ export function OrganizerSearchBar({
               onCloseMenus();
               onToggleSortMenu(!showSortMenu);
             }}
-            title="Sorteeri"
+            title={t('organizer:ui.sort')}
           >
             <i className="modus-icons" style={{ fontSize: '18px' }}>sort</i>
           </button>
