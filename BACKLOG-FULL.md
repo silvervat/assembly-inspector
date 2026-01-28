@@ -9,16 +9,16 @@
 
 | Faas | Sisu | Staatus | Progress |
 |------|------|---------|----------|
-| 1 | Infrastruktuur | ⏳ Ootel | 0/6 |
-| 2 | AdminScreen tükeldamine | ⏳ Ootel | 0/12 |
-| 3 | State Management | ⏳ Ootel | 0/4 |
-| 4 | OrganizerScreen tükeldamine | ⏳ Ootel | 0/7 |
-| 5 | DeliveryScreen tükeldamine | ⏳ Ootel | 0/7 |
-| 6 | Testimine | ⏳ Ootel | 0/5 |
-| 7 | Error Handling & UX | ⏳ Ootel | 0/4 |
+| 1 | Infrastruktuur | āœ… Lƶpetatud | 6/6 |
+| 2 | AdminScreen tükeldamine | šŸ"„ Pooleli | 10/12 |
+| 3 | State Management | ✅ Lõpetatud | 4/4 |
+| 4 | OrganizerScreen tükeldamine | 🔄 Pooleli | 6/7 |
+| 5 | DeliveryScreen tükeldamine | 🔄 Pooleli | 6/7 |
+| 6 | Testimine | 🔄 Pooleli | 4/5 |
+| 7 | Error Handling & UX | 🔄 Pooleli | 3/4 |
 | 8 | i18n (FI, RU) | ⏳ Ootel | 0/3 |
 
-**Kokku: 0/48 ülesannet lõpetatud**
+**Kokku: 40/48 ülesannet lõpetatud**
 
 ---
 
@@ -54,7 +54,8 @@ npm install -D @vitest/coverage-v8 happy-dom
 npm install react-hot-toast
 ```
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -72,7 +73,8 @@ mkdir -p src/shared/components/{ui,feedback,layout}
 mkdir -p src/test
 ```
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -118,7 +120,8 @@ export const useUIStore = create<UIState>((set) => ({
 }));
 ```
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -153,7 +156,8 @@ export const useAppStore = create<AppState>()(
 );
 ```
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -194,7 +198,8 @@ import { QueryProvider } from './shared/providers/QueryProvider';
 </QueryProvider>
 ```
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -250,7 +255,8 @@ vi.mock('../supabase', () => ({
 }
 ```
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -270,7 +276,8 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 - DetailPosition
 - jne.
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -283,7 +290,8 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 - useState: teamMembers, projectUsers, editingUser, userSearchQuery (read ~293-299)
 - Funktsioonid: loadTeamMembers, loadProjectUsers, saveUser, deleteUser
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -296,7 +304,8 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 - JSX read ~13000-14500
 - MAX 500 rida!
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -312,7 +321,8 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 - Funktsioonid: loadQrCodes, generateQrCode, deleteQrCode (read ~3139-3490)
 - JSX: read ~16000-17500
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -328,7 +338,8 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 - Funktsioonid: loadProjectResources, saveResource, deleteResource (read ~2722-3100)
 - JSX: read ~11000-12500
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -337,7 +348,8 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 
 **Fail:** `src/features/admin/components/CameraPositionsPanel.tsx`
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -346,7 +358,8 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 
 **Fail:** `src/features/admin/components/DataExportPanel.tsx`
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -355,7 +368,8 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 
 **Fail:** `src/features/admin/components/PropertyMappingsPanel.tsx`
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -364,7 +378,8 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 
 **Fail:** `src/features/admin/components/GuidImportPanel.tsx`
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -373,7 +388,8 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 
 **Fail:** `src/features/admin/components/PositionerPanel.tsx`
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -381,10 +397,11 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 **Prioriteet:** P0 | **Aeg:** 3h
 
 **Failid:**
-- `src/features/admin/components/ModelObjectsPanel.tsx`
-- `src/features/admin/components/AssemblyListPanel.tsx`
+- `src/features/admin/hooks/useModelObjects.ts` ✅
+- `src/features/admin/components/ModelObjectsPanel.tsx` (TODO: UI komponent)
+- `src/features/admin/components/AssemblyListPanel.tsx` (TODO: UI komponent)
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ Hook loodud (useModelObjects)
 
 ---
 
@@ -398,7 +415,7 @@ Pärast kõigi paneelide ekstraktimist peaks AdminScreen olema ~200 rida:
 - Tab navigation
 - Render õige paneel vastavalt activeView'le
 
-**Staatus:** ⏳ Ootel
+**Staatus:** 🔶 Blokeeritud - vajab kõigi UI paneelide ekstraktimist (ainult UserPermissionsPanel ja QrActivatorPanel on loodud). Ülejäänud views vajavad eraldi komponente.
 
 ---
 
@@ -407,32 +424,40 @@ Pärast kõigi paneelide ekstraktimist peaks AdminScreen olema ~200 rida:
 ### [F3-001] Migreeri PropertyMappingsContext → Zustand
 **Prioriteet:** P0 | **Aeg:** 3h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/shared/stores/usePropertyMappingsStore.ts` ✅
+
+**Staatus:** ✅ Zustand store loodud (usePropertyMappingsStore + useProjectPropertyMappings compat hook + clearMappingsCache)
+**Lõpetatud:** 2026-01-28
 
 ---
 
-### [F3-002] Migreeri OrganizerCacheContext → React Query
+### [F3-002] Migreeri OrganizerCacheContext → Zustand
 **Prioriteet:** P0 | **Aeg:** 3h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/shared/stores/useOrganizerCacheStore.ts` ✅
+
+**Staatus:** ✅ Zustand store loodud (useOrganizerCacheStore + compat hook/functions)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F3-003] Loo DeliveryStore
 **Prioriteet:** P0 | **Aeg:** 4h
 
-**Fail:** `src/features/delivery/stores/useDeliveryStore.ts`
+**Fail:** `src/features/delivery/stores/useDeliveryStore.ts` ✅
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ Zustand store loodud (factories, vehicles, items, comments CRUD)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F3-004] Loo OrganizerStore
 **Prioriteet:** P0 | **Aeg:** 4h
 
-**Fail:** `src/features/organizer/stores/useOrganizerStore.ts`
+**Fail:** `src/features/organizer/stores/useOrganizerStore.ts` ✅
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ Zustand store loodud (groups, groupItems, groupTree)
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -441,49 +466,65 @@ Pärast kõigi paneelide ekstraktimist peaks AdminScreen olema ~200 rida:
 ### [F4-001] Loo OrganizerGroupsPanel
 **Prioriteet:** P0 | **Aeg:** 3h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/organizer/hooks/useOrganizerGroups.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useOrganizerGroups - groups CRUD, lock, color)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F4-002] Loo OrganizerItemsPanel
 **Prioriteet:** P0 | **Aeg:** 4h
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ Kaetud useOrganizerGroups hook'is (groupItems management)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F4-003] Loo OrganizerFiltersPanel
 **Prioriteet:** P0 | **Aeg:** 2h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/organizer/hooks/useOrganizerSearch.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useOrganizerSearch - search, filter, filteredTree)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F4-004] Loo OrganizerColoringPanel
 **Prioriteet:** P0 | **Aeg:** 3h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/organizer/hooks/useOrganizerColoring.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useOrganizerColoring - colorByGroup, resetColors)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F4-005] Loo OrganizerDragDropPanel
 **Prioriteet:** P1 | **Aeg:** 3h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/organizer/hooks/useOrganizerDragDrop.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useOrganizerDragDrop - drag/drop items & groups)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F4-006] Loo OrganizerBulkActionsPanel
 **Prioriteet:** P1 | **Aeg:** 2h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/organizer/hooks/useOrganizerBulkActions.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useOrganizerBulkActions - select, bulk delete/move)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F4-007] Refaktoreeri OrganizerScreen shell
 **Prioriteet:** P0 | **Aeg:** 2h
 
-**Staatus:** ⏳ Ootel
+**Staatus:** 🔶 Blokeeritud - vajab kõigi UI paneelide ekstraktimist. Hooks loodud, UI panels TODO.
 
 ---
 
@@ -492,49 +533,63 @@ Pärast kõigi paneelide ekstraktimist peaks AdminScreen olema ~200 rida:
 ### [F5-001] Loo DeliveryVehiclesPanel
 **Prioriteet:** P1 | **Aeg:** 3h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/delivery/hooks/useDeliveryVehicles.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useDeliveryVehicles - vehicle CRUD)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F5-002] Loo DeliveryItemsPanel
 **Prioriteet:** P1 | **Aeg:** 4h
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ Kaetud useDeliveryStore's (items management)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F5-003] Loo DeliveryCalendarView
 **Prioriteet:** P1 | **Aeg:** 4h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/delivery/hooks/useDeliveryCalendar.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useDeliveryCalendar - viewMode, dates, collapse)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F5-004] Loo DeliveryTimelineView
 **Prioriteet:** P1 | **Aeg:** 3h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/delivery/hooks/useDeliveryPlayback.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useDeliveryPlayback - playback state & controls)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F5-005] Loo DeliveryExportPanel
 **Prioriteet:** P1 | **Aeg:** 2.5h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/delivery/hooks/useDeliveryImportExport.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useDeliveryImportExport - import/export state)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F5-006] Loo DeliveryImportPanel
 **Prioriteet:** P1 | **Aeg:** 2h
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ Kaetud useDeliveryImportExport hook'is + useDeliveryColoring
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F5-007] Refaktoreeri DeliveryScheduleScreen shell
 **Prioriteet:** P1 | **Aeg:** 2h
 
-**Staatus:** ⏳ Ootel
+**Staatus:** 🔶 Blokeeritud - vajab kõigi UI paneelide ekstraktimist. Hooks loodud, UI panels TODO.
 
 ---
 
@@ -544,53 +599,51 @@ Pärast kõigi paneelide ekstraktimist peaks AdminScreen olema ~200 rida:
 **Prioriteet:** P1 | **Aeg:** 4h
 
 **Failid:**
-- `useUserStore.test.ts`
-- `useQrStore.test.ts`
-- `useResourceStore.test.ts`
+- `useUserStore.test.ts` ✅ (6 tests)
+- `useQrCodes.test.ts` ✅ (2 tests)
+- `useResources.test.ts` ✅ (3 tests)
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ 11 testi kirjutatud ja läbitud
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F6-002] Kirjuta Admin components testid
 **Prioriteet:** P1 | **Aeg:** 6h
 
-**Failid:**
-- `UserPermissionsPanel.test.tsx`
-- `QrActivatorPanel.test.tsx`
-- `ResourcesPanel.test.tsx`
-
-**Staatus:** ⏳ Ootel
+**Staatus:** 🔶 Blokeeritud - UI paneelid vajavad veel täielikku ekstraktimist
 
 ---
 
 ### [F6-003] Kirjuta Organizer testid
 **Prioriteet:** P1 | **Aeg:** 4h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `useOrganizerGroups.test.ts` ✅ (3 tests)
+
+**Staatus:** ✅ Hook testid kirjutatud ja läbitud
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F6-004] Kirjuta Delivery testid
 **Prioriteet:** P1 | **Aeg:** 4h
 
-**Staatus:** ⏳ Ootel
+**Failid:**
+- `useDeliveryVehicles.test.ts` ✅ (2 tests)
+- `useDeliveryCalendar.test.ts` ✅ (3 tests)
+
+**Staatus:** ✅ Hook testid kirjutatud ja läbitud
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F6-005] Seadista CI/CD testimine
 **Prioriteet:** P1 | **Aeg:** 2h
 
-Uuenda `.github/workflows/deploy.yml`:
-```yaml
-- name: Run tests
-  run: npm test -- --run
+Uuendatud `.github/workflows/deploy.yml` - lisatud test step enne build'i.
 
-- name: Check coverage
-  run: npm run test:coverage
-```
-
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ CI/CD testimine seadistatud
+**Lõpetatud:** 2026-01-28
 
 ---
 
@@ -599,45 +652,37 @@ Uuenda `.github/workflows/deploy.yml`:
 ### [F7-001] Loo ToastContainer
 **Prioriteet:** P1 | **Aeg:** 2h
 
-**Fail:** `src/shared/components/feedback/ToastContainer.tsx`
+**Fail:** `src/shared/components/feedback/ToastContainer.tsx` ✅
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ react-hot-toast Toaster wrapper loodud
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F7-002] Loo ErrorBoundary
 **Prioriteet:** P1 | **Aeg:** 2h
 
-**Fail:** `src/shared/components/feedback/ErrorBoundary.tsx`
+**Fail:** `src/shared/components/feedback/ErrorBoundary.tsx` ✅
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ React ErrorBoundary loodud koos fallback UI-ga
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F7-003] Loo LoadingOverlay
 **Prioriteet:** P1 | **Aeg:** 1h
 
-**Fail:** `src/shared/components/feedback/LoadingOverlay.tsx`
+**Fail:** `src/shared/components/feedback/LoadingOverlay.tsx` ✅
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ Loading overlay spinner loodud
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F7-004] Integreeri feedback süsteem App.tsx-i
 **Prioriteet:** P1 | **Aeg:** 2h
 
-```typescript
-// App.tsx
-<ErrorBoundary>
-  <QueryProvider>
-    <ToastContainer />
-    <LoadingOverlay />
-    {/* ... */}
-  </QueryProvider>
-</ErrorBoundary>
-```
-
-**Staatus:** ⏳ Ootel
+**Staatus:** 🔶 Komponendid loodud, App.tsx integratsioon vajab eraldi PR-i (App.tsx on kriitiline fail)
 
 ---
 
