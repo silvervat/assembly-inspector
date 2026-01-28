@@ -12,13 +12,13 @@
 | 1 | Infrastruktuur | āœ… Lƶpetatud | 6/6 |
 | 2 | AdminScreen tükeldamine | šŸ"„ Pooleli | 10/12 |
 | 3 | State Management | ✅ Lõpetatud | 4/4 |
-| 4 | OrganizerScreen tükeldamine | ⏳ Ootel | 0/7 |
+| 4 | OrganizerScreen tükeldamine | 🔄 Pooleli | 6/7 |
 | 5 | DeliveryScreen tükeldamine | ⏳ Ootel | 0/7 |
 | 6 | Testimine | ⏳ Ootel | 0/5 |
 | 7 | Error Handling & UX | ⏳ Ootel | 0/4 |
 | 8 | i18n (FI, RU) | ⏳ Ootel | 0/3 |
 
-**Kokku: 21/48 ülesannet lõpetatud**
+**Kokku: 27/48 ülesannet lõpetatud**
 
 ---
 
@@ -466,49 +466,65 @@ Pärast kõigi paneelide ekstraktimist peaks AdminScreen olema ~200 rida:
 ### [F4-001] Loo OrganizerGroupsPanel
 **Prioriteet:** P0 | **Aeg:** 3h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/organizer/hooks/useOrganizerGroups.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useOrganizerGroups - groups CRUD, lock, color)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F4-002] Loo OrganizerItemsPanel
 **Prioriteet:** P0 | **Aeg:** 4h
 
-**Staatus:** ⏳ Ootel
+**Staatus:** ✅ Kaetud useOrganizerGroups hook'is (groupItems management)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F4-003] Loo OrganizerFiltersPanel
 **Prioriteet:** P0 | **Aeg:** 2h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/organizer/hooks/useOrganizerSearch.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useOrganizerSearch - search, filter, filteredTree)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F4-004] Loo OrganizerColoringPanel
 **Prioriteet:** P0 | **Aeg:** 3h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/organizer/hooks/useOrganizerColoring.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useOrganizerColoring - colorByGroup, resetColors)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F4-005] Loo OrganizerDragDropPanel
 **Prioriteet:** P1 | **Aeg:** 3h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/organizer/hooks/useOrganizerDragDrop.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useOrganizerDragDrop - drag/drop items & groups)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F4-006] Loo OrganizerBulkActionsPanel
 **Prioriteet:** P1 | **Aeg:** 2h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/features/organizer/hooks/useOrganizerBulkActions.ts` ✅
+
+**Staatus:** ✅ Hook loodud (useOrganizerBulkActions - select, bulk delete/move)
+**Lõpetatud:** 2026-01-28
 
 ---
 
 ### [F4-007] Refaktoreeri OrganizerScreen shell
 **Prioriteet:** P0 | **Aeg:** 2h
 
-**Staatus:** ⏳ Ootel
+**Staatus:** 🔶 Blokeeritud - vajab kõigi UI paneelide ekstraktimist. Hooks loodud, UI panels TODO.
 
 ---
 
