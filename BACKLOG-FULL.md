@@ -11,14 +11,14 @@
 |------|------|---------|----------|
 | 1 | Infrastruktuur | āœ… Lƶpetatud | 6/6 |
 | 2 | AdminScreen tükeldamine | šŸ"„ Pooleli | 10/12 |
-| 3 | State Management | ⏳ Ootel | 0/4 |
+| 3 | State Management | 🔄 Pooleli | 1/4 |
 | 4 | OrganizerScreen tükeldamine | ⏳ Ootel | 0/7 |
 | 5 | DeliveryScreen tükeldamine | ⏳ Ootel | 0/7 |
 | 6 | Testimine | ⏳ Ootel | 0/5 |
 | 7 | Error Handling & UX | ⏳ Ootel | 0/4 |
 | 8 | i18n (FI, RU) | ⏳ Ootel | 0/3 |
 
-**Kokku: 17/48 ülesannet lõpetatud**
+**Kokku: 18/48 ülesannet lõpetatud**
 
 ---
 
@@ -415,7 +415,7 @@ Pärast kõigi paneelide ekstraktimist peaks AdminScreen olema ~200 rida:
 - Tab navigation
 - Render õige paneel vastavalt activeView'le
 
-**Staatus:** ⏳ Ootel
+**Staatus:** 🔶 Blokeeritud - vajab kõigi UI paneelide ekstraktimist (ainult UserPermissionsPanel ja QrActivatorPanel on loodud). Ülejäänud views vajavad eraldi komponente.
 
 ---
 
@@ -424,7 +424,10 @@ Pärast kõigi paneelide ekstraktimist peaks AdminScreen olema ~200 rida:
 ### [F3-001] Migreeri PropertyMappingsContext → Zustand
 **Prioriteet:** P0 | **Aeg:** 3h
 
-**Staatus:** ⏳ Ootel
+**Fail:** `src/shared/stores/usePropertyMappingsStore.ts` ✅
+
+**Staatus:** ✅ Zustand store loodud (usePropertyMappingsStore + useProjectPropertyMappings compat hook + clearMappingsCache)
+**Lõpetatud:** 2026-01-28
 
 ---
 
