@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { supabase, TrimbleExUser } from '../../../supabase';
 import { mapExternalRole, DEFAULT_USER_PERMISSIONS, DEFAULT_USER_ROLE } from '../../../constants/roles';
-import type { TeamMember } from '../types';
 
 interface UserFormData {
   email: string;

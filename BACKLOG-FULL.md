@@ -10,7 +10,7 @@
 | Faas | Sisu | Staatus | Progress |
 |------|------|---------|----------|
 | 1 | Infrastruktuur | āœ… Lƶpetatud | 6/6 |
-| 2 | AdminScreen tükeldamine | šŸ"„ Pooleli | 9/12 |
+| 2 | AdminScreen tükeldamine | šŸ"„ Pooleli | 10/12 |
 | 3 | State Management | ⏳ Ootel | 0/4 |
 | 4 | OrganizerScreen tükeldamine | ⏳ Ootel | 0/7 |
 | 5 | DeliveryScreen tükeldamine | ⏳ Ootel | 0/7 |
@@ -18,7 +18,7 @@
 | 7 | Error Handling & UX | ⏳ Ootel | 0/4 |
 | 8 | i18n (FI, RU) | ⏳ Ootel | 0/3 |
 
-**Kokku: 15/48 ülesannet lõpetatud**
+**Kokku: 16/48 ülesannet lõpetatud**
 
 ---
 
@@ -388,7 +388,8 @@ Kopeeri AdminScreen.tsx-st kõik interface'id (read ~60-250):
 
 **Fail:** `src/features/admin/components/PositionerPanel.tsx`
 
-**Staatus:** ⏳ Ootel
+**Staatus:** āœ… Lƶpetatud
+**Lõpetatud:** 2026-01-28
 
 ---
 

@@ -8,3 +8,4 @@ export { useCameraPositions } from './hooks/useCameraPositions';
 export { useDataExport } from './hooks/useDataExport';
 export { usePropertyMappings } from './hooks/usePropertyMappings';
 export { useGuidImport } from './hooks/useGuidImport';
+export { usePositioner } from './hooks/usePositioner';
