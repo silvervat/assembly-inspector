@@ -5,3 +5,4 @@ export { useDeliveryColoring } from './hooks/useDeliveryColoring';
 export { useDeliveryDragDrop } from './hooks/useDeliveryDragDrop';
 export { useDeliveryImportExport } from './hooks/useDeliveryImportExport';
 export { useDeliveryCalendar } from './hooks/useDeliveryCalendar';
+export { DeliveryToolbar } from './components/DeliveryToolbar';

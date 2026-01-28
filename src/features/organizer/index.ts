@@ -4,3 +4,7 @@ export { useOrganizerColoring } from './hooks/useOrganizerColoring';
 export { useOrganizerDragDrop } from './hooks/useOrganizerDragDrop';
 export { useOrganizerBulkActions } from './hooks/useOrganizerBulkActions';
 export { useOrganizerSearch } from './hooks/useOrganizerSearch';
+export { OrganizerToolbar } from './components/OrganizerToolbar';
+export { OrganizerSearchBar } from './components/OrganizerSearchBar';
+export { OrganizerBulkActionsBar } from './components/OrganizerBulkActionsBar';
+export { OrganizerGroupsList } from './components/OrganizerGroupsList';

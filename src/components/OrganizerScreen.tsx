@@ -38,6 +38,12 @@ import {
 
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
+import {
+  OrganizerToolbar,
+  OrganizerSearchBar,
+  OrganizerBulkActionsBar,
+  OrganizerGroupsList
+} from '../features/organizer';
 
 interface OrganizerScreenProps {
   api: WorkspaceAPI.WorkspaceAPI;
@@ -10006,277 +10012,60 @@ export default function OrganizerScreen({
       </PageHeader>
 
       {/* Secondary header row - add group and coloring */}
-      <div className="org-header-secondary">
-        <button className="org-add-btn" onClick={() => { resetGroupForm(); setEditingGroup(null); setShowGroupForm(true); }}>
-          <FiPlus size={14} /> Uus grupp
-        </button>
-        <button
-          className="org-icon-btn"
-          style={{ background: '#1e3a5f', color: '#e0e7ff', fontSize: '11px', padding: '5px 10px', gap: '4px', width: 'auto', height: 'auto' }}
-          onClick={() => { loadActivityLogs(0); setShowActivityLogModal(true); }}
-          title={t('organizer:activityLog.title')}
-        >
-          <FiClock size={12} /> Tegevused
-        </button>
-        <div className="org-color-controls">
-          <div className="org-color-dropdown-wrapper">
-            <button
-              className={`org-icon-btn color-btn ${colorByGroup ? 'active' : ''}`}
-              onClick={() => colorByGroup ? resetColors() : colorModelByGroups()}
-              disabled={coloringInProgress || groups.length === 0}
-              title={colorByGroup ? t('organizer:ui.resetColors') : t('organizer:ui.colorByGroups')}
-            >
-              {colorByGroup ? <FiRefreshCw size={15} /> : <FiDroplet size={15} />}
-            </button>
-            <button
-              className="org-color-mode-btn"
-              onClick={(e) => { e.stopPropagation(); setShowColorModeMenu(!showColorModeMenu); }}
-              title="Värvimise režiim"
-            >
-              <FiChevronDown size={12} />
-            </button>
-            {showColorModeMenu && (
-              <div className="org-color-mode-menu" onClick={(e) => e.stopPropagation()}>
-                <button
-                  className={colorMode === 'all' ? 'active' : ''}
-                  onClick={() => { setColorMode('all'); setShowColorModeMenu(false); }}
-                >
-                  <span className="menu-check">{colorMode === 'all' ? '✓' : ''}</span>
-                  Kõik grupid
-                </button>
-                <button
-                  className={colorMode === 'parents-only' ? 'active' : ''}
-                  onClick={() => { setColorMode('parents-only'); setShowColorModeMenu(false); }}
-                >
-                  <span className="menu-check">{colorMode === 'parents-only' ? '✓' : ''}</span>
-                  Ainult peagrupid
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+      <OrganizerToolbar
+        onAddGroup={() => { resetGroupForm(); setEditingGroup(null); setShowGroupForm(true); }}
+        onShowActivityLog={() => { loadActivityLogs(0); setShowActivityLogModal(true); }}
+        colorByGroup={colorByGroup}
+        coloringInProgress={coloringInProgress}
+        groupsCount={groups.length}
+        onColorModelByGroups={colorModelByGroups}
+        onResetColors={resetColors}
+        colorMode={colorMode}
+        onColorModeChange={setColorMode}
+        showColorModeMenu={showColorModeMenu}
+        onToggleColorModeMenu={setShowColorModeMenu}
+        t={t}
+      />
 
       {/* Search bar - separate row */}
-      <div className="org-search-bar">
-        <div className="org-search-group">
-          <div className="org-search">
-            <FiSearch size={14} />
-            <input type="text" placeholder="Otsi kõikidest gruppidest..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-            {searchQuery && <button onClick={() => setSearchQuery('')}><FiX size={14} /></button>}
-          </div>
+      <OrganizerSearchBar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        showFilterMenu={showFilterMenu}
+        onToggleFilterMenu={setShowFilterMenu}
+        showSortMenu={showSortMenu}
+        onToggleSortMenu={setShowSortMenu}
+        searchFilterGroup={searchFilterGroup}
+        onFilterGroupChange={setSearchFilterGroup}
+        searchFilterColumn={searchFilterColumn}
+        onFilterColumnChange={setSearchFilterColumn}
+        groupSortField={groupSortField}
+        onGroupSortFieldChange={setGroupSortField}
+        groupSortDir={groupSortDir}
+        onGroupSortDirChange={setGroupSortDir}
+        groups={groups}
+        groupItems={groupItems}
+        allCustomFields={allCustomFields}
+        onCloseMenus={() => setGroupMenuId(null)}
+        t={t}
+      />
 
-          {/* Filter button with dropdown */}
-          <div className="org-filter-dropdown-container">
-            <button
-              className={`org-filter-icon-btn ${showFilterMenu ? 'active' : ''} ${(searchFilterGroup !== 'all' || searchFilterColumn !== 'all') ? 'has-filter' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setShowSortMenu(false); setGroupMenuId(null); setShowFilterMenu(!showFilterMenu); }}
-              title="Filtreeri"
-            >
-              <i className="modus-icons" style={{ fontSize: '18px' }}>filter</i>
-            </button>
-            {showFilterMenu && (
-              <div className="org-filter-dropdown" onClick={(e) => e.stopPropagation()}>
-                <div className="org-filter-dropdown-section">
-                  <label>Grupp</label>
-                  <select
-                    value={searchFilterGroup}
-                    onChange={(e) => setSearchFilterGroup(e.target.value)}
-                  >
-                    <option value="all">{t('organizer:search.all')}</option>
-                    {groups.map(g => (
-                      <option key={g.id} value={g.id}>{'—'.repeat(g.level)} {g.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="org-filter-dropdown-section">
-                  <label>Veerg</label>
-                  <select
-                    value={searchFilterColumn}
-                    onChange={(e) => setSearchFilterColumn(e.target.value)}
-                  >
-                    <option value="all">{t('organizer:search.allColumns')}</option>
-                    <option value="mark">{t('organizer:excelHeaders.mark')}</option>
-                    <option value="product">{t('organizer:excelHeaders.product')}</option>
-                    <option value="weight">{t('organizer:excelHeaders.weight')}</option>
-                    {allCustomFields.map(f => (
-                      <option key={f.id} value={f.id}>{f.name}</option>
-                    ))}
-                  </select>
-                </div>
-                {(searchFilterGroup !== 'all' || searchFilterColumn !== 'all') && (
-                  <button
-                    className="org-filter-clear-btn"
-                    onClick={() => { setSearchFilterGroup('all'); setSearchFilterColumn('all'); }}
-                  >
-                    Tühista filtrid
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Sort button with dropdown */}
-          <div className="org-sort-dropdown-container">
-            <button
-              className={`org-sort-icon-btn ${showSortMenu ? 'active' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setShowFilterMenu(false); setGroupMenuId(null); setShowSortMenu(!showSortMenu); }}
-              title="Sorteeri"
-            >
-              <i className="modus-icons" style={{ fontSize: '18px' }}>sort</i>
-            </button>
-            {showSortMenu && (
-              <div className="org-sort-dropdown" onClick={(e) => e.stopPropagation()}>
-                <div className="org-sort-dropdown-header">Gruppide sortimine</div>
-                <button
-                  className={groupSortField === 'sort_order' ? 'active' : ''}
-                  onClick={() => { setGroupSortField('sort_order'); }}
-                >
-                  Järjekord {groupSortField === 'sort_order' && (groupSortDir === 'asc' ? '↑' : '↓')}
-                </button>
-                <button
-                  className={groupSortField === 'name' ? 'active' : ''}
-                  onClick={() => { setGroupSortField('name'); }}
-                >
-                  Nimi {groupSortField === 'name' && (groupSortDir === 'asc' ? '↑' : '↓')}
-                </button>
-                <button
-                  className={groupSortField === 'itemCount' ? 'active' : ''}
-                  onClick={() => { setGroupSortField('itemCount'); }}
-                >
-                  Kogus {groupSortField === 'itemCount' && (groupSortDir === 'asc' ? '↑' : '↓')}
-                </button>
-                <button
-                  className={groupSortField === 'totalWeight' ? 'active' : ''}
-                  onClick={() => { setGroupSortField('totalWeight'); }}
-                >
-                  Kaal {groupSortField === 'totalWeight' && (groupSortDir === 'asc' ? '↑' : '↓')}
-                </button>
-                <button
-                  className={groupSortField === 'created_at' ? 'active' : ''}
-                  onClick={() => { setGroupSortField('created_at'); }}
-                >
-                  Loodud {groupSortField === 'created_at' && (groupSortDir === 'asc' ? '↑' : '↓')}
-                </button>
-                <div className="org-sort-dropdown-divider" />
-                <button onClick={() => setGroupSortDir(groupSortDir === 'asc' ? 'desc' : 'asc')}>
-                  {groupSortDir === 'asc' ? '↑ Kasvav' : '↓ Kahanev'}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="org-toolbar-stats">
-          <span>{groups.length} gruppi</span>
-          <span className="separator">|</span>
-          <span>{Array.from(groupItems.values()).flat().length} detaili</span>
-        </div>
-        {selectedItemIds.size > 0 && selectedGroup && !isGroupLocked(selectedGroup.id) && (
-          <div className="org-bulk-actions">
-            <span className="bulk-count">{selectedItemIds.size} valitud</span>
-            <div className="bulk-actions-left">
-              <button onClick={() => { setBulkFieldValues({}); setShowBulkEdit(true); }}><FiEdit2 size={12} /> Muuda</button>
-              {/* Color/mark dropdown - icon only */}
-              <div style={{ position: 'relative' }}>
-                <button
-                  onClick={() => setShowColorMarkMenu(prev => !prev)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '2px', padding: '4px 8px' }}
-                  title="Värvimine ja markupid"
-                >
-                  <FiDroplet size={14} /> <FiChevronDown size={10} />
-                </button>
-                {showColorMarkMenu && (
-                  <div
-                    className="org-dropdown-menu"
-                    style={{
-                      position: 'absolute',
-                      bottom: '100%',
-                      left: 0,
-                      zIndex: 1000,
-                      background: 'white',
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '6px',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                      minWidth: '220px',
-                      marginBottom: '4px'
-                    }}
-                  >
-                    <button
-                      onClick={colorSelectedItemsInModel}
-                      disabled={saving}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        width: '100%',
-                        padding: '10px 12px',
-                        border: 'none',
-                        background: 'none',
-                        cursor: 'pointer',
-                        fontSize: '13px',
-                        textAlign: 'left'
-                      }}
-                      className="org-dropdown-item"
-                    >
-                      <FiDroplet size={14} />
-                      Värvi mudelis ainult valitud detailid
-                    </button>
-                    <button
-                      onClick={addMarkupsToSelectedItems}
-                      disabled={saving}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        width: '100%',
-                        padding: '10px 12px',
-                        border: 'none',
-                        background: 'none',
-                        cursor: 'pointer',
-                        fontSize: '13px',
-                        textAlign: 'left'
-                      }}
-                      className="org-dropdown-item"
-                    >
-                      <FiTag size={14} />
-                      Lisa markupid valitud detailidele
-                    </button>
-                    {hasMarkups && (
-                      <button
-                        onClick={() => { setShowColorMarkMenu(false); removeAllMarkups(); }}
-                        disabled={saving}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          width: '100%',
-                          padding: '10px 12px',
-                          border: 'none',
-                          background: 'none',
-                          cursor: 'pointer',
-                          fontSize: '13px',
-                          textAlign: 'left',
-                          color: '#dc2626',
-                          borderTop: '1px solid #e5e7eb'
-                        }}
-                        className="org-dropdown-item"
-                      >
-                        <FiTrash2 size={14} />
-                        Eemalda markupid
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-              <button className="cancel" onClick={() => setSelectedItemIds(new Set())}><FiX size={12} /> Tühista</button>
-            </div>
-            <div className="bulk-actions-right">
-              <button className="delete" onClick={() => removeItemsFromGroup(Array.from(selectedItemIds))}><FiTrash2 size={12} /></button>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* Bulk actions bar */}
+      {selectedItemIds.size > 0 && selectedGroup && !isGroupLocked(selectedGroup.id) && (
+        <OrganizerBulkActionsBar
+          selectedCount={selectedItemIds.size}
+          onBulkEdit={() => { setBulkFieldValues({}); setShowBulkEdit(true); }}
+          showColorMarkMenu={showColorMarkMenu}
+          onToggleColorMarkMenu={setShowColorMarkMenu}
+          onColorSelectedItems={colorSelectedItemsInModel}
+          onAddMarkups={addMarkupsToSelectedItems}
+          onRemoveMarkups={removeAllMarkups}
+          hasMarkups={hasMarkups}
+          saving={saving}
+          onCancel={() => setSelectedItemIds(new Set())}
+          onDelete={() => removeItemsFromGroup(Array.from(selectedItemIds))}
+        />
+      )}
 
       {/* Batch progress */}
       {batchProgress && (
@@ -10292,20 +10081,15 @@ export default function OrganizerScreen({
       {toast && <div className="org-toast">{toast}</div>}
 
       {/* Content */}
-      <div className="org-content">
-        {loading ? (
-          <div className="org-loading">Laadin...</div>
-        ) : groups.length === 0 ? (
-          <div className="org-empty">
-            <p>Gruppe pole veel loodud</p>
-            <button onClick={() => setShowGroupForm(true)}><FiPlus size={14} /> Lisa esimene grupp</button>
-          </div>
-        ) : (
-          <div className="org-tree">
-            {sortGroupTree(groupTree, groupSortField, groupSortDir).map(node => renderGroupNode(node))}
-          </div>
-        )}
-      </div>
+      <OrganizerGroupsList
+        loading={loading}
+        groupTree={groupTree}
+        groupSortField={groupSortField}
+        groupSortDir={groupSortDir}
+        onAddGroup={() => setShowGroupForm(true)}
+        sortGroupTree={sortGroupTree}
+        renderGroupNode={renderGroupNode}
+      />
 
       {/* Selection bar */}
       {selectedObjects.length > 0 && selectedGroupIds.size === 0 && (

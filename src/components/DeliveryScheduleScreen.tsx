@@ -16,14 +16,15 @@ import {
 import { compressImage, isImageFile } from '../utils/imageUtils';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import * as XLSX from 'xlsx-js-style';
+import { DeliveryToolbar } from '../features/delivery';
 import {
-  FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
+  FiChevronLeft, FiChevronRight, FiPlus,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
-  FiRefreshCw, FiPause, FiSearch, FiEdit2, FiCheck,
-  FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload,
+  FiRefreshCw, FiSearch, FiEdit2, FiCheck,
+  FiSettings, FiChevronUp, FiMoreVertical, FiCopy,
   FiTruck, FiPackage, FiLayers, FiClock, FiMessageSquare, FiDroplet,
   FiEye, FiEyeOff, FiZoomIn, FiAlertTriangle, FiExternalLink, FiTag,
-  FiCamera, FiImage, FiCheckCircle
+  FiCamera, FiImage
 } from 'react-icons/fi';
 import './DeliveryScheduleScreen.css';
 
@@ -64,14 +65,6 @@ interface SelectedObject {
 // ============================================
 // CONSTANTS
 // ============================================
-
-// Playback speeds in milliseconds
-const PLAYBACK_SPEEDS = [
-  { label: '0.5x', value: 1500 },
-  { label: '1x', value: 800 },
-  { label: '2x', value: 300 },
-  { label: '4x', value: 100 }
-];
 
 // Vehicle status colors only - labels come from translations
 const VEHICLE_STATUS_COLORS: Record<string, { color: string; bgColor: string }> = {
@@ -690,9 +683,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Color mode for model visualization - no coloring by default
   const [colorMode, setColorMode] = useState<'none' | 'vehicle' | 'date' | 'progress'>('none');
-  const [showColorMenu, setShowColorMenu] = useState(false);
-  const [showImportExportMenu, setShowImportExportMenu] = useState(false);
-  const [showPlaybackMenu, setShowPlaybackMenu] = useState(false);
   const [vehicleColors, setVehicleColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
   const [dateColors, setDateColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
 
@@ -9074,201 +9064,30 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         )}
       </PageHeader>
 
-      {/* Compact toolbar with stats and icon menus */}
-      <div className="delivery-toolbar-compact">
-        {/* Stats on left */}
-        <div className="toolbar-stats">
-          <span>{totalItems} {t('toolbar.pieces')}</span>
-          <span className="separator">•</span>
-          <span>{formatWeight(totalWeight)?.kg || '0 kg'}</span>
-          <span className="separator">•</span>
-          <span>{vehicles.length} {vehicles.length === 1 ? t('toolbar.vehicle') : t('toolbar.vehicles')}</span>
-        </div>
-
-        {/* Icon menus on right */}
-        <div className="toolbar-icons">
-          {/* TEHASED */}
-          <div className="icon-menu-wrapper">
-            <button
-              className="icon-btn"
-              onClick={() => setShowFactoryModal(true)}
-              title={t('toolbar.factories')}
-            >
-              <FiLayers size={18} />
-            </button>
-          </div>
-
-          {/* IMPORT-EKSPORT */}
-          <div
-            className="icon-menu-wrapper"
-            onMouseEnter={() => setShowImportExportMenu(true)}
-            onMouseLeave={() => setShowImportExportMenu(false)}
-          >
-            <button className="icon-btn" title={t('toolbar.importExport')}>
-              <FiDownload size={18} />
-            </button>
-            {showImportExportMenu && (
-              <div className="icon-dropdown">
-                <button onClick={() => { setShowImportExportMenu(false); setShowImportModal(true); }}>
-                  <FiUpload size={14} /> {t('toolbar.import')}
-                </button>
-                <button onClick={() => { setShowImportExportMenu(false); setShowExportModal(true); }}>
-                  <FiDownload size={14} /> {t('toolbar.export')}
-                </button>
-                <div className="dropdown-divider" />
-                <button onClick={() => {
-                  setShowImportExportMenu(false);
-                  const baseUrl = window.location.origin + (import.meta.env.BASE_URL || '/');
-                  const url = `${baseUrl}?popup=spreadsheet&projectId=${projectId}`;
-                  window.open(url, '_blank', 'width=1200,height=800,menubar=no,toolbar=no,location=no,status=no');
-                }}>
-                  <FiEdit2 size={14} /> {t('toolbar.openAsTable')}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* VÄRSKENDA */}
-          <div className="icon-menu-wrapper">
-            <button
-              className={`icon-btn ${refreshing ? 'spinning' : ''}`}
-              onClick={refreshFromModel}
-              disabled={refreshing || items.length === 0}
-              title={t('toolbar.refreshFromModel')}
-            >
-              <FiRefreshCw size={18} />
-            </button>
-          </div>
-
-          {/* VÄRVI */}
-          <div
-            className="icon-menu-wrapper"
-            onMouseEnter={() => setShowColorMenu(true)}
-            onMouseLeave={() => setShowColorMenu(false)}
-          >
-            <button
-              className={`icon-btn ${colorMode !== 'none' ? 'active' : ''}`}
-              title={t('toolbar.color')}
-              onClick={() => {
-                if (colorMode !== 'none') {
-                  applyColorMode('none');
-                }
-              }}
-            >
-              <FiDroplet size={18} />
-            </button>
-            {showColorMenu && (
-              <div className="icon-dropdown">
-                <button
-                  className={colorMode === 'vehicle' ? 'active' : ''}
-                  onClick={() => applyColorMode(colorMode === 'vehicle' ? 'none' : 'vehicle')}
-                >
-                  <FiTruck size={14} /> {t('toolbar.colorByVehicle')}
-                  {colorMode === 'vehicle' && <FiCheck size={14} />}
-                </button>
-                <button
-                  className={colorMode === 'date' ? 'active' : ''}
-                  onClick={() => applyColorMode(colorMode === 'date' ? 'none' : 'date')}
-                >
-                  <FiCalendar size={14} /> {t('toolbar.colorByDate')}
-                  {colorMode === 'date' && <FiCheck size={14} />}
-                </button>
-                <button
-                  className={colorMode === 'progress' ? 'active' : ''}
-                  onClick={() => applyColorMode(colorMode === 'progress' ? 'none' : 'progress')}
-                >
-                  <FiCheckCircle size={14} /> {t('toolbar.colorByProgress')}
-                  {colorMode === 'progress' && <FiCheck size={14} />}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* PLAY */}
-          <div
-            className="icon-menu-wrapper"
-            onMouseEnter={() => setShowPlaybackMenu(true)}
-            onMouseLeave={() => setShowPlaybackMenu(false)}
-          >
-            <button
-              className={`icon-btn ${isPlaying ? 'active' : ''}`}
-              title={t('playback.play')}
-              onClick={() => {
-                if (!isPlaying) {
-                  startPlayback();
-                } else if (isPaused) {
-                  resumePlayback();
-                } else {
-                  pausePlayback();
-                }
-              }}
-            >
-              {isPlaying && !isPaused ? <FiPause size={18} /> : <FiPlay size={18} />}
-            </button>
-            {showPlaybackMenu && (
-              <div className="icon-dropdown">
-                {!isPlaying ? (
-                  <button onClick={startPlayback}>
-                    <FiPlay size={14} /> {t('playback.play')}
-                  </button>
-                ) : (
-                  <>
-                    {isPaused ? (
-                      <button onClick={resumePlayback}>
-                        <FiPlay size={14} /> {t('playback.resume')}
-                      </button>
-                    ) : (
-                      <button onClick={pausePlayback}>
-                        <FiPause size={14} /> {t('playback.pause')}
-                      </button>
-                    )}
-                    <button onClick={stopPlayback}>
-                      <FiSquare size={14} /> {t('playback.stop')}
-                    </button>
-                  </>
-                )}
-                <div className="dropdown-divider" />
-                <div className="speed-selector">
-                  <span>{t('playback.speedLabel')}</span>
-                  <select
-                    value={playbackSpeed}
-                    onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-                  >
-                    {PLAYBACK_SPEEDS.map(s => (
-                      <option key={s.value} value={s.value}>{s.label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* SEADED */}
-          <div className="icon-menu-wrapper">
-            <button
-              className="icon-btn"
-              onClick={() => setShowSettingsModal(true)}
-              title={t('toolbar.settings')}
-            >
-              <FiSettings size={18} />
-            </button>
-          </div>
-
-          {/* GOOGLE SHEETS SYNC */}
-          <div className="icon-menu-wrapper">
-            <button
-              className="icon-btn"
-              onClick={() => {
-                setShowSheetsModal(true);
-                loadSheetsLogs();
-              }}
-              title={t('toolbar.sheetsSync')}
-            >
-              <FiExternalLink size={18} />
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* Toolbar */}
+      <DeliveryToolbar
+        vehicles={vehicles}
+        items={items}
+        projectId={projectId}
+        refreshing={refreshing}
+        onRefreshFromModel={refreshFromModel}
+        colorMode={colorMode}
+        onApplyColorMode={applyColorMode}
+        isPlaying={isPlaying}
+        isPaused={isPaused}
+        playbackSpeed={playbackSpeed}
+        onSetPlaybackSpeed={setPlaybackSpeed}
+        onStartPlayback={startPlayback}
+        onResumePlayback={resumePlayback}
+        onPausePlayback={pausePlayback}
+        onStopPlayback={stopPlayback}
+        onShowFactoryModal={() => setShowFactoryModal(true)}
+        onShowImportModal={() => setShowImportModal(true)}
+        onShowExportModal={() => setShowExportModal(true)}
+        onShowSettingsModal={() => setShowSettingsModal(true)}
+        onShowSheetsModal={() => setShowSheetsModal(true)}
+        onLoadSheetsLogs={loadSheetsLogs}
+      />
 
       {/* Main content */}
       <div className="delivery-content">
