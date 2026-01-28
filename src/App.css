@@ -12112,13 +12112,13 @@ button.stat-toggle.off:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
+  margin: 0 8px;
   padding: 4px 10px;
   background: #dbeafe;
   border-radius: 6px;
   font-size: 12px;
   color: #1e40af;
-  flex: 1;
+  flex-shrink: 0;
 }
 
 .org-bulk-actions .bulk-count {
